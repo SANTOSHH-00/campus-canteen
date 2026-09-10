@@ -11,30 +11,36 @@ if (dns.setDefaultResultOrder) {
  * Uses Nodemailer with Gmail SMTP (Port 587 STARTTLS, Force IPv4)
  */
 
-let transporter = null;
+async function getTransporter() {
+  const user = process.env.EMAIL_USER;
+  const pass = process.env.EMAIL_APP_PASSWORD;
 
-function getTransporter() {
-  if (!transporter) {
-    const user = process.env.EMAIL_USER;
-    const pass = process.env.EMAIL_APP_PASSWORD;
-
-    transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // STARTTLS
-      auth: {
-        user: user || '',
-        pass: pass ? pass.replace(/\s+/g, '') : '', // strip accidental spaces in app password
-      },
-      lookup: (hostname, options, callback) => {
-        dns.lookup(hostname, { family: 4 }, callback);
-      },
-      connectionTimeout: 8000,
-      greetingTimeout: 8000,
-      socketTimeout: 10000,
-    });
+  // Resolve IPv4 address directly to prevent ENETUNREACH on Linux containers without IPv6 routing
+  let smtpHost = 'smtp.gmail.com';
+  try {
+    const ipv4Addresses = await dns.promises.resolve4('smtp.gmail.com');
+    if (ipv4Addresses && ipv4Addresses.length > 0) {
+      smtpHost = ipv4Addresses[0];
+    }
+  } catch (dnsErr) {
+    console.warn('[EmailService] DNS resolve4 failed, falling back to hostname:', dnsErr.message);
   }
-  return transporter;
+
+  return nodemailer.createTransport({
+    host: smtpHost,
+    port: 587,
+    secure: false, // STARTTLS
+    auth: {
+      user: user || '',
+      pass: pass ? pass.replace(/\s+/g, '') : '', // strip accidental spaces in app password
+    },
+    tls: {
+      servername: 'smtp.gmail.com',
+    },
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 10000,
+  });
 }
 
 /**
@@ -60,7 +66,7 @@ async function sendEmail({ to, subject, html, text }) {
   };
 
   try {
-    const transport = getTransporter();
+    const transport = await getTransporter();
 
     // Background timeout guard
     const sendPromise = transport.sendMail(mailOptions);
@@ -401,7 +407,7 @@ async function checkSmtpStatus() {
   }
 
   try {
-    const transport = getTransporter();
+    const transport = await getTransporter();
     await new Promise((resolve, reject) => {
       transport.verify((err, success) => {
         if (err) reject(err);
