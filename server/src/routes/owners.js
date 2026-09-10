@@ -81,11 +81,10 @@ router.post('/login', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // 7. Dispatch OTP through Gmail SMTP
+    // 7. Dispatch OTP through Gmail SMTP in background (non-blocking)
     console.log(`[OwnerAuth] Dispatching 6-digit OTP code to ${trimmedEmail} (Code: ${rawOtp})...`);
-    const emailResult = await sendOwnerOTP(trimmedEmail, rawOtp, owner.name || 'Canteen Owner').catch(err => {
-      console.error('[OwnerAuth] Error sending owner OTP email:', err.message);
-      return { success: false, error: err.message };
+    sendOwnerOTP(trimmedEmail, rawOtp, owner.name || 'Canteen Owner').catch(err => {
+      console.error('[OwnerAuth] Error sending owner OTP email in background:', err.message);
     });
 
     // 8. Return response WITHOUT exposing the OTP
@@ -93,9 +92,7 @@ router.post('/login', async (req, res) => {
     delete ownerObj.password;
     res.json({
       success: true,
-      message: emailResult && emailResult.success
-        ? 'OTP verification code sent to your registered email.'
-        : 'OTP verification code generated. Please check your email inbox.',
+      message: 'OTP verification code sent to your registered email.',
       email: trimmedEmail,
       owner: ownerObj,
     });
@@ -234,18 +231,15 @@ router.post('/resend-otp', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Send through Gmail SMTP
+    // Send through Gmail SMTP in background (non-blocking)
     console.log(`[OwnerAuth] Resending OTP code to ${trimmedEmail} (Code: ${rawOtp})...`);
-    const emailResult = await sendOwnerOTP(trimmedEmail, rawOtp, owner.name || 'Canteen Owner').catch(err => {
-      console.error('[OwnerAuth] Error resending owner OTP email:', err.message);
-      return { success: false, error: err.message };
+    sendOwnerOTP(trimmedEmail, rawOtp, owner.name || 'Canteen Owner').catch(err => {
+      console.error('[OwnerAuth] Error resending owner OTP email in background:', err.message);
     });
 
     res.json({
       success: true,
-      message: emailResult && emailResult.success
-        ? 'A fresh OTP code has been sent to your registered email.'
-        : 'A fresh OTP code has been generated. Please check your email inbox.',
+      message: 'A fresh OTP code has been sent to your registered email.',
       email: trimmedEmail,
     });
   } catch (err) {

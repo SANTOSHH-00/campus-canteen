@@ -189,20 +189,17 @@ router.post('/forgot-password', async (req, res) => {
       resetUrl = `${protocol}://${host}/api/auth/reset-password?token=${rawToken}&email=${encodeURIComponent(trimmedEmail)}`;
     }
 
-    // Send email using Nodemailer Gmail SMTP
+    // Send email using Nodemailer Gmail SMTP in background (non-blocking)
     console.log(`[Auth] Dispatching password reset email to ${trimmedEmail}...`);
-    const emailResult = await sendPasswordResetEmail(trimmedEmail, resetUrl, targetName).catch(err => {
-      console.error('[Auth] Error sending reset email:', err.message);
-      return { success: false, error: err.message };
+    sendPasswordResetEmail(trimmedEmail, resetUrl, targetName).catch(err => {
+      console.error('[Auth] Error sending reset email in background:', err.message);
     });
 
-    console.log(`[Auth Reset URL]: ${resetUrl}`);
+    console.log(`[Auth Reset URL Generated]: ${resetUrl}`);
 
     res.json({
       success: true,
-      message: emailResult && emailResult.success
-        ? 'Password reset link sent! Please check your email inbox.'
-        : 'Password reset link generated! Please check your email inbox.',
+      message: 'Password reset link sent! Please check your email inbox.',
       email: trimmedEmail,
     });
   } catch (err) {

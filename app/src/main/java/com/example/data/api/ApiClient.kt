@@ -25,16 +25,16 @@ object ApiClient {
         || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic"))
         || "google_sdk" == Build.PRODUCT)
 
-  const val DEV_LAN_IP = "192.168.17.21"
+  const val DEV_LAN_IP = "192.168.11.16"
   const val EMULATOR_HOST = "10.0.2.2"
   const val USB_LOCAL_HOST = "127.0.0.1"
   const val PRODUCTION_RENDER_URL = "https://quickbite-server-pjaf.onrender.com/api/"
 
   val candidateHosts: List<String>
     get() = if (isEmulator) {
-      listOf(EMULATOR_HOST, DEV_LAN_IP, USB_LOCAL_HOST)
+      listOf(EMULATOR_HOST, DEV_LAN_IP, "192.168.17.21", USB_LOCAL_HOST)
     } else {
-      listOf(DEV_LAN_IP, USB_LOCAL_HOST, EMULATOR_HOST)
+      listOf(DEV_LAN_IP, "192.168.17.21", USB_LOCAL_HOST, EMULATOR_HOST)
     }
 
   var baseUrl: String = PRODUCTION_RENDER_URL
