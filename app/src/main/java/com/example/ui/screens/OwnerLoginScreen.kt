@@ -540,7 +540,7 @@ fun OwnerLoginScreen(
                     .padding(horizontal = 14.dp, vertical = 9.dp),
                   verticalAlignment = Alignment.CenterVertically,
                 ) {
-                  Icon(Icons.Default.Info, contentDescription = null, tint = AmberBrand, modifier = Modifier.size(18.dp))
+                  Icon(Icons.Default.CheckCircle, contentDescription = null, tint = AmberBrand, modifier = Modifier.size(18.dp))
                   Spacer(modifier = Modifier.width(8.dp))
                   Text(text = notice, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF92400E))
                 }
