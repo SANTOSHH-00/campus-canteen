@@ -68,12 +68,12 @@ async function getBrevoSenderEmail(apiKey) {
         } catch (e) {
           console.warn('[EmailService] Failed to parse Brevo senders list:', e.message);
         }
-        resolve(process.env.EMAIL_USER || 'quickbite.connecting@gmail.com');
+        resolve(process.env.EMAIL_USER || 'quickbites.connecting@gmail.com');
       });
     });
     req.on('error', (err) => {
       console.warn('[EmailService] Error fetching Brevo senders:', err.message);
-      resolve(process.env.EMAIL_USER || 'quickbite.connecting@gmail.com');
+      resolve(process.env.EMAIL_USER || 'quickbites.connecting@gmail.com');
     });
     req.end();
   });
