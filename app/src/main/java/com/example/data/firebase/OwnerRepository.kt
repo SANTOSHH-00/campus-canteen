@@ -37,7 +37,6 @@ open class OwnerRepository(
   open var lastOtpDelivered: Boolean = true
   open var lastOtpDeliveryNotice: String = ""
   open var lastSentOtpEmail: String? = null
-  open var lastReceivedOtp: String = ""
 
   open val currentUser: AppUser?
     get() = (activeSessionOwner ?: SessionManager.getOwnerSession())?.let {
@@ -90,12 +89,7 @@ open class OwnerRepository(
       val loginResponse = loginResult.getOrNull()
       lastSentOtpEmail = trimmedEmail
       lastOtpDelivered = true
-      lastReceivedOtp = loginResponse?.otp.orEmpty()
-      lastOtpDeliveryNotice = if (!loginResponse?.otp.isNullOrBlank()) {
-        "Test OTP Code: ${loginResponse?.otp}"
-      } else {
-        loginResponse?.message ?: "OTP code sent to $trimmedEmail"
-      }
+      lastOtpDeliveryNotice = loginResponse?.message ?: "OTP code sent to $trimmedEmail"
 
       // 2. Fetch owner profile from MongoDB or loginResponse
       val ownerDto = loginResponse?.owner ?: mongoRepo.getOwner(trimmedEmail).getOrNull()

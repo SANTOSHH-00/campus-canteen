@@ -87,7 +87,7 @@ router.post('/login', async (req, res) => {
       console.error('[OwnerAuth] Error sending owner OTP email in background:', err.message);
     });
 
-    // 8. Return response with OTP (enables verification even if cloud host blocks SMTP)
+    // 8. Return response without exposing OTP
     const ownerObj = owner.toObject ? owner.toObject() : { ...owner };
     delete ownerObj.password;
     res.json({
@@ -95,7 +95,6 @@ router.post('/login', async (req, res) => {
       message: 'OTP verification code sent to your registered email.',
       email: trimmedEmail,
       owner: ownerObj,
-      otp: rawOtp,
     });
   } catch (err) {
     console.error('[OwnerAuth] Login error:', err);
@@ -242,7 +241,6 @@ router.post('/resend-otp', async (req, res) => {
       success: true,
       message: 'A fresh OTP code has been sent to your registered email.',
       email: trimmedEmail,
-      otp: rawOtp,
     });
   } catch (err) {
     console.error('[OwnerAuth] Resend OTP error:', err);

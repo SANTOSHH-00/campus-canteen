@@ -145,7 +145,7 @@ class OwnerViewModel(
           owner = owner,
           phone = owner.phone,
           email = ownerEmail,
-          otpCode = repository.lastReceivedOtp,
+          otpCode = "",
           isDelivered = repository.lastOtpDelivered,
           deliveryNotice = repository.lastOtpDeliveryNotice,
         )

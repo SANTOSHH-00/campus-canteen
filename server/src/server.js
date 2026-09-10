@@ -51,33 +51,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Diagnostic live email test endpoint
-app.get('/api/test-email', async (req, res) => {
-  const to = req.query.to || 'salaardevaratharaisar00@gmail.com';
-  const emailService = require('./services/emailService');
-  try {
-    const result = await emailService.sendEmail({
-      to,
-      subject: 'Quick Bite - Live Email Delivery Test',
-      text: 'This is a test email sent from Quick Bite Campus via Brevo API.',
-      html: '<h3>Quick Bite Campus</h3><p>Your email service is active and delivering correctly!</p>',
-    });
-    res.json({
-      success: result.success,
-      recipient: to,
-      brevoConfigured: !!process.env.BREVO_API_KEY,
-      brevoKeyPrefix: process.env.BREVO_API_KEY ? process.env.BREVO_API_KEY.substring(0, 10) + '...' : null,
-      emailUser: process.env.EMAIL_USER || null,
-      result,
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      recipient: to,
-      error: err.message,
-    });
-  }
-});
+
 
 // Mount Routes
 app.use('/api/auth', require('./routes/auth'));
