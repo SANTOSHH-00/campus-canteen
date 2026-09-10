@@ -409,6 +409,8 @@ data class SimpleMessageResponseDto(
   @Json(name = "success") val success: Boolean = true,
   @Json(name = "message") val message: String? = null,
   @Json(name = "error") val error: String? = null,
+  @Json(name = "resetToken") val resetToken: String? = null,
+  @Json(name = "resetUrl") val resetUrl: String? = null,
 )
 
 // ── Owner Auth DTOs ───────────────────────────────────────────────────────
@@ -424,6 +426,7 @@ data class OwnerLoginResponseDto(
   @Json(name = "message") val message: String? = null,
   @Json(name = "email") val email: String? = null,
   @Json(name = "owner") val owner: MongoOwnerDto? = null,
+  @Json(name = "otp") val otp: String? = null,
   @Json(name = "error") val error: String? = null,
 )
 

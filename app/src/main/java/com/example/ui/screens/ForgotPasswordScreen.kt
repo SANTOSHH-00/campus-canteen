@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.LockReset
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -74,6 +76,7 @@ private val BorderMuted = Color(0xFFE5DECE)
 @Composable
 fun ForgotPasswordScreen(
   onBackToLogin: () -> Unit,
+  onNavigateToResetPassword: () -> Unit = {},
   viewModel: AuthViewModel = viewModel(),
   initialEmail: String = "",
 ) {
@@ -264,6 +267,20 @@ fun ForgotPasswordScreen(
                 lineHeight = 18.sp,
                 color = Color(0xFF047857),
               )
+              if (viewModel.hasResetToken) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                  onClick = { onNavigateToResetPassword() },
+                  colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF059669),
+                    contentColor = PureWhite,
+                  ),
+                  shape = RoundedCornerShape(12.dp),
+                  modifier = Modifier.fillMaxWidth(),
+                ) {
+                  Text("Set New Password Now →", fontWeight = FontWeight.Bold)
+                }
+              }
             }
           }
 

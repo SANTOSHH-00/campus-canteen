@@ -213,6 +213,12 @@ class AuthRepository(
     return sendPasswordResetEmail(email)
   }
 
+  val lastResetToken: String?
+    get() = mongoRepo.lastForgotPasswordResponse?.resetToken
+
+  val lastResetUrl: String?
+    get() = mongoRepo.lastForgotPasswordResponse?.resetUrl
+
   suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
     return try {
       val res = mongoRepo.forgotPassword(email.trim().lowercase())

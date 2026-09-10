@@ -37,6 +37,8 @@ open class OwnerRepository(
   open var lastOtpDelivered: Boolean = true
   open var lastOtpDeliveryNotice: String = ""
   open var lastSentOtpEmail: String? = null
+  open val lastReceivedOtp: String?
+    get() = mongoRepo.lastOwnerLoginResponse?.otp ?: mongoRepo.lastOwnerResendOtpResponse?.resetToken
 
   open val currentUser: AppUser?
     get() = (activeSessionOwner ?: SessionManager.getOwnerSession())?.let {

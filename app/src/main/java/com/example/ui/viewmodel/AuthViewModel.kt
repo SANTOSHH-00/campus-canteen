@@ -48,6 +48,9 @@ class AuthViewModel(
   private val _hasRecoverySession = MutableStateFlow(true)
   val hasRecoverySession: StateFlow<Boolean> = _hasRecoverySession.asStateFlow()
 
+  val hasResetToken: Boolean
+    get() = deepLinkToken.isNotBlank()
+
   fun hasActiveRecoverySession(): Boolean {
     return deepLinkToken.isNotBlank() || authRepository.isUserLoggedIn
   }
@@ -79,6 +82,10 @@ class AuthViewModel(
         val successText = "Password reset link sent! Please check your email inbox."
         _successMessage.value = successText
         _resetState.value = PasswordResetState.EmailSent(successText)
+        val generatedToken = authRepository.lastResetToken
+        if (!generatedToken.isNullOrBlank()) {
+          setDeepLinkInfo(token = generatedToken, email = trimmed)
+        }
         Result.success(Unit)
       } else {
         val ex = result.exceptionOrNull()
