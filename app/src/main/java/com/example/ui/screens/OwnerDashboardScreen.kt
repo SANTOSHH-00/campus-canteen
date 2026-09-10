@@ -55,6 +55,7 @@ import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -63,6 +64,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Switch
@@ -527,6 +529,7 @@ private fun OwnerNavDrawer(
 
             Spacer(Modifier.width(14.dp))
 
+            val blockInfo = if (owner.block.isNotBlank()) "Block ${owner.block}" else ""
             Column {
                 Text(
                     text = owner.name.ifBlank { "Canteen Owner" },
@@ -537,23 +540,16 @@ private fun OwnerNavDrawer(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(3.dp))
-                // Canteen name shown ONLY inside the drawer
+                // Canteen name and Block shown clearly inside the drawer
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { },
                 ) {
                     Text(
-                        text = canteenName.ifBlank { "Main Canteen" },
+                        text = if (blockInfo.isNotBlank()) "${canteenName.ifBlank { "Main Canteen" }} • $blockInfo" else canteenName.ifBlank { "Main Canteen" },
                         fontSize = 13.sp,
                         color = TextMuted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                    )
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = null,
-                        tint = TextMuted,
-                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
@@ -561,6 +557,8 @@ private fun OwnerNavDrawer(
 
         HorizontalDivider(thickness = 0.8.dp, color = Color(0xFFEEEEEE))
         Spacer(Modifier.height(6.dp))
+
+        var showLogoutConfirmation by remember { mutableStateOf(false) }
 
         // ── Scrollable nav items ─────────────────────────────────────────────
         Column(
@@ -584,14 +582,53 @@ private fun OwnerNavDrawer(
             )
             Spacer(Modifier.height(6.dp))
 
-            // Logout
+            // Logout with confirmation
             DrawerNavItem(
                 item = NavItem("Logout", Icons.AutoMirrored.Filled.Logout, tag = "owner_logout_button"),
                 isSelected = false,
                 tintOverride = Color(0xFFDC2626),
-                onClick = onLogout,
+                onClick = { showLogoutConfirmation = true },
             )
             Spacer(Modifier.height(16.dp))
+        }
+
+        if (showLogoutConfirmation) {
+            AlertDialog(
+                onDismissRequest = { showLogoutConfirmation = false },
+                title = {
+                    Text(
+                        text = "Confirm Logout",
+                        fontWeight = FontWeight.Bold,
+                        color = TextDark,
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Are you sure you want to log out of the Owner Dashboard?",
+                        color = TextMuted,
+                        fontSize = 14.sp,
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showLogoutConfirmation = false
+                            onLogout()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Text("Log Out", color = PureWhite, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLogoutConfirmation = false }) {
+                        Text("Cancel", color = TextDark)
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = PureWhite,
+            )
         }
     }
 }

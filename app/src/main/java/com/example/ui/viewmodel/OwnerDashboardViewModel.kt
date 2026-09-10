@@ -11,6 +11,7 @@ import com.example.data.firebase.OrderDocument
 import com.example.data.firebase.OwnerDocument
 import com.example.data.firebase.OwnerRepository
 import com.example.data.session.SessionManager
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -236,6 +237,10 @@ open class OwnerDashboardViewModel(
    * Update Order Status:
    * NEW -> PREPARING -> READY -> COMPLETED (or CANCELLED)
    */
+  fun observeOrder(orderId: String): Flow<OrderDocument?> {
+    return firestoreRepo.observeOrder(orderId)
+  }
+
   fun updateOrderStatus(orderId: String, newStatus: String) {
     viewModelScope.launch {
       firestoreRepo.updateOrderStatus(orderId, newStatus)

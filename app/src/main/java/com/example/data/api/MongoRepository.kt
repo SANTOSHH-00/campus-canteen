@@ -26,6 +26,14 @@ class MongoRepository(
 ) {
   private val TAG = "MongoRepository"
 
+  companion object {
+    val cachedCanteenItems = java.util.concurrent.ConcurrentHashMap<String, List<ItemDocument>>()
+    val cachedCanteenOrders = java.util.concurrent.ConcurrentHashMap<String, List<OrderDocument>>()
+    val cachedOrderDetails = java.util.concurrent.ConcurrentHashMap<String, OrderDocument>()
+
+    fun getCachedOrder(orderId: String): OrderDocument? = cachedOrderDetails[orderId]
+  }
+
   private fun parseErrorMessage(errorBody: String?, fallback: String): String {
     if (errorBody.isNullOrBlank()) return fallback
     return try {
@@ -438,10 +446,13 @@ class MongoRepository(
   }
 
   fun observeItems(canteenId: String): Flow<List<ItemDocument>> = flow {
+    cachedCanteenItems[canteenId]?.let { emit(it) }
     while (currentCoroutineContext().isActive) {
       val res = getCanteenItems(canteenId)
       if (res.isSuccess) {
-        emit(res.getOrThrow().map { it.toDocument() })
+        val items = res.getOrThrow().map { it.toDocument() }
+        cachedCanteenItems[canteenId] = items
+        emit(items)
       }
       delay(2000)
     }
@@ -461,16 +472,25 @@ class MongoRepository(
     WebSocketManager.connect()
     val currentOrders = mutableListOf<OrderDocument>()
 
+    // Instant 0ms emit from cache if available
+    cachedCanteenOrders[canteenId]?.let { cached ->
+      currentOrders.addAll(cached)
+      trySend(cached)
+    }
+
     val wsJob = launch {
       WebSocketManager.observeCanteenOrders(canteenId).collect { dto ->
         val doc = dto.toDocument()
+        cachedOrderDetails[doc.orderId] = doc
         val existingIdx = currentOrders.indexOfFirst { it.orderId == doc.orderId }
         if (existingIdx >= 0) {
           currentOrders[existingIdx] = doc
         } else {
           currentOrders.add(0, doc)
         }
-        trySend(currentOrders.toList())
+        val snapshot = currentOrders.toList()
+        cachedCanteenOrders[canteenId] = snapshot
+        trySend(snapshot)
       }
     }
 
@@ -478,9 +498,13 @@ class MongoRepository(
       while (isActive) {
         val res = getCanteenOrders(canteenId)
         if (res.isSuccess) {
+          val fetched = res.getOrThrow().map { it.toDocument() }
           currentOrders.clear()
-          currentOrders.addAll(res.getOrThrow().map { it.toDocument() })
-          trySend(currentOrders.toList())
+          currentOrders.addAll(fetched)
+          fetched.forEach { cachedOrderDetails[it.orderId] = it }
+          val snapshot = currentOrders.toList()
+          cachedCanteenOrders[canteenId] = snapshot
+          trySend(snapshot)
         }
         delay(4000)
       }
@@ -496,10 +520,15 @@ class MongoRepository(
   fun observeOrder(orderId: String): Flow<OrderDocument?> = channelFlow {
     WebSocketManager.connect()
 
+    // Instant 0ms emit from cache if available
+    cachedOrderDetails[orderId]?.let { trySend(it) }
+
     // 1. Instant sub-second updates pushed via WebSocket
     val wsJob = launch {
       WebSocketManager.observeOrder(orderId).collect { dto ->
-        trySend(dto.toDocument())
+        val doc = dto.toDocument()
+        cachedOrderDetails[orderId] = doc
+        trySend(doc)
       }
     }
 
@@ -508,7 +537,9 @@ class MongoRepository(
       while (isActive) {
         val res = getOrder(orderId)
         if (res.isSuccess) {
-          trySend(res.getOrThrow().toDocument())
+          val doc = res.getOrThrow().toDocument()
+          cachedOrderDetails[orderId] = doc
+          trySend(doc)
         }
         delay(4000)
       }

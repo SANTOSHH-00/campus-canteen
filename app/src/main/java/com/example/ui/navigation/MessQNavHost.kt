@@ -31,6 +31,7 @@ fun MessQNavHost(
   navController: NavHostController = rememberNavController(),
   appState: CanteenAppState = rememberCanteenAppState(),
   ownerViewModel: OwnerViewModel = viewModel(),
+  ownerDashboardViewModel: com.example.ui.viewmodel.OwnerDashboardViewModel = viewModel(),
   deepLinkDestination: String? = null,
   modifier: Modifier = Modifier,
 ) {
@@ -274,6 +275,7 @@ fun MessQNavHost(
       OwnerDashboardScreen(
         owner = currentOwner,
         appState = appState,
+        dashboardViewModel = ownerDashboardViewModel,
         onLogout = {
           ownerViewModel.logout()
           navController.navigate(MessQDestinations.WELCOME) {
@@ -319,6 +321,7 @@ fun MessQNavHost(
         onNavigateToOrderDetails = { orderId ->
           navController.navigate("${MessQDestinations.OWNER_ORDER_DETAILS}/$orderId")
         },
+        dashboardViewModel = ownerDashboardViewModel,
       )
     }
 
@@ -328,6 +331,7 @@ fun MessQNavHost(
       com.example.ui.screens.OwnerOrderDetailsScreen(
         orderId = orderId,
         onBack = { navController.popBackStack() },
+        dashboardViewModel = ownerDashboardViewModel,
       )
     }
   }

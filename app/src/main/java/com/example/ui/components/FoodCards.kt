@@ -432,8 +432,8 @@ fun QuickOrderCard(
 ) {
   Card(
     modifier = modifier
-      .width(260.dp)
-      .height(270.dp)
+      .width(285.dp)
+      .height(295.dp)
       .clickable { onCardClick() },
     shape = RoundedCornerShape(20.dp),
     colors = CardDefaults.cardColors(containerColor = PureWhite),
@@ -447,7 +447,7 @@ fun QuickOrderCard(
       Box(
         modifier = Modifier
           .fillMaxWidth()
-          .height(145.dp),
+          .height(160.dp),
       ) {
         FoodImagePlaceholder(
           itemName = foodItem.name,

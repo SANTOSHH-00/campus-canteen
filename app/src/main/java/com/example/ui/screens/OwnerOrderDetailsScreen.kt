@@ -41,9 +41,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.firebase.OrderDocument
+import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.TextDark
 import com.example.ui.theme.TextMuted
@@ -83,20 +87,54 @@ fun OwnerOrderDetailsScreen(
 ) {
   val context = LocalContext.current
   val allOrders by dashboardViewModel.orders.collectAsState()
+  var fetchedOrder by remember { mutableStateOf<OrderDocument?>(null) }
+  var isFetching by remember { mutableStateOf(false) }
 
-  // Find targeted order from ViewModel state
-  val order = allOrders.find { it.orderId == orderId } ?: remember(orderId) {
-    OrderDocument(
-      orderId = orderId,
-      tokenNumber = "Q1042",
-      studentName = "Rahul Sharma",
-      studentPhone = "9876543210",
-      studentCourse = "B.Tech CSE",
-      studentId = "RA231100",
-      status = "PREPARING",
-      totalAmount = 90,
-      createdAt = System.currentTimeMillis() - 1000 * 60 * 5,
-    )
+  val order = remember(allOrders, fetchedOrder, orderId) {
+    allOrders.find { it.orderId == orderId }
+      ?: com.example.data.api.MongoRepository.getCachedOrder(orderId)
+      ?: fetchedOrder
+  }
+
+  LaunchedEffect(orderId) {
+    if (order == null) {
+      isFetching = true
+      dashboardViewModel.observeOrder(orderId).collect {
+        fetchedOrder = it
+        isFetching = false
+      }
+    }
+  }
+
+  if (order == null) {
+    Box(
+      modifier = modifier
+        .fillMaxSize()
+        .background(PageBackground)
+        .statusBarsPadding()
+        .navigationBarsPadding(),
+      contentAlignment = Alignment.Center,
+    ) {
+      Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        androidx.compose.material3.CircularProgressIndicator(color = OrangeAccent)
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+          text = if (isFetching) "Loading order details..." else "Order not found",
+          color = TextMuted,
+          fontSize = 14.sp,
+          fontWeight = FontWeight.Medium,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(
+          onClick = onBack,
+          colors = ButtonDefaults.buttonColors(containerColor = BlackPrimary),
+          shape = RoundedCornerShape(12.dp),
+        ) {
+          Text("Go Back", color = PureWhite)
+        }
+      }
+    }
+    return
   }
 
   val isPreparing = order.status.equals("PREPARING", ignoreCase = true)
@@ -127,20 +165,24 @@ fun OwnerOrderDetailsScreen(
   val orderDate = remember(order.createdAt) { dateFormatter.format(Date(order.createdAt)) }
 
   // Phone calling & copying action
-  val effectivePhone = order.studentPhone.ifBlank { "9876543210" }
+  val effectivePhone = order.studentPhone
   val onCallStudent = {
-    try {
-      val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-      val clip = ClipData.newPlainText("Student Phone", effectivePhone)
-      clipboard.setPrimaryClip(clip)
-      Toast.makeText(context, "Copied $effectivePhone to clipboard", Toast.LENGTH_SHORT).show()
+    if (effectivePhone.isNotBlank()) {
+      try {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("Student Phone", effectivePhone)
+        clipboard.setPrimaryClip(clip)
+        Toast.makeText(context, "Copied $effectivePhone to clipboard", Toast.LENGTH_SHORT).show()
 
-      val dialIntent = Intent(Intent.ACTION_DIAL).apply {
-        data = Uri.parse("tel:$effectivePhone")
+        val dialIntent = Intent(Intent.ACTION_DIAL).apply {
+          data = Uri.parse("tel:$effectivePhone")
+        }
+        context.startActivity(dialIntent)
+      } catch (e: Exception) {
+        Toast.makeText(context, "Could not open dialer: ${e.message}", Toast.LENGTH_SHORT).show()
       }
-      context.startActivity(dialIntent)
-    } catch (e: Exception) {
-      Toast.makeText(context, "Could not open dialer: ${e.message}", Toast.LENGTH_SHORT).show()
+    } else {
+      Toast.makeText(context, "No phone number available", Toast.LENGTH_SHORT).show()
     }
   }
 
@@ -158,12 +200,6 @@ fun OwnerOrderDetailsScreen(
         .padding(bottom = 120.dp) // Space for bottom action buttons
         .verticalScroll(rememberScrollState()),
     ) {
-      // ── Constant upper navigation bar (3 lines, app name, notification icon, profile)
-      OwnerTopBar(
-        drawerOpen = false,
-        onHamburgerClick = onBack,
-        onProfileClick = {},
-      )
 
       // ── Header matching Image 2 ───────────────────────────────────────────
       Row(

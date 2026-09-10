@@ -33,8 +33,10 @@ let cachedBrevoSender = null;
 // Dynamically fetch the verified sender email registered in the Brevo account
 async function getBrevoSenderEmail(apiKey) {
   if (cachedBrevoSender) return cachedBrevoSender;
-  if (process.env.BREVO_SENDER_EMAIL && process.env.BREVO_SENDER_EMAIL.trim()) {
-    cachedBrevoSender = process.env.BREVO_SENDER_EMAIL.trim();
+  const configured = (process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_USER || '').trim();
+  if (configured) {
+    console.log(`[EmailService] Using configured sender email: ${configured}`);
+    cachedBrevoSender = configured;
     return cachedBrevoSender;
   }
 
@@ -83,7 +85,7 @@ async function sendViaBrevo(apiKey, { to, subject, html, text }) {
   console.log(`[EmailService] Attempting Brevo HTTPS send from <${senderEmail}> to <${to}>`);
 
   const data = JSON.stringify({
-    sender: { name: 'Quick Bite Campus', email: senderEmail },
+    sender: { name: 'QuickBite', email: senderEmail },
     to: [{ email: to.trim().toLowerCase() }],
     subject,
     htmlContent: html || text,

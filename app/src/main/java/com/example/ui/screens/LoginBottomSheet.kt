@@ -23,11 +23,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
@@ -76,6 +83,10 @@ import com.example.ui.state.UserProfile
 
 typealias DemoUser = UserProfile
 
+private val PillBackground = Color(0xFFF3F4F6)
+private val LabelColor = Color(0xFF6B7280)
+private val PlaceholderColor = Color(0xFF9CA3AF)
+
 @Composable
 fun LoginContent(
   modifier: Modifier = Modifier,
@@ -88,7 +99,8 @@ fun LoginContent(
   var password by remember { mutableStateOf("") }
   var studentName by remember { mutableStateOf("") }
   var registrationNumber by remember { mutableStateOf("") }
-  var department by remember { mutableStateOf("") }
+  var currentCourse by remember { mutableStateOf("") }
+  var phoneNumber by remember { mutableStateOf("") }
   var passwordVisible by remember { mutableStateOf(false) }
   var isLoading by remember { mutableStateOf(false) }
   var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -111,7 +123,10 @@ fun LoginContent(
         .testTag("login_sheet_content")
   ) {
     Column(
-      modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 24.dp),
+      modifier = Modifier
+        .fillMaxWidth()
+        .verticalScroll(rememberScrollState())
+        .padding(top = 12.dp, bottom = 24.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
     ) {
       // Top Handle pill (like Screenshot 5)
@@ -159,38 +174,49 @@ fun LoginContent(
         )
       }
 
-      Spacer(modifier = Modifier.height(12.dp))
+      Spacer(modifier = Modifier.height(14.dp))
 
-      // Sign Up extra fields: Student Name, Reg Number, Department
+      // Sign Up extra fields: Student Name, Reg Number, Current Course, Phone Number
       AnimatedVisibility(visible = isSignUpMode) {
         Column(modifier = Modifier.fillMaxWidth()) {
-          // 1. Student Name
+          // 1. Student Full Name
           Text(
-            text = "STUDENT FULL NAME",
+            text = "FULL NAME",
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp,
-            color = TextMuted,
+            color = LabelColor,
+            modifier = Modifier.padding(start = 6.dp, bottom = 6.dp),
           )
-          Spacer(modifier = Modifier.height(4.dp))
-          TextField(
-            value = studentName,
-            onValueChange = { studentName = it; errorMessage = null },
-            placeholder = { Text("enter your name", color = Color(0xFFA1A1AA)) },
-            singleLine = true,
-            colors =
-              TextFieldDefaults.colors(
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(52.dp)
+              .clip(RoundedCornerShape(26.dp))
+              .background(PillBackground),
+            contentAlignment = Alignment.CenterStart,
+          ) {
+            TextField(
+              value = studentName,
+              onValueChange = { studentName = it; errorMessage = null },
+              placeholder = { Text("enter your name", color = PlaceholderColor, fontSize = 14.sp) },
+              leadingIcon = {
+                Icon(Icons.Default.Person, contentDescription = null, tint = PlaceholderColor, modifier = Modifier.size(20.dp))
+              },
+              singleLine = true,
+              colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
-                focusedIndicatorColor = BlackPrimary,
-                unfocusedIndicatorColor = BorderGray,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
                 focusedTextColor = TextDark,
                 unfocusedTextColor = TextDark,
               ),
-            modifier = Modifier.fillMaxWidth().testTag("name_input_field"),
-          )
+              modifier = Modifier.fillMaxWidth().testTag("name_input_field"),
+            )
+          }
 
-          Spacer(modifier = Modifier.height(16.dp))
+          Spacer(modifier = Modifier.height(14.dp))
 
           // 2. Student Registration Number (8 digits)
           Text(
@@ -198,182 +224,282 @@ fun LoginContent(
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp,
-            color = TextMuted,
+            color = LabelColor,
+            modifier = Modifier.padding(start = 6.dp, bottom = 6.dp),
           )
-          Spacer(modifier = Modifier.height(4.dp))
-          TextField(
-            value = registrationNumber,
-            onValueChange = { input ->
-              if (input.length <= 8 && input.all { it.isDigit() }) {
-                registrationNumber = input
-                errorMessage = null
-              }
-            },
-            placeholder = { Text("enter your registration number", color = Color(0xFFA1A1AA)) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
-            singleLine = true,
-            colors =
-              TextFieldDefaults.colors(
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(52.dp)
+              .clip(RoundedCornerShape(26.dp))
+              .background(PillBackground),
+            contentAlignment = Alignment.CenterStart,
+          ) {
+            TextField(
+              value = registrationNumber,
+              onValueChange = { input ->
+                if (input.length <= 8 && input.all { it.isDigit() }) {
+                  registrationNumber = input
+                  errorMessage = null
+                }
+              },
+              placeholder = { Text("enter your registration number", color = PlaceholderColor, fontSize = 14.sp) },
+              keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+              leadingIcon = {
+                Icon(Icons.Default.School, contentDescription = null, tint = PlaceholderColor, modifier = Modifier.size(20.dp))
+              },
+              singleLine = true,
+              colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
-                focusedIndicatorColor = BlackPrimary,
-                unfocusedIndicatorColor = BorderGray,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
                 focusedTextColor = TextDark,
                 unfocusedTextColor = TextDark,
               ),
-            modifier = Modifier.fillMaxWidth().testTag("reg_number_input_field"),
-          )
+              modifier = Modifier.fillMaxWidth().testTag("reg_number_input_field"),
+            )
+          }
 
-          Spacer(modifier = Modifier.height(16.dp))
+          Spacer(modifier = Modifier.height(14.dp))
 
-          // 3. Department & Course Name
+          // 3. Current Course
           Text(
-            text = "DEPARTMENT / COURSE",
+            text = "CURRENT COURSE",
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp,
-            color = TextMuted,
+            color = LabelColor,
+            modifier = Modifier.padding(start = 6.dp, bottom = 6.dp),
           )
-          Spacer(modifier = Modifier.height(4.dp))
-          TextField(
-            value = department,
-            onValueChange = { department = it; errorMessage = null },
-            placeholder = { Text("enter your department (optional)", color = Color(0xFFA1A1AA)) },
-            singleLine = true,
-            colors =
-              TextFieldDefaults.colors(
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(52.dp)
+              .clip(RoundedCornerShape(26.dp))
+              .background(PillBackground),
+            contentAlignment = Alignment.CenterStart,
+          ) {
+            TextField(
+              value = currentCourse,
+              onValueChange = { currentCourse = it; errorMessage = null },
+              placeholder = { Text("e.g. B.Tech CSE, MBA, B.Sc", color = PlaceholderColor, fontSize = 14.sp) },
+              keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Next),
+              leadingIcon = {
+                Icon(Icons.Default.School, contentDescription = null, tint = PlaceholderColor, modifier = Modifier.size(20.dp))
+              },
+              singleLine = true,
+              colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
-                focusedIndicatorColor = BlackPrimary,
-                unfocusedIndicatorColor = BorderGray,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
                 focusedTextColor = TextDark,
                 unfocusedTextColor = TextDark,
               ),
-            modifier = Modifier.fillMaxWidth().testTag("department_input_field"),
-          )
+              modifier = Modifier.fillMaxWidth().testTag("course_input_field"),
+            )
+          }
 
-          Spacer(modifier = Modifier.height(16.dp))
+          Spacer(modifier = Modifier.height(14.dp))
+
+          // 4. Phone Number (10 digits)
+          Text(
+            text = "PHONE NUMBER",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp,
+            color = LabelColor,
+            modifier = Modifier.padding(start = 6.dp, bottom = 6.dp),
+          )
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(52.dp)
+              .clip(RoundedCornerShape(26.dp))
+              .background(PillBackground),
+            contentAlignment = Alignment.CenterStart,
+          ) {
+            TextField(
+              value = phoneNumber,
+              onValueChange = { input ->
+                if (input.length <= 10 && input.all { it.isDigit() }) {
+                  phoneNumber = input
+                  errorMessage = null
+                }
+              },
+              placeholder = { Text("enter 10-digit phone number", color = PlaceholderColor, fontSize = 14.sp) },
+              keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next),
+              leadingIcon = {
+                Icon(Icons.Default.Phone, contentDescription = null, tint = PlaceholderColor, modifier = Modifier.size(20.dp))
+              },
+              singleLine = true,
+              colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                focusedTextColor = TextDark,
+                unfocusedTextColor = TextDark,
+              ),
+              modifier = Modifier.fillMaxWidth().testTag("phone_input_field"),
+            )
+          }
+
+          Spacer(modifier = Modifier.height(14.dp))
         }
       }
 
       // EMAIL SECTION (or Reg No in Login mode)
       Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-          text = if (isSignUpMode) "EMAIL" else "REGISTRATION NUMBER OR EMAIL",
+          text = if (isSignUpMode) "EMAIL" else "EMAIL OR REGISTRATION NUMBER",
           fontSize = 11.sp,
           fontWeight = FontWeight.Bold,
           letterSpacing = 1.sp,
-          color = TextMuted,
+          color = LabelColor,
+          modifier = Modifier.padding(start = 6.dp, bottom = 6.dp),
         )
-        Spacer(modifier = Modifier.height(4.dp))
-        TextField(
-          value = email,
-          onValueChange = {
-            email = it
-            errorMessage = null
-          },
-          placeholder = { Text(if (isSignUpMode) "enter your email" else "enter your email or registration number", color = Color(0xFFA1A1AA)) },
-          singleLine = true,
-          keyboardOptions =
-            KeyboardOptions(
-              keyboardType = if (isSignUpMode) KeyboardType.Email else KeyboardType.Text,
-              imeAction = ImeAction.Next,
-            ),
-          trailingIcon = {
-            if (email.isNotEmpty()) {
-              IconButton(onClick = { email = "" }) {
-                Icon(
-                  imageVector = Icons.Default.Close,
-                  contentDescription = "Clear",
-                  tint = TextMuted,
-                  modifier = Modifier.size(18.dp),
-                )
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .background(PillBackground),
+          contentAlignment = Alignment.CenterStart,
+        ) {
+          TextField(
+            value = email,
+            onValueChange = {
+              email = it
+              errorMessage = null
+            },
+            placeholder = {
+              Text(
+                if (isSignUpMode) "enter your email" else "enter your email or registration number",
+                color = PlaceholderColor,
+                fontSize = 14.sp,
+              )
+            },
+            singleLine = true,
+            keyboardOptions =
+              KeyboardOptions(
+                keyboardType = if (isSignUpMode) KeyboardType.Email else KeyboardType.Text,
+                imeAction = ImeAction.Next,
+              ),
+            leadingIcon = {
+              Icon(Icons.Default.Email, contentDescription = null, tint = PlaceholderColor, modifier = Modifier.size(20.dp))
+            },
+            trailingIcon = {
+              if (email.isNotEmpty()) {
+                IconButton(onClick = { email = "" }) {
+                  Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Clear",
+                    tint = PlaceholderColor,
+                    modifier = Modifier.size(18.dp),
+                  )
+                }
               }
-            }
-          },
-          colors =
-            TextFieldDefaults.colors(
-              focusedContainerColor = Color.Transparent,
-              unfocusedContainerColor = Color.Transparent,
-              focusedIndicatorColor = BlackPrimary,
-              unfocusedIndicatorColor = BorderGray,
-              focusedTextColor = TextDark,
-              unfocusedTextColor = TextDark,
-            ),
-          modifier = Modifier.fillMaxWidth().testTag("email_input_field"),
-        )
+            },
+            colors =
+              TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                focusedTextColor = TextDark,
+                unfocusedTextColor = TextDark,
+              ),
+            modifier = Modifier.fillMaxWidth().testTag("email_input_field"),
+          )
+        }
       }
 
-      Spacer(modifier = Modifier.height(18.dp))
+      Spacer(modifier = Modifier.height(14.dp))
 
-      // PASSWORD SECTION (Screenshot 5)
+      // PASSWORD SECTION
       Column(modifier = Modifier.fillMaxWidth()) {
         Text(
           text = "PASSWORD",
           fontSize = 11.sp,
           fontWeight = FontWeight.Bold,
           letterSpacing = 1.sp,
-          color = TextMuted,
+          color = LabelColor,
+          modifier = Modifier.padding(start = 6.dp, bottom = 6.dp),
         )
-        Spacer(modifier = Modifier.height(4.dp))
-        TextField(
-          value = password,
-          onValueChange = {
-            password = it
-            errorMessage = null
-          },
-          placeholder = { Text("enter your password", color = Color(0xFFA1A1AA)) },
-          singleLine = true,
-          visualTransformation =
-            if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-          keyboardOptions =
-            KeyboardOptions(
-              keyboardType = KeyboardType.Password,
-              imeAction = ImeAction.Done,
-            ),
-          keyboardActions =
-            KeyboardActions(
-              onDone = {
-                keyboardController?.hide()
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .background(PillBackground),
+          contentAlignment = Alignment.CenterStart,
+        ) {
+          TextField(
+            value = password,
+            onValueChange = {
+              password = it
+              errorMessage = null
+            },
+            placeholder = { Text("enter your password", color = PlaceholderColor, fontSize = 14.sp) },
+            singleLine = true,
+            visualTransformation =
+              if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions =
+              KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done,
+              ),
+            keyboardActions =
+              KeyboardActions(
+                onDone = {
+                  keyboardController?.hide()
+                }
+              ),
+            leadingIcon = {
+              Icon(Icons.Default.Lock, contentDescription = null, tint = PlaceholderColor, modifier = Modifier.size(20.dp))
+            },
+            trailingIcon = {
+              IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                Icon(
+                  imageVector =
+                    if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                  contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                  tint = PlaceholderColor,
+                  modifier = Modifier.size(20.dp),
+                )
               }
-            ),
-          trailingIcon = {
-            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-              Icon(
-                imageVector =
-                  if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                contentDescription = if (passwordVisible) "Hide password" else "Show password",
-                tint = TextMuted,
-                modifier = Modifier.size(20.dp),
-              )
-            }
-          },
-          colors =
-            TextFieldDefaults.colors(
-              focusedContainerColor = Color.Transparent,
-              unfocusedContainerColor = Color.Transparent,
-              focusedIndicatorColor = BlackPrimary,
-              unfocusedIndicatorColor = BorderGray,
-              focusedTextColor = TextDark,
-              unfocusedTextColor = TextDark,
-            ),
-          modifier = Modifier.fillMaxWidth().testTag("password_input_field"),
-        )
+            },
+            colors =
+              TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                focusedTextColor = TextDark,
+                unfocusedTextColor = TextDark,
+              ),
+            modifier = Modifier.fillMaxWidth().testTag("password_input_field"),
+          )
+        }
       }
 
-      // Forgot Password link (Screenshot 5)
-      Box(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
-        Text(
-          text = "Forgot password?",
-          fontSize = 13.sp,
-          fontWeight = FontWeight.Bold,
-          color = TextDark,
-          modifier =
-            Modifier
-              .align(Alignment.CenterEnd)
-              .clickable { showForgotPasswordDialog = true }
-              .testTag("forgot_password_link"),
-        )
+      // Forgot Password link (in sign in mode)
+      if (!isSignUpMode) {
+        Box(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+          Text(
+            text = "Forgot password?",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark,
+            modifier =
+              Modifier
+                .align(Alignment.CenterEnd)
+                .clickable { showForgotPasswordDialog = true }
+                .testTag("forgot_password_link"),
+          )
+        }
       }
 
       // Error message feedback
@@ -434,16 +560,16 @@ fun LoginContent(
         }
       }
 
-      Spacer(modifier = Modifier.height(24.dp))
+      Spacer(modifier = Modifier.height(20.dp))
 
-      // Primary Login Button (Screenshot 5)
+      // Primary Login Button
       Box(
         modifier =
           Modifier
             .fillMaxWidth()
-            .height(56.dp)
-            .shadow(4.dp, RoundedCornerShape(32.dp))
-            .clip(RoundedCornerShape(32.dp))
+            .height(52.dp)
+            .shadow(4.dp, RoundedCornerShape(26.dp))
+            .clip(RoundedCornerShape(26.dp))
             .background(BlackPrimary)
             .clickable(
               role = Role.Button,
@@ -492,11 +618,13 @@ fun LoginContent(
                   "12345678"
                 }
 
-                val finalDept = if (department.isNotBlank()) {
-                  department.trim()
+                val finalCourse = if (currentCourse.isNotBlank()) {
+                  currentCourse.trim()
                 } else {
-                  "Computer Science & Engineering"
+                  "CSE – 3rd Year"
                 }
+
+                val finalPhone = phoneNumber.trim()
 
                 val finalEmail = trimmedInput
 
@@ -504,8 +632,10 @@ fun LoginContent(
                   UserProfile(
                     name = finalName,
                     registrationNumber = finalRegNo,
-                    department = finalDept,
+                    department = finalCourse,
                     email = finalEmail,
+                    phone = finalPhone,
+                    course = finalCourse,
                   )
 
                 coroutineScope.launch {
@@ -516,7 +646,9 @@ fun LoginContent(
                         email = finalEmail,
                         password = password,
                         registrationNumber = finalRegNo,
-                        department = finalDept,
+                        department = finalCourse,
+                        phone = finalPhone,
+                        course = finalCourse,
                       )
                       if (result.isSuccess) {
                         val finalProf = result.getOrNull()!!.toUserProfile()

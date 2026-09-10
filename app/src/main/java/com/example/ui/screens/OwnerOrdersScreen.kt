@@ -23,13 +23,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -65,8 +73,8 @@ private val BadgePickedUpBg = Color(0xFFF3F4F6)
 private val CardBorderColor = Color(0xFFF3F4F6)
 private val PageBackground = Color(0xFFFAFAFA)
 
-// Tabs matching Image 1: All, Preparing, Ready, Picked Up
-private val FilterTabs = listOf("All", "Preparing", "Ready", "Picked Up")
+// Tabs: Preparing, Ready, Picked Up (All tab removed as requested)
+private val FilterTabs = listOf("Preparing", "Ready", "Picked Up")
 
 @Composable
 fun OwnerOrdersScreen(
@@ -76,26 +84,48 @@ fun OwnerOrdersScreen(
   dashboardViewModel: OwnerDashboardViewModel = viewModel(),
   modifier: Modifier = Modifier,
 ) {
-  var selectedTab by remember { mutableStateOf("All") }
+  var selectedTab by remember { mutableStateOf("Preparing") }
   val allOrders by dashboardViewModel.orders.collectAsState()
+
+  // Filter feature for Picked Up orders
+  var pickedUpFilterTime by remember { mutableStateOf("All") } // "All", "Today", "Yesterday"
+  var pickedUpSearchQuery by remember { mutableStateOf("") }
+  var showPickedUpFilterDialog by remember { mutableStateOf(false) }
 
   val sourceOrders = remember(allOrders) {
     allOrders.filter { !dashboardViewModel.isGuestOrder(it) }
   }
 
   // Counts for each tab
-  val allCount = sourceOrders.size
   val preparingCount = sourceOrders.count { it.status.equals("PREPARING", ignoreCase = true) || it.status.equals("NEW", ignoreCase = true) }
   val readyCount = sourceOrders.count { it.status.equals("READY", ignoreCase = true) }
   val pickedUpCount = sourceOrders.count { it.status.equals("COMPLETED", ignoreCase = true) || it.status.equals("DELIVERED", ignoreCase = true) }
 
-  val filteredOrders = remember(sourceOrders, selectedTab) {
+  val filteredOrders = remember(sourceOrders, selectedTab, pickedUpFilterTime, pickedUpSearchQuery) {
     when (selectedTab) {
-      "All" -> sourceOrders
       "Preparing" -> sourceOrders.filter { it.status.equals("PREPARING", ignoreCase = true) || it.status.equals("NEW", ignoreCase = true) }
       "Ready" -> sourceOrders.filter { it.status.equals("READY", ignoreCase = true) }
-      "Picked Up" -> sourceOrders.filter { it.status.equals("COMPLETED", ignoreCase = true) || it.status.equals("DELIVERED", ignoreCase = true) }
-      else -> sourceOrders
+      "Picked Up" -> {
+        val now = System.currentTimeMillis()
+        val oneDayMs = 24 * 60 * 60 * 1000L
+        sourceOrders.filter { it.status.equals("COMPLETED", ignoreCase = true) || it.status.equals("DELIVERED", ignoreCase = true) }
+          .filter { order ->
+            val matchesTime = when (pickedUpFilterTime) {
+              "Today" -> (now - order.createdAt) < oneDayMs
+              "Yesterday" -> {
+                val diff = now - order.createdAt
+                diff in oneDayMs..(2 * oneDayMs)
+              }
+              else -> true
+            }
+            val matchesQuery = pickedUpSearchQuery.isBlank() ||
+              order.tokenNumber.contains(pickedUpSearchQuery, ignoreCase = true) ||
+              order.studentName.contains(pickedUpSearchQuery, ignoreCase = true) ||
+              order.studentCourse.contains(pickedUpSearchQuery, ignoreCase = true)
+            matchesTime && matchesQuery
+          }
+      }
+      else -> sourceOrders.filter { it.status.equals("PREPARING", ignoreCase = true) }
     }
   }
 
@@ -108,50 +138,69 @@ fun OwnerOrdersScreen(
       .testTag("owner_orders_screen"),
   ) {
     Column(
-      modifier = Modifier
-        .fillMaxSize()
-        .padding(bottom = 76.dp), // Space for bottom button
+      modifier = Modifier.fillMaxSize(),
     ) {
-      // ── Constant upper navigation bar (3 lines, app name, notification icon, profile)
-      OwnerTopBar(
-        drawerOpen = false,
-        onHamburgerClick = onBack,
-        onProfileClick = {},
-      )
-
-      // ── Subheader (matching Image 1) ─────────────────────────────────────────
+      // ── Clean Header (Without redundant constant top bar) ─────────────────
       Row(
         modifier = Modifier
           .fillMaxWidth()
           .background(PureWhite)
-          .padding(horizontal = 16.dp, vertical = 10.dp),
+          .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        IconButton(
-          onClick = onBack,
-          modifier = Modifier.testTag("owner_orders_back_button"),
-        ) {
-          Icon(
-            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-            contentDescription = "Back",
-            tint = TextDark,
-            modifier = Modifier.size(24.dp),
-          )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          IconButton(
+            onClick = onBack,
+            modifier = Modifier.testTag("owner_orders_back_button"),
+          ) {
+            Icon(
+              imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+              contentDescription = "Back",
+              tint = TextDark,
+              modifier = Modifier.size(24.dp),
+            )
+          }
+
+          Spacer(modifier = Modifier.width(10.dp))
+
+          Column {
+            Text(
+              text = "Live Orders",
+              fontSize = 20.sp,
+              fontWeight = FontWeight.Bold,
+              color = TextDark,
+            )
+            Text(
+              text = "${preparingCount + readyCount} active in kitchen",
+              fontSize = 12.sp,
+              color = TextMuted,
+            )
+          }
         }
 
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Text(
-          text = "Live Orders",
-          fontSize = 20.sp,
-          fontWeight = FontWeight.Bold,
-          color = TextDark,
-        )
+        // Filter icon feature for Picked Up orders
+        if (selectedTab == "Picked Up") {
+          val isFilterActive = pickedUpFilterTime != "All" || pickedUpSearchQuery.isNotBlank()
+          IconButton(
+            onClick = { showPickedUpFilterDialog = true },
+            modifier = Modifier
+              .clip(CircleShape)
+              .background(if (isFilterActive) BadgePreparingBg else Color(0xFFF3F4F6)),
+          ) {
+            Icon(
+              imageVector = Icons.Default.Tune,
+              contentDescription = "Filter Picked Up Orders",
+              tint = if (isFilterActive) OrangeAccent else TextDark,
+              modifier = Modifier.size(20.dp),
+            )
+          }
+        }
       }
 
-      Spacer(modifier = Modifier.height(8.dp))
+      Spacer(modifier = Modifier.height(4.dp))
 
-      // ── Filter Tabs matching Image 1: All (12), Preparing (6), Ready (3), Picked Up (3)
+      // ── Filter Tabs: Preparing (6), Ready (3), Picked Up (3)
       LazyRow(
         modifier = Modifier
           .fillMaxWidth()
@@ -163,7 +212,6 @@ fun OwnerOrdersScreen(
         items(FilterTabs) { tab ->
           val isSelected = selectedTab.equals(tab, ignoreCase = true)
           val count = when (tab) {
-            "All" -> allCount
             "Preparing" -> preparingCount
             "Ready" -> readyCount
             "Picked Up" -> pickedUpCount
@@ -175,13 +223,13 @@ fun OwnerOrdersScreen(
               .clip(RoundedCornerShape(18.dp))
               .background(if (isSelected) OrangeAccent else Color(0xFFF3F4F6))
               .clickable { selectedTab = tab }
-              .padding(horizontal = 14.dp, vertical = 7.dp)
+              .padding(horizontal = 16.dp, vertical = 8.dp)
               .testTag("order_tab_$tab"),
             contentAlignment = Alignment.Center,
           ) {
             Text(
               text = "$tab ($count)",
-              fontSize = 12.5.sp,
+              fontSize = 13.sp,
               fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
               color = if (isSelected) PureWhite else Color(0xFF4B5563),
             )
@@ -189,9 +237,37 @@ fun OwnerOrdersScreen(
         }
       }
 
-      Spacer(modifier = Modifier.height(10.dp))
+      // Active filter chip banner for Picked Up tab
+      if (selectedTab == "Picked Up" && (pickedUpFilterTime != "All" || pickedUpSearchQuery.isNotBlank())) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Text(
+            text = "Filtered by: ${if (pickedUpFilterTime != "All") pickedUpFilterTime else ""} ${if (pickedUpSearchQuery.isNotBlank()) "\"$pickedUpSearchQuery\"" else ""}".trim(),
+            fontSize = 12.sp,
+            color = OrangeAccent,
+            fontWeight = FontWeight.SemiBold,
+          )
+          Text(
+            text = "Clear Filter",
+            fontSize = 12.sp,
+            color = Color(0xFFDC2626),
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.clickable {
+              pickedUpFilterTime = "All"
+              pickedUpSearchQuery = ""
+            },
+          )
+        }
+      }
 
-      // ── Live Orders List matching Image 1 ─────────────────────────────────
+      Spacer(modifier = Modifier.height(6.dp))
+
+      // ── Live Orders List ──────────────────────────────────────────────────
       if (filteredOrders.isEmpty()) {
         Box(
           modifier = Modifier
@@ -200,7 +276,10 @@ fun OwnerOrdersScreen(
           contentAlignment = Alignment.Center,
         ) {
           Text(
-            text = "No $selectedTab orders right now.",
+            text = if (selectedTab == "Picked Up" && (pickedUpFilterTime != "All" || pickedUpSearchQuery.isNotBlank()))
+              "No completed orders match your filters."
+            else
+              "No $selectedTab orders right now.",
             fontSize = 14.sp,
             color = TextMuted,
           )
@@ -225,31 +304,92 @@ fun OwnerOrdersScreen(
       }
     }
 
-    // ── Bottom Fixed Button: View All Orders (Image 1) ──────────────────────
-    Box(
-      modifier = Modifier
-        .align(Alignment.BottomCenter)
-        .fillMaxWidth()
-        .background(PureWhite)
-        .padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
-      Button(
-        onClick = { selectedTab = "All" },
-        modifier = Modifier
-          .fillMaxWidth()
-          .height(50.dp)
-          .testTag("view_all_orders_button"),
-        shape = RoundedCornerShape(25.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
-      ) {
-        Text(
-          text = "View All Orders",
-          fontSize = 15.sp,
-          fontWeight = FontWeight.Bold,
-          color = PureWhite,
-        )
-      }
+    // ── Picked Up Filter Dialog ─────────────────────────────────────────────
+    if (showPickedUpFilterDialog) {
+      AlertDialog(
+        onDismissRequest = { showPickedUpFilterDialog = false },
+        title = {
+          Text(
+            text = "Filter Picked Up Orders",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark,
+          )
+        },
+        text = {
+          Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Search field
+            OutlinedTextField(
+              value = pickedUpSearchQuery,
+              onValueChange = { pickedUpSearchQuery = it },
+              placeholder = { Text("Search by Token or Student", fontSize = 13.sp) },
+              leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted) },
+              trailingIcon = {
+                if (pickedUpSearchQuery.isNotEmpty()) {
+                  IconButton(onClick = { pickedUpSearchQuery = "" }) {
+                    Icon(Icons.Default.Close, contentDescription = "Clear", tint = TextMuted)
+                  }
+                }
+              },
+              singleLine = true,
+              shape = RoundedCornerShape(12.dp),
+              modifier = Modifier.fillMaxWidth(),
+            )
+
+            Text(
+              text = "TIME RANGE",
+              fontSize = 11.sp,
+              fontWeight = FontWeight.Bold,
+              color = TextMuted,
+              letterSpacing = 0.5.sp,
+            )
+
+            listOf("All", "Today", "Yesterday").forEach { timeOption ->
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clip(RoundedCornerShape(8.dp))
+                  .clickable { pickedUpFilterTime = timeOption }
+                  .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                RadioButton(
+                  selected = pickedUpFilterTime == timeOption,
+                  onClick = { pickedUpFilterTime = timeOption },
+                  colors = RadioButtonDefaults.colors(selectedColor = OrangeAccent),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                  text = if (timeOption == "All") "All Completed Orders" else timeOption,
+                  fontSize = 14.sp,
+                  fontWeight = if (pickedUpFilterTime == timeOption) FontWeight.Bold else FontWeight.Normal,
+                  color = TextDark,
+                )
+              }
+            }
+          }
+        },
+        confirmButton = {
+          Button(
+            onClick = { showPickedUpFilterDialog = false },
+            colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent),
+            shape = RoundedCornerShape(12.dp),
+          ) {
+            Text("Apply Filter", color = PureWhite, fontWeight = FontWeight.Bold)
+          }
+        },
+        dismissButton = {
+          TextButton(onClick = {
+            pickedUpFilterTime = "All"
+            pickedUpSearchQuery = ""
+            showPickedUpFilterDialog = false
+          }) {
+            Text("Reset", color = TextMuted)
+          }
+        },
+        shape = RoundedCornerShape(20.dp),
+        containerColor = PureWhite,
+      )
     }
   }
 }
