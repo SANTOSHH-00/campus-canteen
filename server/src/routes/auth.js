@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Owner = require('../models/Owner');
 const PasswordResetToken = require('../models/PasswordResetToken');
-const { sendPasswordResetEmail } = require('../services/emailService');
+const { sendPasswordResetEmail, checkSmtpStatus } = require('../services/emailService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'quickbite-super-secure-jwt-secret-key-2026';
 
@@ -137,6 +137,16 @@ router.post('/login', async (req, res) => {
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: err.message || 'Login failed.' });
+  }
+});
+
+// ── GET /api/auth/smtp-status (Diagnostics for email delivery) ────────────────
+router.get('/smtp-status', async (req, res) => {
+  try {
+    const status = await checkSmtpStatus();
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -372,8 +372,43 @@ Quick Bite Campus Canteen System
   return sendEmail({ to: toEmail, subject, html, text });
 }
 
+async function checkSmtpStatus() {
+  const user = process.env.EMAIL_USER;
+  const pass = process.env.EMAIL_APP_PASSWORD;
+
+  const status = {
+    hasEmailUser: !!user,
+    emailUserMasked: user ? user.replace(/(.{2})(.*)(@.*)/, '$1***$3') : null,
+    hasAppPassword: !!pass,
+    appPasswordLength: pass ? pass.replace(/\s+/g, '').length : 0,
+    transporterReady: false,
+    verifyError: null,
+  };
+
+  if (!user || !pass) {
+    status.verifyError = 'EMAIL_USER or EMAIL_APP_PASSWORD environment variables are missing';
+    return status;
+  }
+
+  try {
+    const transport = getTransporter();
+    await new Promise((resolve, reject) => {
+      transport.verify((err, success) => {
+        if (err) reject(err);
+        else resolve(success);
+      });
+    });
+    status.transporterReady = true;
+  } catch (err) {
+    status.verifyError = err.message;
+  }
+
+  return status;
+}
+
 module.exports = {
   sendEmail,
   sendOwnerOTP,
   sendPasswordResetEmail,
+  checkSmtpStatus,
 };
