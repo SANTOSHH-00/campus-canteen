@@ -1,8 +1,14 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
+
+// Cloud containers (e.g. Render) lack IPv6 outbound routing; force IPv4 resolution
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 /**
  * Centralized Email Service for Quick Bite
- * Uses Nodemailer with Gmail SMTP (Port 465, SSL)
+ * Uses Nodemailer with Gmail SMTP (Port 587 STARTTLS, Force IPv4)
  */
 
 let transporter = null;
@@ -12,16 +18,18 @@ function getTransporter() {
     const user = process.env.EMAIL_USER;
     const pass = process.env.EMAIL_APP_PASSWORD;
 
-    // Use Gmail service with short timeouts to prevent server hanging in cloud environments
     transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // STARTTLS
       auth: {
         user: user || '',
         pass: pass ? pass.replace(/\s+/g, '') : '', // strip accidental spaces in app password
       },
-      connectionTimeout: 6000,
-      greetingTimeout: 6000,
-      socketTimeout: 8000,
+      family: 4, // Force IPv4 to avoid ENETUNREACH on cloud hosts like Render
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 10000,
     });
   }
   return transporter;
@@ -52,10 +60,10 @@ async function sendEmail({ to, subject, html, text }) {
   try {
     const transport = getTransporter();
 
-    // 7-second Promise.race guard to guarantee the endpoint never hangs
+    // Background timeout guard
     const sendPromise = transport.sendMail(mailOptions);
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Email dispatch timed out after 7s')), 7000)
+      setTimeout(() => reject(new Error('Email dispatch timed out after 15s')), 15000)
     );
 
     const info = await Promise.race([sendPromise, timeoutPromise]);
