@@ -154,6 +154,9 @@ fun OwnerLoginScreen(
       if (targetEmail.isNotBlank()) {
         registeredEmail = targetEmail
       }
+      if (req.otpCode.isNotBlank()) {
+        otpCode = req.otpCode
+      }
       // Ensure UI immediately transitions to the OTP screen
       viewModel.goToEmailOtp(targetEmail)
       onNavigateToOtp?.invoke(targetEmail)
@@ -524,7 +527,25 @@ fun OwnerLoginScreen(
                 )
               }
 
-              Spacer(modifier = Modifier.height(20.dp))
+              Spacer(modifier = Modifier.height(16.dp))
+
+              val notice = (loginState as? OwnerLoginUiState.RequiresOtp)?.deliveryNotice.orEmpty()
+              if (notice.isNotBlank()) {
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFFFEF3C7))
+                    .border(1.dp, Color(0xFFFDE68A), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Icon(Icons.Default.Info, contentDescription = null, tint = AmberBrand, modifier = Modifier.size(18.dp))
+                  Spacer(modifier = Modifier.width(8.dp))
+                  Text(text = notice, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF92400E))
+                }
+                Spacer(modifier = Modifier.height(14.dp))
+              }
 
               Text(
                 text = "ENTER 6-DIGIT OTP CODE",

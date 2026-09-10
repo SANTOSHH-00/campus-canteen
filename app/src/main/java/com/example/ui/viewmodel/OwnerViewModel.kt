@@ -140,15 +140,14 @@ class OwnerViewModel(
 
         // Backend POST /api/owner/login already generates and sends the 6-digit OTP via Gmail SMTP!
         // Do not call repository.sendEmailOtp again here as it can trigger cooldown or failure.
-        val receivedOtp = repository.lastReceivedOtp.orEmpty()
         _currentStep.value = OwnerAuthStep.EMAIL_OTP
         _loginState.value = OwnerLoginUiState.RequiresOtp(
           owner = owner,
           phone = owner.phone,
           email = ownerEmail,
-          otpCode = receivedOtp,
+          otpCode = repository.lastReceivedOtp,
           isDelivered = repository.lastOtpDelivered,
-          deliveryNotice = if (receivedOtp.isNotBlank()) "Verification OTP: $receivedOtp" else repository.lastOtpDeliveryNotice,
+          deliveryNotice = repository.lastOtpDeliveryNotice,
         )
       } else {
         _currentStep.value = OwnerAuthStep.CREDENTIALS

@@ -408,9 +408,9 @@ data class ResetPasswordRequestDto(
 data class SimpleMessageResponseDto(
   @Json(name = "success") val success: Boolean = true,
   @Json(name = "message") val message: String? = null,
-  @Json(name = "error") val error: String? = null,
-  @Json(name = "resetToken") val resetToken: String? = null,
+  @Json(name = "token") val token: String? = null,
   @Json(name = "resetUrl") val resetUrl: String? = null,
+  @Json(name = "error") val error: String? = null,
 )
 
 // ── Owner Auth DTOs ───────────────────────────────────────────────────────

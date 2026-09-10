@@ -1,141 +1,174 @@
 const nodemailer = require('nodemailer');
-const dns = require('dns');
-
-// Cloud containers (e.g. Render) lack IPv6 outbound routing; force IPv4 resolution
-if (dns.setDefaultResultOrder) {
-  dns.setDefaultResultOrder('ipv4first');
-}
 
 /**
  * Centralized Email Service for Quick Bite
- * Uses Nodemailer with Gmail SMTP (Port 587 STARTTLS, Force IPv4)
+ * Uses Nodemailer with Gmail SMTP (Port 465, SSL)
  */
-
-async function getTransporter() {
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_APP_PASSWORD;
-
-  // Resolve IPv4 address directly to prevent ENETUNREACH on Linux containers without IPv6 routing
-  let smtpHost = 'smtp.gmail.com';
-  try {
-    const ipv4Addresses = await dns.promises.resolve4('smtp.gmail.com');
-    if (ipv4Addresses && ipv4Addresses.length > 0) {
-      smtpHost = ipv4Addresses[0];
-    }
-  } catch (dnsErr) {
-    console.warn('[EmailService] DNS resolve4 failed, falling back to hostname:', dnsErr.message);
-  }
-
-  return nodemailer.createTransport({
-    host: smtpHost,
-    port: 587,
-    secure: false, // STARTTLS
-    auth: {
-      user: user || '',
-      pass: pass ? pass.replace(/\s+/g, '') : '', // strip accidental spaces in app password
-    },
-    tls: {
-      servername: 'smtp.gmail.com',
-    },
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 10000,
-  });
-}
 
 const https = require('https');
 
-async function sendViaResend({ to, subject, html, text }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM || 'QuickBite <onboarding@resend.dev>';
+let transporter = null;
 
-  const payload = JSON.stringify({
-    from,
-    to: [to.trim().toLowerCase()],
+function getTransporter() {
+  if (!transporter) {
+    const user = process.env.EMAIL_USER;
+    const pass = process.env.EMAIL_APP_PASSWORD;
+
+    transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: user || '',
+        pass: pass ? pass.replace(/\s+/g, '') : '',
+      },
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 6000,
+    });
+  }
+  return transporter;
+}
+
+// Brevo API (port 443 HTTPS - 300 free emails/day, no credit card required)
+function sendViaBrevo(apiKey, { to, subject, html, text }) {
+  const senderEmail = process.env.EMAIL_USER || 'quickbite.connecting@gmail.com';
+  const data = JSON.stringify({
+    sender: { name: 'Quick Bite Campus', email: senderEmail },
+    to: [{ email: to.trim().toLowerCase() }],
     subject,
-    html: html || undefined,
-    text: text || undefined,
+    htmlContent: html || text,
+    textContent: text || '',
   });
 
   return new Promise((resolve, reject) => {
-    const req = https.request('https://api.resend.com/emails', {
+    const req = https.request({
+      hostname: 'api.brevo.com',
+      port: 443,
+      path: '/v3/smtp/email',
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'api-key': apiKey,
         'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(payload),
+        'Content-Length': Buffer.byteLength(data),
       },
-      timeout: 10000,
+      timeout: 6000,
     }, (res) => {
       let body = '';
       res.on('data', chunk => body += chunk);
       res.on('end', () => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          console.log(`[EmailService/Resend] Email sent via HTTP API to ${to}. Response:`, body);
-          resolve({ success: true, response: body });
+          console.log(`[EmailService] Delivered successfully via Brevo HTTPS API to ${to}.`);
+          resolve({ success: true, messageId: body });
         } else {
-          console.error(`[EmailService/Resend] Resend API error (${res.statusCode}):`, body);
-          reject(new Error(`Resend API error (${res.statusCode}): ${body}`));
+          console.error(`[EmailService] Brevo API error (${res.statusCode}):`, body);
+          reject(new Error(`Brevo API error: ${body}`));
         }
       });
     });
-
     req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('Resend API request timed out after 10s'));
-    });
+    req.on('timeout', () => { req.destroy(); reject(new Error('Brevo API timeout')); });
+    req.write(data);
+    req.end();
+  });
+}
 
-    req.write(payload);
+// Resend API (port 443 HTTPS - 3,000 free emails/month)
+function sendViaResend(apiKey, { to, subject, html, text }) {
+  const sender = process.env.RESEND_FROM || 'onboarding@resend.dev';
+  const data = JSON.stringify({
+    from: `Quick Bite <${sender}>`,
+    to: [to.trim().toLowerCase()],
+    subject,
+    html: html || text,
+    text: text || '',
+  });
+
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.resend.com',
+      port: 443,
+      path: '/emails',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(data),
+      },
+      timeout: 6000,
+    }, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          console.log(`[EmailService] Delivered successfully via Resend HTTPS API to ${to}.`);
+          resolve({ success: true, messageId: body });
+        } else {
+          console.error(`[EmailService] Resend API error (${res.statusCode}):`, body);
+          reject(new Error(`Resend API error: ${body}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Resend API timeout')); });
+    req.write(data);
     req.end();
   });
 }
 
 /**
- * Generic reusable email sender with timeout guard
+ * Generic reusable email sender with multi-provider fallback (Brevo / Resend / Gmail SMTP)
  * @param {Object} options - { to, subject, html, text }
  */
 async function sendEmail({ to, subject, html, text }) {
-  // If RESEND_API_KEY is configured, dispatch via HTTPS port 443 (never blocked by Render)
-  if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim()) {
+  const recipient = to.trim().toLowerCase();
+
+  // 1. Check for Brevo API key (HTTPS port 443 - works on Render Free Tier)
+  if (process.env.BREVO_API_KEY) {
     try {
-      return await sendViaResend({ to, subject, html, text });
-    } catch (resendErr) {
-      console.warn('[EmailService] Resend dispatch failed, attempting SMTP fallback:', resendErr.message);
+      return await sendViaBrevo(process.env.BREVO_API_KEY.trim(), { to: recipient, subject, html, text });
+    } catch (e) {
+      console.warn('[EmailService] Brevo HTTPS dispatch failed, attempting next provider...', e.message);
     }
   }
 
+  // 2. Check for Resend API key (HTTPS port 443 - works on Render Free Tier)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      return await sendViaResend(process.env.RESEND_API_KEY.trim(), { to: recipient, subject, html, text });
+    } catch (e) {
+      console.warn('[EmailService] Resend HTTPS dispatch failed, attempting next provider...', e.message);
+    }
+  }
+
+  // 3. Fallback to Gmail SMTP (Works on local machine or paid clouds)
   const user = process.env.EMAIL_USER;
   const pass = process.env.EMAIL_APP_PASSWORD;
 
   if (!user || !pass) {
-    console.warn(`[EmailService] EMAIL_USER or EMAIL_APP_PASSWORD not configured. Skipping SMTP dispatch to ${to}.`);
-    return { success: false, skipped: true, error: 'Email credentials not configured on server' };
+    console.warn(`[EmailService] EMAIL_USER / EMAIL_APP_PASSWORD not set. Skipping SMTP to ${recipient}.`);
+    return { success: false, skipped: true, error: 'Email credentials not configured' };
   }
 
   const fromAddress = user || 'no-reply@quickbite.campus';
   const mailOptions = {
     from: `"Quick Bite Campus" <${fromAddress}>`,
-    to: to.trim().toLowerCase(),
+    to: recipient,
     subject,
     text: text || '',
     html: html || '',
   };
 
   try {
-    const transport = await getTransporter();
-
-    // Background timeout guard
+    const transport = getTransporter();
     const sendPromise = transport.sendMail(mailOptions);
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Email dispatch timed out after 15s')), 15000)
+      setTimeout(() => reject(new Error('Gmail SMTP timed out (Render free tier blocks ports 465/587)')), 6000)
     );
 
     const info = await Promise.race([sendPromise, timeoutPromise]);
-    console.log(`[EmailService] Email sent successfully to ${to}. MessageId: ${info.messageId}`);
+    console.log(`[EmailService] Email sent successfully to ${recipient}. MessageId: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error(`[EmailService] Failed to send email to ${to}:`, error.message);
+    console.error(`[EmailService] SMTP delivery failed to ${recipient}: ${error.message}`);
     return { success: false, error: error.message };
   }
 }
@@ -445,44 +478,8 @@ Quick Bite Campus Canteen System
   return sendEmail({ to: toEmail, subject, html, text });
 }
 
-async function checkSmtpStatus() {
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_APP_PASSWORD;
-
-  const status = {
-    hasResendApiKey: !!(process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim()),
-    hasEmailUser: !!user,
-    emailUserMasked: user ? user.replace(/(.{2})(.*)(@.*)/, '$1***$3') : null,
-    hasAppPassword: !!pass,
-    appPasswordLength: pass ? pass.replace(/\s+/g, '').length : 0,
-    transporterReady: false,
-    verifyError: null,
-  };
-
-  if (!user || !pass) {
-    status.verifyError = 'EMAIL_USER or EMAIL_APP_PASSWORD environment variables are missing';
-    return status;
-  }
-
-  try {
-    const transport = await getTransporter();
-    await new Promise((resolve, reject) => {
-      transport.verify((err, success) => {
-        if (err) reject(err);
-        else resolve(success);
-      });
-    });
-    status.transporterReady = true;
-  } catch (err) {
-    status.verifyError = err.message;
-  }
-
-  return status;
-}
-
 module.exports = {
   sendEmail,
   sendOwnerOTP,
   sendPasswordResetEmail,
-  checkSmtpStatus,
 };

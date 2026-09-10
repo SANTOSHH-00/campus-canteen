@@ -87,7 +87,7 @@ router.post('/login', async (req, res) => {
       console.error('[OwnerAuth] Error sending owner OTP email in background:', err.message);
     });
 
-    // 8. Return response
+    // 8. Return response with OTP (enables verification even if cloud host blocks SMTP)
     const ownerObj = owner.toObject ? owner.toObject() : { ...owner };
     delete ownerObj.password;
     res.json({
