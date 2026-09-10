@@ -13,12 +13,57 @@ const connectDB = require('./config/db');
 // Connect to MongoDB Atlas
 connectDB();
 
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+
 const app = express();
 
-// Middlewares
+// Security Middlewares (Option 3B: Helmet HTTP Security Headers)
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
 app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
+
+// Option 3A: Rate Limiting
+// 1. General API Rate Limiter (600 requests / 15 mins per IP)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests from this IP, please try again in 15 minutes.' },
+});
+app.use('/api/', apiLimiter);
+
+// 2. Sensitive Authentication & OTP Rate Limiter (15 attempts / 10 mins per IP)
+const authLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login or OTP attempts. Please wait 10 minutes before trying again.' },
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/send-otp', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
+app.use('/api/auth/reset-password', authLimiter);
+app.use('/api/owner/login', authLimiter);
+app.use('/api/owners/login', authLimiter);
+app.use('/api/owner/resend-otp', authLimiter);
+app.use('/api/owners/resend-otp', authLimiter);
+
+// Google Play Mandatory Compliance Pages
+app.get('/privacy-policy', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/privacy-policy.html'));
+});
+
+app.get('/delete-account', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/delete-account.html'));
+});
 
 // Static Admin Portal
 app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
