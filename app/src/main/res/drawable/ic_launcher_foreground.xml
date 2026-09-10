@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Centered Food Cover / Cloche & Utensils Icon -->
+    <!-- Cloche handle -->
+    <path
+        android:fillColor="#FFA726"
+        android:pathData="M54,34 C51.8,34 50,35.8 50,38 C50,38.6 50.1,39.1 50.4,39.6 C40.8,42.2 34,51.1 34,62 L74,62 C74,51.1 67.2,42.2 57.6,39.6 C57.9,39.1 58,38.6 58,38 C58,35.8 56.2,34 54,34 Z" />
+    <!-- Cloche plate base -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,65 L78,65 C79.1,65 80,65.9 80,67 C80,68.1 79.1,69 78,69 L30,69 C28.9,69 28,68.1 28,67 C28,65.9 28.9,65 30,65 Z" />
+    <!-- Steam waves / fast speed indicator -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFCC80"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M46,28 C45,26 47,24 46,22" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFCC80"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M54,26 C53,24 55,22 54,20" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFCC80"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M62,28 C61,26 63,24 62,22" />
+    <!-- Small lightning / fast clock dot -->
+    <path
+        android:fillColor="#FFA726"
+        android:pathData="M52,72 L56,72 L53.5,77 L57,77 L51,84 L53,79 L49,79 Z" />
+</vector>

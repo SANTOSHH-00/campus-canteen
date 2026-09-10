@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quickbite Campus Admin Portal - Canteen Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #FF6B00;
+      --primary-dark: #E65100;
+      --primary-light: #FFF3E0;
+      --bg: #0D1117;
+      --surface: #161B22;
+      --surface-border: #30363D;
+      --text-main: #F0F6FC;
+      --text-muted: #8B949E;
+      --success: #238636;
+      --success-bg: #0F381E;
+      --danger: #DA3633;
+      --danger-bg: #3E1B1B;
+      --warning: #D29922;
+      --warning-bg: #382A0C;
+      --radius: 12px;
+      --card-radius: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--surface-border);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-icon {
+      font-size: 1.8rem;
+    }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--primary);
+    }
+
+    .header-badges {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .badge-db {
+      background: #00ED6422;
+      border: 1px solid #00ED6488;
+      color: #00ED64;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .badge-auth {
+      background: #388BFD22;
+      border: 1px solid #388BFD88;
+      color: #58A6FF;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .badge-auth:hover {
+      background: #388BFD33;
+    }
+
+    .container {
+      max-width: 1250px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+      flex: 1;
+      width: 100%;
+    }
+
+    .page-header {
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .page-title {
+      font-size: 1.85rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .page-subtitle {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-top: 0.35rem;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.65rem 1.25rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: #21262D;
+      border: 1px solid var(--surface-border);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      background: #30363D;
+    }
+
+    .btn-danger {
+      background: var(--danger-bg);
+      border: 1px solid var(--danger);
+      color: #F85149;
+    }
+
+    .btn-danger:hover {
+      background: var(--danger);
+      color: white;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .stat-num {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--primary);
+    }
+
+    .stat-label {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--card-radius);
+      overflow: hidden;
+      margin-bottom: 2rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--surface-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .search-input {
+      background: #0D1117;
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      padding: 0.5rem 0.9rem;
+      color: var(--text-main);
+      font-size: 0.85rem;
+      width: 250px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th, td {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--surface-border);
+      font-size: 0.9rem;
+      vertical-align: middle;
+    }
+
+    th {
+      background: #1C2128;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      letter-spacing: 0.5px;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Live Toggle Switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 26px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #30363D;
+      transition: 0.3s;
+      border-radius: 34px;
+      border: 1px solid #484F58;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--success);
+      border-color: #3FB950;
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(22px);
+    }
+
+    .toggle-wrapper {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .toggle-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .text-active {
+      color: #3FB950;
+    }
+
+    .text-inactive {
+      color: #F85149;
+    }
+
+    .canteen-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: #21262D;
+      border: 1px solid #30363D;
+      padding: 0.35rem 0.7rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+
+    .actions-cell {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+    }
+
+    .btn-icon {
+      padding: 0.45rem 0.65rem;
+      font-size: 0.8rem;
+      border-radius: 6px;
+      background: #21262D;
+      border: 1px solid var(--surface-border);
+      color: var(--text-main);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      transition: all 0.2s;
+    }
+
+    .btn-icon:hover {
+      background: #30363D;
+      border-color: var(--text-muted);
+    }
+
+    .btn-icon.delete:hover {
+      background: var(--danger-bg);
+      border-color: var(--danger);
+      color: #F85149;
+    }
+
+    /* Modals */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(5px);
+      display: none;
+      place-items: center;
+      z-index: 1000;
+      padding: 1.5rem;
+    }
+
+    .modal-overlay.active {
+      display: grid;
+    }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 520px;
+      padding: 2rem;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6);
+      animation: modalPop 0.2s ease-out;
+    }
+
+    @keyframes modalPop {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      margin-bottom: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .modal-subtitle {
+      color: var(--text-muted);
+      font-size: 0.88rem;
+      margin-bottom: 1.5rem;
+      line-height: 1.4;
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #C9D1D9;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    input, select {
+      width: 100%;
+      background: #0D1117;
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      padding: 0.75rem 0.95rem;
+      color: var(--text-main);
+      font-size: 0.95rem;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(255, 107, 0, 0.15);
+    }
+
+    .password-wrapper {
+      position: relative;
+    }
+
+    .password-toggle {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      margin-top: 1.75rem;
+    }
+
+    /* Auth Gate Overlay */
+    #authGateOverlay {
+      position: fixed;
+      inset: 0;
+      background: #0D1117EE;
+      backdrop-filter: blur(10px);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    .auth-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      max-width: 440px;
+      width: 100%;
+      padding: 2.25rem;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+      text-align: center;
+    }
+
+    .auth-icon {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .auth-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+    }
+
+    .auth-desc {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: #1C2128;
+      border: 1px solid var(--primary);
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      display: none;
+      animation: slideIn 0.3s ease;
+      z-index: 3000;
+      max-width: 420px;
+      font-size: 0.92rem;
+      line-height: 1.4;
+    }
+
+    .toast.success {
+      border-color: #3FB950;
+      color: #3FB950;
+    }
+
+    .toast.error {
+      border-color: #F85149;
+      color: #F85149;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ADMIN AUTH GATE -->
+  <div id="authGateOverlay" style="display: none;">
+    <div class="auth-card">
+      <div class="auth-icon">🛡️</div>
+      <h2 class="auth-title">Campus Admin Access</h2>
+      <p class="auth-desc">Enter your campus Master Admin passcode to synchronize and manage canteen allocations in MongoDB Atlas.</p>
+      
+      <form id="adminAuthForm" onsubmit="verifyAdminPasscode(event)">
+        <div class="form-group" style="text-align: left;">
+          <label for="adminPasscodeInput">Admin Passcode</label>
+          <div class="password-wrapper">
+            <input type="password" id="adminPasscodeInput" required placeholder="Enter master admin passcode" autocomplete="current-password">
+            <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('adminPasscodeInput')">👁️</button>
+          </div>
+        </div>
+        <div id="authErrorMsg" style="color: #F85149; font-size: 0.85rem; margin-bottom: 1rem; display: none;"></div>
+        <button type="submit" class="btn" style="width: 100%; justify-content: center; padding: 0.8rem;">
+          🔓 Unlock Admin Dashboard
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <header>
+    <div class="brand">
+      <span class="brand-icon">🍔</span>
+      <span class="brand-title">Quickbite Campus Admin</span>
+    </div>
+    <div class="header-badges">
+      <div class="badge-db" id="dbStatusBadge">
+        <span>●</span> Connected: MongoDB Atlas (Quickbite)
+      </div>
+      <div class="badge-auth" onclick="lockAdminSession()" title="Click to lock admin session">
+        🔒 Admin: Authenticated
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Canteen Owner Access & Allocations</h1>
+        <p class="page-subtitle">Create owners, provision login passwords, assign canteens, and live-toggle access directly in MongoDB Atlas.</p>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="fetchData()">⟳ Refresh Data</button>
+        <button class="btn" onclick="openCreateOwnerModal()">
+          <span>➕</span> Create New Canteen Owner
+        </button>
+      </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-num" id="statTotalOwners">0</div>
+        <div class="stat-label">Total Canteen Owners</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num text-active" id="statActiveOwners">0</div>
+        <div class="stat-label">Active & Assigned (Can Log In)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num text-inactive" id="statInactiveOwners">0</div>
+        <div class="stat-label">Deactivated / Pending (Access Denied)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="statTotalCanteens" style="color: #58A6FF;">0</div>
+        <div class="stat-label">Available Campus Canteens</div>
+      </div>
+    </div>
+
+    <!-- Owners Table Card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <span>👥</span> Registered Canteen Owners
+        </div>
+        <input type="text" id="ownerSearchInput" class="search-input" placeholder="🔍 Search owner by name or email..." oninput="filterOwnersTable()">
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Owner Details</th>
+            <th>Contact Email & Phone</th>
+            <th>Assigned Canteen</th>
+            <th>Access Status (Live Toggle)</th>
+            <th style="text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="ownersTableBody">
+          <tr>
+            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 3rem;">
+              Connecting to MongoDB Atlas...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- MODAL: CREATE NEW OWNER -->
+  <div class="modal-overlay" id="createOwnerModal">
+    <div class="modal">
+      <h2 class="modal-title"><span>➕</span> Create Canteen Owner</h2>
+      <p class="modal-subtitle">Provision login credentials and assign a campus canteen. Credentials will immediately allow access in the Quickbite Android app.</p>
+
+      <form id="createOwnerForm" onsubmit="submitCreateOwner(event)">
+        <div class="form-group">
+          <label for="createName">Owner Full Name</label>
+          <input type="text" id="createName" required placeholder="e.g. Ramesh Kumar">
+        </div>
+
+        <div class="form-group">
+          <label for="createEmail">Owner Email (For Login & OTP Verification)</label>
+          <input type="email" id="createEmail" required placeholder="e.g. owner@campus.edu">
+        </div>
+
+        <div class="form-group">
+          <label for="createPassword">Initial Password (Min 6 chars)</label>
+          <div class="password-wrapper">
+            <input type="password" id="createPassword" required minlength="6" placeholder="Set a secure initial password">
+            <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('createPassword')">👁️</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="createPhone">Contact Phone (Optional)</label>
+          <input type="tel" id="createPhone" placeholder="+91 9876543210">
+        </div>
+
+        <div class="form-group">
+          <label for="createCanteenId">Assign Campus Canteen</label>
+          <select id="createCanteenId" required onchange="onCreateCanteenSelectChange()">
+            <option value="">-- Select Canteen --</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Initial Access State</label>
+          <div class="toggle-wrapper" style="margin-top: 0.4rem;">
+            <label class="switch">
+              <input type="checkbox" id="createCanteenAssigned" checked>
+              <span class="slider"></span>
+            </label>
+            <span class="toggle-label text-active" id="createToggleLabel">Active (Assigned)</span>
+          </div>
+        </div>
+
+        <input type="hidden" id="createBlock">
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('createOwnerModal')">Cancel</button>
+          <button type="submit" class="btn">Create & Save to MongoDB</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT ALLOCATION -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal">
+      <h2 class="modal-title"><span>✏️</span> Edit Canteen Allocation</h2>
+      <p class="modal-subtitle" id="editModalSubtitle">owner@campus.edu</p>
+
+      <form id="editForm" onsubmit="submitEditAllocation(event)">
+        <input type="hidden" id="editOwnerUid">
+
+        <div class="form-group">
+          <label for="editCanteenId">Select Assigned Canteen</label>
+          <select id="editCanteenId" required onchange="onEditCanteenSelectChange()">
+            <option value="">-- Choose a Canteen --</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Canteen Access Permission</label>
+          <div class="toggle-wrapper" style="margin-top: 0.4rem;">
+            <label class="switch">
+              <input type="checkbox" id="editCanteenAssigned" onchange="updateEditToggleLabel()">
+              <span class="slider"></span>
+            </label>
+            <span class="toggle-label" id="editToggleLabel">Active</span>
+          </div>
+        </div>
+
+        <input type="hidden" id="editBlock">
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('editModal')">Cancel</button>
+          <button type="submit" class="btn">Save Allocation</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: RESET PASSWORD -->
+  <div class="modal-overlay" id="resetPasswordModal">
+    <div class="modal">
+      <h2 class="modal-title"><span>🔑</span> Reset Owner Password</h2>
+      <p class="modal-subtitle" id="resetPasswordSubtitle">Reset credentials for owner</p>
+
+      <form id="resetPasswordForm" onsubmit="submitResetPassword(event)">
+        <input type="hidden" id="resetPasswordUid">
+
+        <div class="form-group">
+          <label for="newPasswordInput">New Password (Min 6 chars)</label>
+          <div class="password-wrapper">
+            <input type="password" id="newPasswordInput" required minlength="6" placeholder="Enter new password">
+            <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('newPasswordInput')">👁️</button>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('resetPasswordModal')">Cancel</button>
+          <button type="submit" class="btn">Update Password in MongoDB</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let canteensList = [];
+    let ownersList = [];
+    let adminSecretKey = localStorage.getItem('qb_admin_key') || '';
+
+    // Check if session is unlocked
+    window.addEventListener('DOMContentLoaded', () => {
+      if (!adminSecretKey) {
+        showAuthGate();
+      } else {
+        validateSavedKey();
+      }
+    });
+
+    function showAuthGate() {
+      document.getElementById('authGateOverlay').style.display = 'flex';
+    }
+
+    function hideAuthGate() {
+      document.getElementById('authGateOverlay').style.display = 'none';
+    }
+
+    async function validateSavedKey() {
+      try {
+        const res = await fetch('/api/owners/admin/verify-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: adminSecretKey })
+        });
+        if (res.ok) {
+          hideAuthGate();
+          fetchData();
+        } else {
+          localStorage.removeItem('qb_admin_key');
+          adminSecretKey = '';
+          showAuthGate();
+        }
+      } catch (err) {
+        // Offline or connection error, allow attempt
+        fetchData();
+      }
+    }
+
+    async function verifyAdminPasscode(e) {
+      e.preventDefault();
+      const input = document.getElementById('adminPasscodeInput').value.trim();
+      const errBox = document.getElementById('authErrorMsg');
+
+      try {
+        const res = await fetch('/api/owners/admin/verify-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: input })
+        });
+
+        if (res.ok) {
+          adminSecretKey = input;
+          localStorage.setItem('qb_admin_key', input);
+          errBox.style.display = 'none';
+          hideAuthGate();
+          showToast('✅ Admin authenticated successfully', 'success');
+          fetchData();
+        } else {
+          errBox.textContent = '❌ Incorrect admin passcode. Please check .env ADMIN_SECRET.';
+          errBox.style.display = 'block';
+        }
+      } catch (err) {
+        errBox.textContent = 'Error communicating with server: ' + err.message;
+        errBox.style.display = 'block';
+      }
+    }
+
+    function lockAdminSession() {
+      if (confirm('Lock admin dashboard? You will need to enter the admin passcode again.')) {
+        localStorage.removeItem('qb_admin_key');
+        adminSecretKey = '';
+        showAuthGate();
+      }
+    }
+
+    function getAdminHeaders() {
+      return {
+        'Content-Type': 'application/json',
+        'x-admin-key': adminSecretKey
+      };
+    }
+
+    // Toggle password visibility
+    function togglePasscodeVisibility(fieldId) {
+      const field = document.getElementById(fieldId);
+      field.type = field.type === 'password' ? 'text' : 'password';
+    }
+
+    // Fetch Data
+    async function fetchData() {
+      try {
+        // Fetch canteens
+        const cRes = await fetch('/api/canteens');
+        canteensList = await cRes.json();
+        populateCanteenDropdowns();
+
+        // Fetch owners
+        const oRes = await fetch('/api/owners', {
+          headers: getAdminHeaders()
+        });
+
+        if (oRes.status === 401) {
+          showAuthGate();
+          return;
+        }
+
+        ownersList = await oRes.json();
+        updateStats();
+        renderOwnersTable(ownersList);
+      } catch (err) {
+        showToast('Error syncing with MongoDB: ' + err.message, 'error');
+      }
+    }
+
+    function populateCanteenDropdowns() {
+      const createSelect = document.getElementById('createCanteenId');
+      const editSelect = document.getElementById('editCanteenId');
+
+      let optionsHtml = '<option value="">-- Choose a Canteen --</option>';
+      canteensList.forEach(c => {
+        optionsHtml += `<option value="${c.id}" data-block="${c.block}">${c.name} (${c.location || 'Block ' + c.block})</option>`;
+      });
+
+      createSelect.innerHTML = optionsHtml;
+      editSelect.innerHTML = optionsHtml;
+    }
+
+    function updateStats() {
+      document.getElementById('statTotalOwners').textContent = ownersList.length;
+      const activeCount = ownersList.filter(o => o.canteenAssigned).length;
+      document.getElementById('statActiveOwners').textContent = activeCount;
+      document.getElementById('statInactiveOwners').textContent = ownersList.length - activeCount;
+      document.getElementById('statTotalCanteens').textContent = canteensList.length;
+    }
+
+    function renderOwnersTable(list) {
+      const tbody = document.getElementById('ownersTableBody');
+      if (!list || list.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 3rem;">
+              No canteen owners found. Click <strong>"➕ Create New Canteen Owner"</strong> above to register one.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = list.map(o => {
+        const assigned = Boolean(o.canteenAssigned);
+        const canteen = canteensList.find(c => c.id === o.canteenId);
+        const canteenLabel = canteen ? `${canteen.name} (${canteen.location || 'Block ' + canteen.block})` : (o.canteenId || 'No canteen selected');
+
+        return `
+          <tr id="row-${o.uid}">
+            <td>
+              <div style="font-weight: 700; font-size: 0.95rem;">${escapeHtml(o.name || 'Canteen Owner')}</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">UID: ${o.uid}</div>
+            </td>
+            <td>
+              <div style="font-weight: 600;">${escapeHtml(o.email)}</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">${escapeHtml(o.phone || '—')}</div>
+            </td>
+            <td>
+              ${assigned && o.canteenId ? `
+                <div class="canteen-pill">
+                  <span>🏢</span> ${escapeHtml(canteenLabel)}
+                </div>
+              ` : `
+                <span style="color: var(--text-muted); font-size: 0.85rem;">— Not Assigned —</span>
+              `}
+            </td>
+            <td>
+              <div class="toggle-wrapper">
+                <label class="switch">
+                  <input type="checkbox" id="toggle-${o.uid}" ${assigned ? 'checked' : ''} onchange="toggleOwnerStatus('${o.uid}', this.checked)">
+                  <span class="slider"></span>
+                </label>
+                <span class="toggle-label ${assigned ? 'text-active' : 'text-inactive'}" id="status-label-${o.uid}">
+                  ${assigned ? 'Active (Assigned)' : 'Off (Access Denied)'}
+                </span>
+              </div>
+            </td>
+            <td>
+              <div class="actions-cell" style="justify-content: flex-end;">
+                <button class="btn-icon" onclick="openEditModal('${o.uid}')" title="Change canteen assignment">
+                  ✏️ Edit
+                </button>
+                <button class="btn-icon" onclick="openResetPasswordModal('${o.uid}', '${escapeHtml(o.email)}')" title="Reset owner password">
+                  🔑 Key
+                </button>
+                <button class="btn-icon delete" onclick="deleteOwner('${o.uid}', '${escapeHtml(o.email)}')" title="Delete owner">
+                  🗑️
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterOwnersTable() {
+      const q = document.getElementById('ownerSearchInput').value.toLowerCase().trim();
+      if (!q) {
+        renderOwnersTable(ownersList);
+        return;
+      }
+      const filtered = ownersList.filter(o => 
+        (o.name && o.name.toLowerCase().includes(q)) ||
+        (o.email && o.email.toLowerCase().includes(q)) ||
+        (o.canteenId && o.canteenId.toLowerCase().includes(q))
+      );
+      renderOwnersTable(filtered);
+    }
+
+    // Live On/Off Toggle
+    async function toggleOwnerStatus(uid, isChecked) {
+      const owner = ownersList.find(o => o.uid === uid);
+      if (!owner) return;
+
+      const label = document.getElementById(`status-label-${uid}`);
+      label.textContent = isChecked ? 'Updating...' : 'Disabling...';
+
+      // If turning ON but no canteenId exists, prompt user to select one
+      if (isChecked && (!owner.canteenId || !owner.canteenId.trim())) {
+        showToast('⚠️ Please assign a canteen to this owner first.', 'error');
+        document.getElementById(`toggle-${uid}`).checked = false;
+        openEditModal(uid);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/owners/${encodeURIComponent(uid)}/assign`, {
+          method: 'PATCH',
+          headers: getAdminHeaders(),
+          body: JSON.stringify({
+            canteenAssigned: isChecked,
+            canteenId: isChecked ? owner.canteenId : '',
+            block: isChecked ? owner.block : ''
+          })
+        });
+
+        if (!res.ok) throw new Error('Failed to update status in MongoDB');
+
+        owner.canteenAssigned = isChecked;
+        if (!isChecked) {
+          // Keep canteenId reference in local state for convenience when turning back on
+        }
+
+        label.textContent = isChecked ? 'Active (Assigned)' : 'Off (Access Denied)';
+        label.className = `toggle-label ${isChecked ? 'text-active' : 'text-inactive'}`;
+        updateStats();
+
+        showToast(
+          isChecked 
+            ? `✅ Access ENABLED for ${owner.email}. Owner can now log into Android.` 
+            : `⚠️ Access DISABLED for ${owner.email}. Android login rejected.`,
+          isChecked ? 'success' : 'error'
+        );
+      } catch (err) {
+        document.getElementById(`toggle-${uid}`).checked = !isChecked;
+        showToast('❌ Error updating toggle: ' + err.message, 'error');
+      }
+    }
+
+    // Create Owner Modal Handling
+    function openCreateOwnerModal() {
+      document.getElementById('createOwnerForm').reset();
+      document.getElementById('createCanteenAssigned').checked = true;
+      document.getElementById('createToggleLabel').textContent = 'Active (Assigned)';
+      document.getElementById('createToggleLabel').className = 'toggle-label text-active';
+      document.getElementById('createOwnerModal').classList.add('active');
+    }
+
+    document.getElementById('createCanteenAssigned').addEventListener('change', (e) => {
+      const label = document.getElementById('createToggleLabel');
+      label.textContent = e.target.checked ? 'Active (Assigned)' : 'Off (Access Denied)';
+      label.className = `toggle-label ${e.target.checked ? 'text-active' : 'text-inactive'}`;
+    });
+
+    function onCreateCanteenSelectChange() {
+      const select = document.getElementById('createCanteenId');
+      const selected = select.options[select.selectedIndex];
+      document.getElementById('createBlock').value = selected ? (selected.dataset.block || '') : '';
+    }
+
+    async function submitCreateOwner(e) {
+      e.preventDefault();
+      const name = document.getElementById('createName').value.trim();
+      const email = document.getElementById('createEmail').value.trim();
+      const password = document.getElementById('createPassword').value.trim();
+      const phone = document.getElementById('createPhone').value.trim();
+      const canteenId = document.getElementById('createCanteenId').value.trim();
+      const block = document.getElementById('createBlock').value.trim();
+      const canteenAssigned = document.getElementById('createCanteenAssigned').checked;
+
+      if (!canteenId && canteenAssigned) {
+        showToast('Please select a canteen to assign', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/owners', {
+          method: 'POST',
+          headers: getAdminHeaders(),
+          body: JSON.stringify({
+            name,
+            email,
+            password,
+            phone,
+            canteenId,
+            block,
+            canteenAssigned,
+            role: 'owner'
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to create owner');
+
+        showToast(`🎉 Canteen owner account created for ${email}! Synchronized in MongoDB Atlas.`, 'success');
+        closeModal('createOwnerModal');
+        fetchData();
+      } catch (err) {
+        showToast('❌ Error creating owner: ' + err.message, 'error');
+      }
+    }
+
+    // Edit Allocation Modal
+    function openEditModal(uid) {
+      const owner = ownersList.find(o => o.uid === uid);
+      if (!owner) return;
+
+      document.getElementById('editOwnerUid').value = owner.uid;
+      document.getElementById('editModalSubtitle').textContent = `${owner.name} (${owner.email})`;
+      document.getElementById('editCanteenId').value = owner.canteenId || '';
+      document.getElementById('editBlock').value = owner.block || '';
+      document.getElementById('editCanteenAssigned').checked = Boolean(owner.canteenAssigned);
+
+      updateEditToggleLabel();
+      document.getElementById('editModal').classList.add('active');
+    }
+
+    function onEditCanteenSelectChange() {
+      const select = document.getElementById('editCanteenId');
+      const selected = select.options[select.selectedIndex];
+      document.getElementById('editBlock').value = selected ? (selected.dataset.block || '') : '';
+    }
+
+    function updateEditToggleLabel() {
+      const checked = document.getElementById('editCanteenAssigned').checked;
+      const label = document.getElementById('editToggleLabel');
+      label.textContent = checked ? 'Active (Assigned)' : 'Off (Access Denied)';
+      label.className = `toggle-label ${checked ? 'text-active' : 'text-inactive'}`;
+    }
+
+    async function submitEditAllocation(e) {
+      e.preventDefault();
+      const uid = document.getElementById('editOwnerUid').value;
+      const canteenId = document.getElementById('editCanteenId').value;
+      const block = document.getElementById('editBlock').value;
+      const canteenAssigned = document.getElementById('editCanteenAssigned').checked;
+
+      try {
+        const res = await fetch(`/api/owners/${encodeURIComponent(uid)}/assign`, {
+          method: 'PATCH',
+          headers: getAdminHeaders(),
+          body: JSON.stringify({
+            canteenAssigned,
+            canteenId: canteenAssigned ? canteenId : '',
+            block: canteenAssigned ? block : ''
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to save allocation');
+
+        showToast('✅ Canteen allocation updated and saved in MongoDB Atlas.', 'success');
+        closeModal('editModal');
+        fetchData();
+      } catch (err) {
+        showToast('❌ Error: ' + err.message, 'error');
+      }
+    }
+
+    // Reset Password Modal
+    function openResetPasswordModal(uid, email) {
+      document.getElementById('resetPasswordUid').value = uid;
+      document.getElementById('resetPasswordSubtitle').textContent = `Set new password for ${email}`;
+      document.getElementById('newPasswordInput').value = '';
+      document.getElementById('resetPasswordModal').classList.add('active');
+    }
+
+    async function submitResetPassword(e) {
+      e.preventDefault();
+      const uid = document.getElementById('resetPasswordUid').value;
+      const newPassword = document.getElementById('newPasswordInput').value.trim();
+
+      try {
+        const res = await fetch(`/api/owners/${encodeURIComponent(uid)}/password`, {
+          method: 'PATCH',
+          headers: getAdminHeaders(),
+          body: JSON.stringify({ newPassword })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to reset password');
+
+        showToast('🔑 Password successfully updated and bcrypt hashed in MongoDB Atlas.', 'success');
+        closeModal('resetPasswordModal');
+      } catch (err) {
+        showToast('❌ Error: ' + err.message, 'error');
+      }
+    }
+
+    // Delete Owner
+    async function deleteOwner(uid, email) {
+      if (!confirm(`Are you sure you want to permanently delete the owner account for ${email} from MongoDB Atlas?`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/owners/${encodeURIComponent(uid)}`, {
+          method: 'DELETE',
+          headers: getAdminHeaders()
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to delete owner');
+
+        showToast(`🗑️ Owner ${email} removed from MongoDB Atlas.`, 'success');
+        fetchData();
+      } catch (err) {
+        showToast('❌ Error: ' + err.message, 'error');
+      }
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+
+    function showToast(msg, type = 'info') {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.className = `toast ${type}`;
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 4500);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>

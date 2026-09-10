@@ -1,0 +1,6 @@
+{
+  "name": "Campus Canteen",
+  "description": "College canteen and food outlet pre-ordering app to reduce wait times during lunch and short breaks.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
