@@ -226,9 +226,6 @@ fun MessQNavHost(
         onBackToLogin = {
           navController.popBackStack()
         },
-        onNavigateToResetPassword = {
-          navController.navigate(MessQDestinations.RESET_PASSWORD)
-        },
       )
     }
 

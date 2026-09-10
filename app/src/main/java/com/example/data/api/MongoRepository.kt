@@ -58,20 +58,10 @@ class MongoRepository(
     }.onFailure { Log.e(TAG, "registerUser error: ${it.message}") }
   }
 
-  var lastForgotPasswordResponse: SimpleMessageResponseDto? = null
-    private set
-
-  var lastOwnerLoginResponse: OwnerLoginResponseDto? = null
-    private set
-
-  var lastOwnerResendOtpResponse: SimpleMessageResponseDto? = null
-    private set
-
   suspend fun forgotPassword(email: String): Result<String> {
     return runCatching {
       val res = apiService.forgotPassword(ForgotPasswordRequestDto(email = email.trim()))
       if (res.isSuccessful && res.body() != null) {
-        lastForgotPasswordResponse = res.body()
         res.body()!!.message ?: "Password reset link sent to your email."
       } else {
         val err = parseErrorMessage(res.errorBody()?.string(), "Failed to send reset link (${res.code()})")
@@ -97,7 +87,6 @@ class MongoRepository(
     return runCatching {
       val res = apiService.ownerLogin(OwnerLoginRequestDto(email = email.trim(), password = pass))
       if (res.isSuccessful && res.body() != null) {
-        lastOwnerLoginResponse = res.body()
         res.body()!!
       } else {
         val err = parseErrorMessage(res.errorBody()?.string(), "Owner login failed (${res.code()})")
@@ -122,7 +111,6 @@ class MongoRepository(
     return runCatching {
       val res = apiService.ownerResendOtp(OwnerResendOtpRequestDto(email = email.trim()))
       if (res.isSuccessful && res.body() != null) {
-        lastOwnerResendOtpResponse = res.body()
         res.body()!!.message ?: "OTP sent successfully."
       } else {
         val err = parseErrorMessage(res.errorBody()?.string(), "Failed to resend OTP (${res.code()})")

@@ -83,7 +83,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.firebase.ItemDocument
+import com.example.ui.components.FoodImagePlaceholder
 import com.example.ui.theme.BlackPrimary
+import com.example.ui.theme.BorderGray
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.TextDark
 import com.example.ui.theme.TextMuted
@@ -531,18 +533,6 @@ private fun MenuItemCard(
     "${item.prepMinutes - 2}-${item.prepMinutes} min".replace("0-", "3-").replace("-1-", "3-")
   }
 
-  // Visual thumbnail icon / preview matching Image 1
-  val foodIcon = when {
-    item.name.contains("Sandwich", true) -> "🥪"
-    item.name.contains("Dosa", true) -> "🥞"
-    item.name.contains("Roll", true) -> "🌯"
-    item.name.contains("Coffee", true) -> "☕"
-    item.name.contains("Tea", true) -> "🫖"
-    item.name.contains("Burger", true) -> "🍔"
-    item.name.contains("Pizza", true) -> "🍕"
-    else -> "🍲"
-  }
-
   Card(
     modifier = Modifier
       .fillMaxWidth()
@@ -558,16 +548,13 @@ private fun MenuItemCard(
         .padding(12.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      // 1. Food Thumbnail Image (Left) matching Image 1
-      Box(
-        modifier = Modifier
-          .size(76.dp)
-          .clip(RoundedCornerShape(12.dp))
-          .background(Color(0xFFFFF7ED)),
-        contentAlignment = Alignment.Center,
-      ) {
-        Text(text = foodIcon, fontSize = 38.sp)
-      }
+      // 1. Food Thumbnail Image matching user-side FoodCards
+      FoodImagePlaceholder(
+        itemName = item.name,
+        imageUrl = item.imageUrl,
+        compact = true,
+        modifier = Modifier.size(76.dp),
+      )
 
       Spacer(modifier = Modifier.width(14.dp))
 
@@ -818,8 +805,9 @@ private fun AddEditItemDialog(
           Box(
             modifier = Modifier
               .size(68.dp)
-              .clip(RoundedCornerShape(12.dp))
-              .background(Color(0xFFF3F4F6))
+              .clip(RoundedCornerShape(14.dp))
+              .background(Color(0xFFF3ECE4))
+              .border(1.dp, BorderGray.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
               .clickable { imagePickerLauncher.launch("image/*") },
             contentAlignment = Alignment.Center,
           ) {
@@ -835,7 +823,7 @@ private fun AddEditItemDialog(
               Icon(
                 imageVector = Icons.Default.AddPhotoAlternate,
                 contentDescription = "Upload Image",
-                tint = TextMuted,
+                tint = OrangeAccent,
                 modifier = Modifier.size(28.dp),
               )
             }
