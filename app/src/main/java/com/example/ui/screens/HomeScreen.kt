@@ -64,7 +64,6 @@ import com.example.ui.components.FeaturedSpecialBannerCard
 import com.example.ui.components.HomeScreenHeader
 import com.example.ui.components.PopularCard
 import com.example.ui.components.QuickOrderCard
-import com.example.ui.components.ReadyIn10Card
 import com.example.ui.components.YourUsualBanner
 import com.example.ui.state.CanteenAppState
 import com.example.ui.theme.BlackPrimary
@@ -138,7 +137,6 @@ fun HomeScreen(
     if (filtered.isEmpty()) base else filtered
   }
   val popularItems = currentCanteen.popularItems
-  val readyIn10 = currentCanteen.readyIn10Items
 
   Box(
     modifier = modifier
@@ -348,41 +346,7 @@ fun HomeScreen(
           }
         }
 
-        // ── Section 3: ORDER IN 10 MINUTES ─────────────────────────────────────
-        if (readyIn10.isNotEmpty()) {
-          item(key = "ready10_header") {
-            SectionHeaderRow(
-              iconVector = Icons.Default.Speed,
-              title = "ORDER IN 10 MINUTES",
-              onSeeAllClick = {
-                appState.selectedMenuCategory = FoodCategory.READY_UNDER_10
-                onNavigateToTab(BottomNavTab.MENU)
-              },
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-          }
 
-          items(
-            items = readyIn10.take(6),
-            key = { "r10_${it.id}" },
-          ) { item ->
-            Box(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 5.dp)
-            ) {
-              ReadyIn10Card(
-                foodItem = item,
-                onAddToCart = { appState.addToCart(item) },
-                onCardClick = { appState.openFoodDetail(item) },
-              )
-            }
-          }
-
-          item(key = "ready10_spacer") {
-            Spacer(modifier = Modifier.height(18.dp))
-          }
-        }
 
         // ── Section 4: YOUR USUAL ORDER CARD ────────────────────────────────
         val usual = appState.usualOrderInfo

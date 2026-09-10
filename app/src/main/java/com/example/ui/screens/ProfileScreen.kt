@@ -20,9 +20,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Schedule
@@ -91,12 +92,13 @@ fun ProfileScreen(
   var showNotificationsDialog by remember { mutableStateOf(false) }
   var showHelpSupportDialog by remember { mutableStateOf(false) }
 
+  val isGuest = appState.isGuest
   val currentUser = appState.currentUser
 
-  val displayName = currentUser?.name?.ifBlank { "Alex Kumar" } ?: "Alex Kumar"
-  val displayCourse = if (currentUser?.course.isNullOrBlank()) "CSE – 3rd Year" else currentUser?.course ?: "CSE – 3rd Year"
-  val displayCollege = if (currentUser?.department.isNullOrBlank()) "Lovely Professional University" else currentUser?.department ?: "Lovely Professional University"
-  val displayRollNo = if (currentUser?.registrationNumber.isNullOrBlank()) "220945" else currentUser?.registrationNumber ?: "220945"
+  val displayName = if (isGuest) "Guest User" else (currentUser?.name?.ifBlank { "Alex Kumar" } ?: "Alex Kumar")
+  val displayCourse = if (isGuest) "Exploring Campus Canteens" else (if (currentUser?.course.isNullOrBlank()) "CSE – 3rd Year" else currentUser?.course ?: "CSE – 3rd Year")
+  val displayCollege = if (isGuest) "QuickBite Guest Account" else (if (currentUser?.department.isNullOrBlank()) "Lovely Professional University" else currentUser?.department ?: "Lovely Professional University")
+  val displayRollNo = if (isGuest) "Not signed in" else (if (currentUser?.registrationNumber.isNullOrBlank()) "220945" else currentUser?.registrationNumber ?: "220945")
   val activeAvatarId = currentUser?.avatarId ?: "alex"
 
   Box(
@@ -422,31 +424,59 @@ fun ProfileScreen(
 
       Spacer(modifier = Modifier.height(20.dp))
 
-      // ── 4. Log Out Button ──────────────────────────────────────────────────
-      Box(
-        modifier = Modifier
-          .fillMaxWidth()
-          .clip(RoundedCornerShape(16.dp))
-          .background(Color(0xFFFEF2F2))
-          .border(1.dp, Color(0xFFFEE2E2), RoundedCornerShape(16.dp))
-          .clickable { onLogout() }
-          .padding(vertical = 14.dp),
-        contentAlignment = Alignment.Center,
-      ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Icon(
-            imageVector = Icons.Default.Logout,
-            contentDescription = "Logout",
-            tint = Color(0xFFDC2626),
-            modifier = Modifier.size(18.dp),
-          )
-          Spacer(modifier = Modifier.width(8.dp))
-          Text(
-            text = "Log Out from QuickBite",
-            fontSize = 13.5.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFFDC2626),
-          )
+      // ── 4. Log In / Log Out Button ─────────────────────────────────────────
+      if (isGuest) {
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(BlackPrimary)
+            .clickable { showLoginSheet = true }
+            .padding(vertical = 14.dp),
+          contentAlignment = Alignment.Center,
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.AutoMirrored.Filled.Login,
+              contentDescription = "Log In",
+              tint = PureWhite,
+              modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = "Log In to QuickBite",
+              fontSize = 14.sp,
+              fontWeight = FontWeight.Bold,
+              color = PureWhite,
+            )
+          }
+        }
+      } else {
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFFFEF2F2))
+            .border(1.dp, Color(0xFFFEE2E2), RoundedCornerShape(16.dp))
+            .clickable { onLogout() }
+            .padding(vertical = 14.dp),
+          contentAlignment = Alignment.Center,
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.AutoMirrored.Filled.Logout,
+              contentDescription = "Logout",
+              tint = Color(0xFFDC2626),
+              modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = "Log Out from QuickBite",
+              fontSize = 13.5.sp,
+              fontWeight = FontWeight.Bold,
+              color = Color(0xFFDC2626),
+            )
+          }
         }
       }
 
@@ -582,6 +612,33 @@ fun ProfileScreen(
         message = "Need assistance with an order?\n\n• Canteen Helpdesk: Counter 1 & 2\n• Email: support@quickbite.campus\n• WhatsApp Support: +91 98765 43210\nHours: 7:00 AM – 10:00 PM Daily",
         onDismiss = { showHelpSupportDialog = false }
       )
+    }
+
+    // 8. In-Screen Modal Login Sheet for Guest User
+    if (showLoginSheet) {
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .background(Color.Black.copy(alpha = 0.55f))
+          .clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = { showLoginSheet = false },
+          ),
+        contentAlignment = Alignment.BottomCenter,
+      ) {
+        LoginContent(
+          onDismiss = { showLoginSheet = false },
+          onLoginSuccess = { profile ->
+            appState.loginUser(profile)
+            showLoginSheet = false
+            coroutineScope.launch {
+              snackbarHostState.showSnackbar("Welcome back, ${profile.name}!")
+            }
+          },
+          isSignUpDefault = false,
+        )
+      }
     }
   }
 }

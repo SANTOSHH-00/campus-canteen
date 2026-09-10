@@ -608,7 +608,7 @@ fun CartScreen(
               contentAlignment = Alignment.Center,
             ) {
               Text(
-                text = if (isCanteenOpen) "Place Pre-Order →" else "Canteen Closed",
+                text = if (isCanteenOpen) "Place Order →" else "Canteen Closed",
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = if (isCanteenOpen) PureWhite else TextMuted,

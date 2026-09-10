@@ -30,9 +30,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
+import com.example.ui.screens.LoginContent
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
@@ -103,13 +105,15 @@ fun StudentProfileDrawer(
 ) {
   var showTimeDialog by remember { mutableStateOf(false) }
   var showLogoutConfirm by remember { mutableStateOf(false) }
+  var showLoginSheet by remember { mutableStateOf(false) }
   var activeDialogTitle by remember { mutableStateOf<String?>(null) }
   var activeDialogContent by remember { mutableStateOf<String?>(null) }
 
+  val isGuest = appState.isGuest
   val currentUser = appState.currentUser
-  val resolvedName = if (!currentUser?.name.isNullOrBlank()) currentUser!!.name else if (userName.isNotBlank()) userName else "Justin"
-  val resolvedBranch = if (!currentUser?.course.isNullOrBlank()) currentUser!!.course else "CSE • B.Tech"
-  val resolvedRollNo = if (!currentUser?.registrationNumber.isNullOrBlank()) currentUser!!.registrationNumber else "21BCE1042"
+  val resolvedName = if (isGuest) "Guest User" else if (!currentUser?.name.isNullOrBlank()) currentUser!!.name else if (userName.isNotBlank()) userName else "Justin"
+  val resolvedBranch = if (isGuest) "Welcome to QuickBite" else if (!currentUser?.course.isNullOrBlank()) currentUser!!.course else "CSE • B.Tech"
+  val resolvedRollNo = if (isGuest) "Log in to track orders" else if (!currentUser?.registrationNumber.isNullOrBlank()) "Roll No: ${currentUser!!.registrationNumber}" else "Roll No: 21BCE1042"
 
   AnimatedVisibility(
     visible = isOpen,
@@ -417,29 +421,55 @@ fun StudentProfileDrawer(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // ── 5. Log Out at the Bottom ────────────────────────────────────
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(PureWhite.copy(alpha = 0.25f))
-                .clickable { showLogoutConfirm = true }
-                .padding(horizontal = 16.dp, vertical = 13.dp),
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Icon(
-                imageVector = Icons.AutoMirrored.Filled.Logout,
-                contentDescription = "Logout",
-                tint = BlackPrimary,
-                modifier = Modifier.size(22.dp),
-              )
-              Spacer(modifier = Modifier.width(14.dp))
-              Text(
-                text = "Log Out",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = BlackPrimary,
-              )
+            // ── 5. Log In / Log Out at the Bottom ───────────────────────────
+            if (isGuest) {
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clip(RoundedCornerShape(16.dp))
+                  .background(BlackPrimary)
+                  .clickable { showLoginSheet = true }
+                  .padding(horizontal = 16.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Icon(
+                  imageVector = Icons.AutoMirrored.Filled.Login,
+                  contentDescription = "Log In",
+                  tint = PureWhite,
+                  modifier = Modifier.size(22.dp),
+                )
+                Spacer(modifier = Modifier.width(14.dp))
+                Text(
+                  text = "Log In to QuickBite",
+                  fontSize = 15.sp,
+                  fontWeight = FontWeight.ExtraBold,
+                  color = PureWhite,
+                )
+              }
+            } else {
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clip(RoundedCornerShape(16.dp))
+                  .background(PureWhite.copy(alpha = 0.25f))
+                  .clickable { showLogoutConfirm = true }
+                  .padding(horizontal = 16.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Icon(
+                  imageVector = Icons.AutoMirrored.Filled.Logout,
+                  contentDescription = "Logout",
+                  tint = BlackPrimary,
+                  modifier = Modifier.size(22.dp),
+                )
+                Spacer(modifier = Modifier.width(14.dp))
+                Text(
+                  text = "Log Out",
+                  fontSize = 15.sp,
+                  fontWeight = FontWeight.ExtraBold,
+                  color = BlackPrimary,
+                )
+              }
             }
           }
         }
@@ -534,6 +564,30 @@ fun StudentProfileDrawer(
       containerColor = PureWhite,
       shape = RoundedCornerShape(22.dp),
     )
+  }
+
+  // ── In-Screen Modal Login Sheet for Guest User ──────────────────────────────
+  if (showLoginSheet) {
+    Box(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(Color.Black.copy(alpha = 0.55f))
+        .clickable(
+          interactionSource = remember { MutableInteractionSource() },
+          indication = null,
+          onClick = { showLoginSheet = false },
+        ),
+      contentAlignment = Alignment.BottomCenter,
+    ) {
+      LoginContent(
+        onDismiss = { showLoginSheet = false },
+        onLoginSuccess = { profile ->
+          appState.loginUser(profile)
+          showLoginSheet = false
+        },
+        isSignUpDefault = false,
+      )
+    }
   }
 }
 
