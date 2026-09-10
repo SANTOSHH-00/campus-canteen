@@ -28,6 +28,7 @@ object ApiClient {
   const val DEV_LAN_IP = "192.168.17.21"
   const val EMULATOR_HOST = "10.0.2.2"
   const val USB_LOCAL_HOST = "127.0.0.1"
+  const val PRODUCTION_RENDER_URL = "https://quickbite-server-pjaf.onrender.com/api/"
 
   val candidateHosts: List<String>
     get() = if (isEmulator) {
@@ -36,11 +37,7 @@ object ApiClient {
       listOf(DEV_LAN_IP, USB_LOCAL_HOST, EMULATOR_HOST)
     }
 
-  var baseUrl: String = if (isEmulator) {
-    "http://$EMULATOR_HOST:5000/api/"
-  } else {
-    "http://$DEV_LAN_IP:5000/api/"
-  }
+  var baseUrl: String = PRODUCTION_RENDER_URL
     set(value) {
       field = if (value.endsWith("/")) value else "$value/"
       retrofitInstance = buildRetrofit()
