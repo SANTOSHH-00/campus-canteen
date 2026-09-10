@@ -28,9 +28,60 @@ function getTransporter() {
   return transporter;
 }
 
+let cachedBrevoSender = null;
+
+// Dynamically fetch the verified sender email registered in the Brevo account
+async function getBrevoSenderEmail(apiKey) {
+  if (cachedBrevoSender) return cachedBrevoSender;
+  if (process.env.BREVO_SENDER_EMAIL && process.env.BREVO_SENDER_EMAIL.trim()) {
+    cachedBrevoSender = process.env.BREVO_SENDER_EMAIL.trim();
+    return cachedBrevoSender;
+  }
+
+  return new Promise((resolve) => {
+    const req = https.request({
+      hostname: 'api.brevo.com',
+      port: 443,
+      path: '/v3/senders',
+      method: 'GET',
+      headers: {
+        'api-key': apiKey,
+      },
+      timeout: 5000,
+    }, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(body);
+          if (json.senders && Array.isArray(json.senders) && json.senders.length > 0) {
+            const active = json.senders.find(s => s.active) || json.senders[0];
+            if (active && active.email) {
+              console.log(`[EmailService] Auto-detected active Brevo sender: ${active.email}`);
+              cachedBrevoSender = active.email;
+              resolve(active.email);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('[EmailService] Failed to parse Brevo senders list:', e.message);
+        }
+        resolve(process.env.EMAIL_USER || 'quickbite.connecting@gmail.com');
+      });
+    });
+    req.on('error', (err) => {
+      console.warn('[EmailService] Error fetching Brevo senders:', err.message);
+      resolve(process.env.EMAIL_USER || 'quickbite.connecting@gmail.com');
+    });
+    req.end();
+  });
+}
+
 // Brevo API (port 443 HTTPS - 300 free emails/day, no credit card required)
-function sendViaBrevo(apiKey, { to, subject, html, text }) {
-  const senderEmail = process.env.EMAIL_USER || 'quickbite.connecting@gmail.com';
+async function sendViaBrevo(apiKey, { to, subject, html, text }) {
+  const senderEmail = await getBrevoSenderEmail(apiKey);
+  console.log(`[EmailService] Attempting Brevo HTTPS send from <${senderEmail}> to <${to}>`);
+
   const data = JSON.stringify({
     sender: { name: 'Quick Bite Campus', email: senderEmail },
     to: [{ email: to.trim().toLowerCase() }],
@@ -56,11 +107,11 @@ function sendViaBrevo(apiKey, { to, subject, html, text }) {
       res.on('data', chunk => body += chunk);
       res.on('end', () => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          console.log(`[EmailService] Delivered successfully via Brevo HTTPS API to ${to}.`);
+          console.log(`[EmailService] Delivered successfully via Brevo HTTPS API to ${to}. Response:`, body);
           resolve({ success: true, messageId: body });
         } else {
-          console.error(`[EmailService] Brevo API error (${res.statusCode}):`, body);
-          reject(new Error(`Brevo API error: ${body}`));
+          console.error(`[EmailService] Brevo API rejected email (${res.statusCode}): ${body}`);
+          reject(new Error(`Brevo API error (${res.statusCode}): ${body}`));
         }
       });
     });
