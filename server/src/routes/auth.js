@@ -211,6 +211,8 @@ router.post('/forgot-password', async (req, res) => {
       success: true,
       message: 'Password reset link sent! Please check your email inbox.',
       email: trimmedEmail,
+      resetToken: rawToken,
+      resetUrl,
     });
   } catch (err) {
     console.error('Forgot password error:', err);

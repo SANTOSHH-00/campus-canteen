@@ -43,11 +43,68 @@ async function getTransporter() {
   });
 }
 
+const https = require('https');
+
+async function sendViaResend({ to, subject, html, text }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM || 'QuickBite <onboarding@resend.dev>';
+
+  const payload = JSON.stringify({
+    from,
+    to: [to.trim().toLowerCase()],
+    subject,
+    html: html || undefined,
+    text: text || undefined,
+  });
+
+  return new Promise((resolve, reject) => {
+    const req = https.request('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+      timeout: 10000,
+    }, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          console.log(`[EmailService/Resend] Email sent via HTTP API to ${to}. Response:`, body);
+          resolve({ success: true, response: body });
+        } else {
+          console.error(`[EmailService/Resend] Resend API error (${res.statusCode}):`, body);
+          reject(new Error(`Resend API error (${res.statusCode}): ${body}`));
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Resend API request timed out after 10s'));
+    });
+
+    req.write(payload);
+    req.end();
+  });
+}
+
 /**
  * Generic reusable email sender with timeout guard
  * @param {Object} options - { to, subject, html, text }
  */
 async function sendEmail({ to, subject, html, text }) {
+  // If RESEND_API_KEY is configured, dispatch via HTTPS port 443 (never blocked by Render)
+  if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim()) {
+    try {
+      return await sendViaResend({ to, subject, html, text });
+    } catch (resendErr) {
+      console.warn('[EmailService] Resend dispatch failed, attempting SMTP fallback:', resendErr.message);
+    }
+  }
+
   const user = process.env.EMAIL_USER;
   const pass = process.env.EMAIL_APP_PASSWORD;
 
@@ -393,6 +450,7 @@ async function checkSmtpStatus() {
   const pass = process.env.EMAIL_APP_PASSWORD;
 
   const status = {
+    hasResendApiKey: !!(process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim()),
     hasEmailUser: !!user,
     emailUserMasked: user ? user.replace(/(.{2})(.*)(@.*)/, '$1***$3') : null,
     hasAppPassword: !!pass,
