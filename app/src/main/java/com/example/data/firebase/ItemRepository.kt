@@ -26,11 +26,30 @@ open class ItemRepository(
    * Observe all food items belonging to the owner's assigned canteen.
    */
   open fun observeCanteenItems(canteenId: String): Flow<List<ItemDocument>> {
-    return firestoreRepo.observeItems(canteenId).map { remoteList ->
-      if (remoteList.isNotEmpty() || FirebaseConfig.hasLiveFirebaseConfig) {
+    val effectiveId = canteenId.ifBlank { "canteen_33" }
+    return firestoreRepo.observeItems(effectiveId).map { remoteList ->
+      if (remoteList.isNotEmpty()) {
         remoteList
+      } else if (localItems.any { it.canteenId == effectiveId }) {
+        localItems.filter { it.canteenId == effectiveId }
       } else {
-        localItems.filter { it.canteenId == canteenId }
+        val fallbackCanteen = com.example.data.SampleFoodData.campusCanteens.find { it.id == effectiveId }
+          ?: com.example.data.SampleFoodData.canteen_33
+        val sampleList = fallbackCanteen.allItems.ifEmpty { com.example.data.SampleFoodData.allItems }
+        sampleList.map { fi ->
+          ItemDocument(
+            id = fi.id,
+            canteenId = effectiveId,
+            name = fi.name,
+            price = fi.price,
+            category = fi.category.name,
+            prepMinutes = fi.prepMinutes,
+            stock = 25,
+            available = true,
+            imageUrl = fi.imageUrl,
+            description = fi.description,
+          )
+        }
       }
     }
   }

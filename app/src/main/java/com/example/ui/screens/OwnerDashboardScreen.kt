@@ -94,6 +94,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.firebase.ItemDocument
 import com.example.data.firebase.OrderDocument
 import com.example.data.firebase.OwnerDocument
+import com.example.ui.components.FoodImagePlaceholder
 import com.example.ui.theme.AccentGreen
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
@@ -797,6 +798,173 @@ private fun OwnerDashboardBody(
 
         Spacer(Modifier.height(26.dp))
 
+        // ── Menu Items Section ───────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Menu Items",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextDark,
+                )
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(OrangeAccent.copy(alpha = 0.12f))
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        text = "${state.allItems.size}",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = OrangeAccent,
+                    )
+                }
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onNavigateToManageItems() }
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    text = "Manage All",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = OrangeAccent,
+                )
+                Spacer(Modifier.width(3.dp))
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = OrangeAccent,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+        }
+
+        // Low stock warning alert banner if any items are low stock
+        if (state.lowStockItems.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFFFEF3C7))
+                    .border(1.dp, Color(0xFFFDE68A), RoundedCornerShape(12.dp))
+                    .clickable { onNavigateToManageItems() }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = Color(0xFFD97706),
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "${state.lowStockItems.size} item(s) are low in stock or unavailable. Tap to update.",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF92400E),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        if (state.allItems.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(CardBackground)
+                    .border(1.dp, Color(0xFFF3F4F6), RoundedCornerShape(16.dp))
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.RestaurantMenu,
+                        contentDescription = null,
+                        tint = Color(0xFFD1D5DB),
+                        modifier = Modifier.size(36.dp),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "No menu items listed yet.",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextDark,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Add delicious food items for campus students to order.",
+                        fontSize = 12.sp,
+                        color = TextMuted,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = onNavigateToManageItems,
+                        colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Add First Item", fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier.padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                // Show first 6 items
+                state.allItems.take(6).forEach { item ->
+                    DashboardMenuItemRow(
+                        item = item,
+                        onClick = onNavigateToManageItems,
+                    )
+                }
+
+                if (state.allItems.size > 6) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFFFFF7ED))
+                            .border(1.dp, Color(0xFFFFEDD5), RoundedCornerShape(14.dp))
+                            .clickable { onNavigateToManageItems() }
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "View All ${state.allItems.size} Menu Items →",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = OrangeAccent,
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(26.dp))
+
         // ── Recent Orders (Delivered & Completed Orders Only) ───────────────
         Row(
             modifier = Modifier
@@ -1088,6 +1256,102 @@ private fun DashboardOrderRow(
     }
 }
 
-// Keep data model reference to suppress unused-import warnings
-@Suppress("unused")
-private fun unusedRef(i: ItemDocument) = Unit
+// ─────────────────────────────────────────────────────────────────────────────
+//  DASHBOARD MENU ITEM ROW
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun DashboardMenuItemRow(
+    item: ItemDocument,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(CardBackground)
+            .border(1.dp, Color(0xFFF3F4F6), RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FoodImagePlaceholder(
+            itemName = item.name,
+            imageUrl = item.imageUrl,
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(12.dp)),
+            compact = true,
+        )
+
+        Spacer(Modifier.width(12.dp))
+
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = item.name,
+                fontSize = 14.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Category badge
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFFF3F4F6))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        text = item.category.replace("_", " "),
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF4B5563),
+                    )
+                }
+
+                Text(
+                    text = "⏱ ${item.prepMinutes}m",
+                    fontSize = 11.sp,
+                    color = TextMuted,
+                )
+            }
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = "₹${item.price}",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = TextDark,
+            )
+            Spacer(Modifier.height(4.dp))
+            // Stock badge
+            val (badgeText, badgeBg, badgeTextColor) = when {
+                !item.available || item.stock == 0 -> Triple("Out of Stock", Color(0xFFFEE2E2), Color(0xFFDC2626))
+                item.stock <= 5 -> Triple("Low (${item.stock})", Color(0xFFFEF3C7), Color(0xFFD97706))
+                else -> Triple("In Stock (${item.stock})", Color(0xFFDCFCE7), Color(0xFF16A34A))
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(badgeBg)
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+            ) {
+                Text(
+                    text = badgeText,
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = badgeTextColor,
+                )
+            }
+        }
+    }
+}

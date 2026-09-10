@@ -189,8 +189,9 @@ class MongoRepository(
 
   // ── Items ─────────────────────────────────────────────────────────────────
   suspend fun getCanteenItems(canteenId: String): Result<List<MongoItemDto>> {
+    val effectiveId = canteenId.ifBlank { "canteen_33" }
     return runCatching {
-      val res = apiService.getCanteenItems(canteenId)
+      val res = apiService.getCanteenItems(effectiveId)
       if (res.isSuccessful && res.body() != null) {
         res.body()!!
       } else {
@@ -446,12 +447,13 @@ class MongoRepository(
   }
 
   fun observeItems(canteenId: String): Flow<List<ItemDocument>> = flow {
-    cachedCanteenItems[canteenId]?.let { emit(it) }
+    val effectiveId = canteenId.ifBlank { "canteen_33" }
+    cachedCanteenItems[effectiveId]?.let { emit(it) }
     while (currentCoroutineContext().isActive) {
-      val res = getCanteenItems(canteenId)
+      val res = getCanteenItems(effectiveId)
       if (res.isSuccess) {
         val items = res.getOrThrow().map { it.toDocument() }
-        cachedCanteenItems[canteenId] = items
+        cachedCanteenItems[effectiveId] = items
         emit(items)
       }
       delay(2000)

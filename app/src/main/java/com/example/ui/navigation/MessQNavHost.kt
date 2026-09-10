@@ -272,8 +272,11 @@ fun MessQNavHost(
 
     // 6. Owner Main Screen (Owner Dashboard destination)
     composable(MessQDestinations.OWNER_MAIN) {
+      val effectiveOwner = currentOwner
+        ?: ownerDashboardViewModel.currentOwner.value
+        ?: SessionManager.getOwnerSession()
       OwnerDashboardScreen(
-        owner = currentOwner,
+        owner = effectiveOwner,
         appState = appState,
         dashboardViewModel = ownerDashboardViewModel,
         onLogout = {
@@ -296,7 +299,10 @@ fun MessQNavHost(
 
     // 7. Owner Manage Items Screen
     composable(MessQDestinations.OWNER_ITEMS) {
-      val canteenId = currentOwner?.canteenId ?: ""
+      val effectiveOwner = currentOwner
+        ?: ownerDashboardViewModel.currentOwner.value
+        ?: SessionManager.getOwnerSession()
+      val canteenId = effectiveOwner?.canteenId?.ifBlank { null } ?: "canteen_33"
       com.example.ui.screens.ManageItemsScreen(
         canteenId = canteenId,
         onBack = { navController.popBackStack() },
@@ -305,7 +311,10 @@ fun MessQNavHost(
 
     // 7b. Owner Inventory Screen (Distinct from Menu Management)
     composable(MessQDestinations.OWNER_INVENTORY) {
-      val canteenId = currentOwner?.canteenId ?: ""
+      val effectiveOwner = currentOwner
+        ?: ownerDashboardViewModel.currentOwner.value
+        ?: SessionManager.getOwnerSession()
+      val canteenId = effectiveOwner?.canteenId?.ifBlank { null } ?: "canteen_33"
       com.example.ui.screens.InventoryScreen(
         canteenId = canteenId,
         onBack = { navController.popBackStack() },
@@ -314,7 +323,10 @@ fun MessQNavHost(
 
     // 8. Owner Live Orders Screen
     composable(MessQDestinations.OWNER_ORDERS) {
-      val canteenId = currentOwner?.canteenId ?: ""
+      val effectiveOwner = currentOwner
+        ?: ownerDashboardViewModel.currentOwner.value
+        ?: SessionManager.getOwnerSession()
+      val canteenId = effectiveOwner?.canteenId?.ifBlank { null } ?: "canteen_33"
       com.example.ui.screens.OwnerOrdersScreen(
         canteenId = canteenId,
         onBack = { navController.popBackStack() },
