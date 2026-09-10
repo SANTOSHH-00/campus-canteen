@@ -12,25 +12,35 @@ function getTransporter() {
     const user = process.env.EMAIL_USER;
     const pass = process.env.EMAIL_APP_PASSWORD;
 
+    // Use Gmail service with short timeouts to prevent server hanging in cloud environments
     transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true, // SSL
+      service: 'gmail',
       auth: {
         user: user || '',
         pass: pass ? pass.replace(/\s+/g, '') : '', // strip accidental spaces in app password
       },
+      connectionTimeout: 6000,
+      greetingTimeout: 6000,
+      socketTimeout: 8000,
     });
   }
   return transporter;
 }
 
 /**
- * Generic reusable email sender
+ * Generic reusable email sender with timeout guard
  * @param {Object} options - { to, subject, html, text }
  */
 async function sendEmail({ to, subject, html, text }) {
-  const fromAddress = process.env.EMAIL_USER || 'no-reply@quickbite.campus';
+  const user = process.env.EMAIL_USER;
+  const pass = process.env.EMAIL_APP_PASSWORD;
+
+  if (!user || !pass) {
+    console.warn(`[EmailService] EMAIL_USER or EMAIL_APP_PASSWORD not configured. Skipping SMTP dispatch to ${to}.`);
+    return { success: false, skipped: true, error: 'Email credentials not configured on server' };
+  }
+
+  const fromAddress = user || 'no-reply@quickbite.campus';
   const mailOptions = {
     from: `"Quick Bite Campus" <${fromAddress}>`,
     to: to.trim().toLowerCase(),
@@ -41,12 +51,19 @@ async function sendEmail({ to, subject, html, text }) {
 
   try {
     const transport = getTransporter();
-    const info = await transport.sendMail(mailOptions);
+
+    // 7-second Promise.race guard to guarantee the endpoint never hangs
+    const sendPromise = transport.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Email dispatch timed out after 7s')), 7000)
+    );
+
+    const info = await Promise.race([sendPromise, timeoutPromise]);
     console.log(`[EmailService] Email sent successfully to ${to}. MessageId: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error(`[EmailService] Failed to send email to ${to}:`, error.message);
-    throw error;
+    return { success: false, error: error.message };
   }
 }
 

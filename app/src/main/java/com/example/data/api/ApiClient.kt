@@ -88,9 +88,9 @@ object ApiClient {
     .build()
 
   private val okHttpClient: OkHttpClient = OkHttpClient.Builder()
-    .connectTimeout(8, TimeUnit.SECONDS)
-    .readTimeout(15, TimeUnit.SECONDS)
-    .writeTimeout(15, TimeUnit.SECONDS)
+    .connectTimeout(15, TimeUnit.SECONDS)
+    .readTimeout(25, TimeUnit.SECONDS)
+    .writeTimeout(25, TimeUnit.SECONDS)
     .addInterceptor(hostFallbackInterceptor)
     .addInterceptor(
       HttpLoggingInterceptor().apply {

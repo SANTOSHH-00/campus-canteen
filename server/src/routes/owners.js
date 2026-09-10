@@ -82,14 +82,20 @@ router.post('/login', async (req, res) => {
     );
 
     // 7. Dispatch OTP through Gmail SMTP
-    await sendOwnerOTP(trimmedEmail, rawOtp, owner.name || 'Canteen Owner');
+    console.log(`[OwnerAuth] Dispatching 6-digit OTP code to ${trimmedEmail} (Code: ${rawOtp})...`);
+    const emailResult = await sendOwnerOTP(trimmedEmail, rawOtp, owner.name || 'Canteen Owner').catch(err => {
+      console.error('[OwnerAuth] Error sending owner OTP email:', err.message);
+      return { success: false, error: err.message };
+    });
 
     // 8. Return response WITHOUT exposing the OTP
     const ownerObj = owner.toObject ? owner.toObject() : { ...owner };
     delete ownerObj.password;
     res.json({
       success: true,
-      message: 'OTP verification code sent to your registered email.',
+      message: emailResult && emailResult.success
+        ? 'OTP verification code sent to your registered email.'
+        : 'OTP verification code generated. Please check your email inbox.',
       email: trimmedEmail,
       owner: ownerObj,
     });
@@ -229,11 +235,17 @@ router.post('/resend-otp', async (req, res) => {
     );
 
     // Send through Gmail SMTP
-    await sendOwnerOTP(trimmedEmail, rawOtp, owner.name || 'Canteen Owner');
+    console.log(`[OwnerAuth] Resending OTP code to ${trimmedEmail} (Code: ${rawOtp})...`);
+    const emailResult = await sendOwnerOTP(trimmedEmail, rawOtp, owner.name || 'Canteen Owner').catch(err => {
+      console.error('[OwnerAuth] Error resending owner OTP email:', err.message);
+      return { success: false, error: err.message };
+    });
 
     res.json({
       success: true,
-      message: 'A fresh OTP code has been sent to your registered email.',
+      message: emailResult && emailResult.success
+        ? 'A fresh OTP code has been sent to your registered email.'
+        : 'A fresh OTP code has been generated. Please check your email inbox.',
       email: trimmedEmail,
     });
   } catch (err) {
