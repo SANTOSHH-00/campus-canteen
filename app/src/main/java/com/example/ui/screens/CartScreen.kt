@@ -29,7 +29,10 @@ import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -49,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,6 +62,7 @@ import com.example.data.OrderRecord
 import com.example.ui.components.FoodImagePlaceholder
 import com.example.ui.components.PickupTimePickerSheet
 import com.example.ui.state.CanteenAppState
+import com.example.util.NetworkUtils
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
 import com.example.ui.theme.CardSurface
@@ -84,6 +89,8 @@ fun CartScreen(
   var newlyPlacedOrder by remember { mutableStateOf<OrderRecord?>(null) }
   var showLoginPrompt by remember { mutableStateOf(false) }
   var showTimePickerDialog by remember { mutableStateOf(false) }
+  var showNetworkErrorDialog by remember { mutableStateOf(false) }
+  val context = LocalContext.current
 
   val cartListState = rememberLazyListState()
 
@@ -587,6 +594,10 @@ fun CartScreen(
                 .clip(RoundedCornerShape(14.dp))
                 .background(if (isCanteenOpen) BlackPrimary else BorderGray)
                 .clickable(enabled = isCanteenOpen) {
+                  if (!NetworkUtils.isOnline(context)) {
+                    showNetworkErrorDialog = true
+                    return@clickable
+                  }
                   if (appState.isGuest) {
                     showLoginPrompt = true
                   } else {
@@ -706,6 +717,84 @@ fun CartScreen(
       )
     }
 
+    // Network Issue Dialog (Offline Protection)
+    if (showNetworkErrorDialog) {
+      AlertDialog(
+        onDismissRequest = { showNetworkErrorDialog = false },
+        containerColor = PureWhite,
+        shape = RoundedCornerShape(22.dp),
+        title = {
+          Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+          ) {
+            Box(
+              modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(Color(0xFFFEF2F2))
+                .border(1.dp, Color(0xFFFCA5A5), CircleShape),
+              contentAlignment = Alignment.Center,
+            ) {
+              Icon(
+                imageVector = Icons.Default.WifiOff,
+                contentDescription = "Offline",
+                tint = Color(0xFFDC2626),
+                modifier = Modifier.size(28.dp),
+              )
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+              text = "No Internet Connection",
+              fontWeight = FontWeight.ExtraBold,
+              fontSize = 18.sp,
+              color = TextDark,
+            )
+          }
+        },
+        text = {
+          Text(
+            text = "Unable to connect to Quick Bite servers. Please check your cellular data or Wi-Fi to place your order. Your cart items are safely preserved.",
+            fontSize = 13.5.sp,
+            lineHeight = 20.sp,
+            color = TextMuted,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+          )
+        },
+        confirmButton = {
+          Button(
+            onClick = {
+              if (NetworkUtils.isOnline(context)) {
+                showNetworkErrorDialog = false
+                if (appState.isGuest) {
+                  showLoginPrompt = true
+                } else {
+                  newlyPlacedOrder = appState.placeOrder()
+                }
+              }
+            },
+            colors = ButtonDefaults.buttonColors(
+              containerColor = BlackPrimary,
+              contentColor = PureWhite,
+            ),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Text("Retry Connection", fontWeight = FontWeight.Bold)
+          }
+        },
+        dismissButton = {
+          TextButton(
+            onClick = { showNetworkErrorDialog = false },
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Text("Keep Items In Cart", color = TextMuted, fontWeight = FontWeight.SemiBold)
+          }
+        },
+      )
+    }
+
     // Modal Login Bottom Sheet when guest clicks Place Pre-Order
     if (showLoginPrompt) {
       Box(
@@ -724,7 +813,11 @@ fun CartScreen(
           onLoginSuccess = { profile ->
             appState.loginUser(profile)
             showLoginPrompt = false
-            newlyPlacedOrder = appState.placeOrder()
+            if (!NetworkUtils.isOnline(context)) {
+              showNetworkErrorDialog = true
+            } else {
+              newlyPlacedOrder = appState.placeOrder()
+            }
           },
           isSignUpDefault = false,
         )

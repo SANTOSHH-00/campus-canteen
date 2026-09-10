@@ -70,7 +70,13 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
+const http = require('http');
+const { initWebSocket } = require('./services/socketService');
+
+const server = http.createServer(app);
+initWebSocket(server);
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Quickbite Node.js/Express Server listening on port ${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Quickbite Node.js/Express Server & WebSocket Gateway listening on port ${PORT}`);
 });

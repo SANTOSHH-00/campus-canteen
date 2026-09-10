@@ -9,11 +9,14 @@ import com.example.data.firebase.OrderDocument
 import com.example.data.firebase.OrderItemDocument
 import com.example.data.firebase.OwnerDocument
 import com.example.data.firebase.UserDocument
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -454,23 +457,67 @@ class MongoRepository(
     }
   }
 
-  fun observeCanteenOrders(canteenId: String): Flow<List<OrderDocument>> = flow {
-    while (currentCoroutineContext().isActive) {
-      val res = getCanteenOrders(canteenId)
-      if (res.isSuccess) {
-        emit(res.getOrThrow().map { it.toDocument() })
+  fun observeCanteenOrders(canteenId: String): Flow<List<OrderDocument>> = channelFlow {
+    WebSocketManager.connect()
+    val currentOrders = mutableListOf<OrderDocument>()
+
+    val wsJob = launch {
+      WebSocketManager.observeCanteenOrders(canteenId).collect { dto ->
+        val doc = dto.toDocument()
+        val existingIdx = currentOrders.indexOfFirst { it.orderId == doc.orderId }
+        if (existingIdx >= 0) {
+          currentOrders[existingIdx] = doc
+        } else {
+          currentOrders.add(0, doc)
+        }
+        trySend(currentOrders.toList())
       }
-      delay(2000)
+    }
+
+    val pollJob = launch {
+      while (isActive) {
+        val res = getCanteenOrders(canteenId)
+        if (res.isSuccess) {
+          currentOrders.clear()
+          currentOrders.addAll(res.getOrThrow().map { it.toDocument() })
+          trySend(currentOrders.toList())
+        }
+        delay(4000)
+      }
+    }
+
+    awaitClose {
+      wsJob.cancel()
+      pollJob.cancel()
+      WebSocketManager.unsubscribe("canteen:$canteenId")
     }
   }
 
-  fun observeOrder(orderId: String): Flow<OrderDocument?> = flow {
-    while (currentCoroutineContext().isActive) {
-      val res = getOrder(orderId)
-      if (res.isSuccess) {
-        emit(res.getOrThrow().toDocument())
+  fun observeOrder(orderId: String): Flow<OrderDocument?> = channelFlow {
+    WebSocketManager.connect()
+
+    // 1. Instant sub-second updates pushed via WebSocket
+    val wsJob = launch {
+      WebSocketManager.observeOrder(orderId).collect { dto ->
+        trySend(dto.toDocument())
       }
-      delay(2000)
+    }
+
+    // 2. Fetch initial order and periodic safety fallback
+    val pollJob = launch {
+      while (isActive) {
+        val res = getOrder(orderId)
+        if (res.isSuccess) {
+          trySend(res.getOrThrow().toDocument())
+        }
+        delay(4000)
+      }
+    }
+
+    awaitClose {
+      wsJob.cancel()
+      pollJob.cancel()
+      WebSocketManager.unsubscribe("order:$orderId")
     }
   }
 

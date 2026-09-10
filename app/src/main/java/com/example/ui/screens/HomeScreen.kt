@@ -16,12 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ChevronRight
@@ -85,41 +86,48 @@ fun HomeScreen(
   onOpenProfileDrawer: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
-  val scrollState = rememberScrollState()
+  val listState = rememberLazyListState()
   var showNotificationsDialog by remember { mutableStateOf(false) }
   var showQuickFilterDialog by remember { mutableStateOf(false) }
 
   val currentCanteen = appState.selectedCanteen
 
   // Hide bottom navigation bar when scrolling down, show when scrolling up
-  LaunchedEffect(scrollState) {
-    var lastValue = scrollState.value
+  LaunchedEffect(listState) {
+    var lastIndex = listState.firstVisibleItemIndex
+    var lastOffset = listState.firstVisibleItemScrollOffset
     var accumulatedDown = 0
     var accumulatedUp = 0
-    snapshotFlow { scrollState.value }.collect { currentVal ->
-      val delta = currentVal - lastValue
-      if (delta > 0) {
-        accumulatedDown += delta
-        accumulatedUp = 0
-        if (accumulatedDown >= 40 && currentVal > 50) {
-          // Scrolling down with threshold -> hide bottom navigation bar
-          appState.isBottomBarVisible = false
+
+    snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+      .collect { (currentIndex, currentOffset) ->
+        val delta = if (currentIndex == lastIndex) {
+          currentOffset - lastOffset
+        } else {
+          (currentIndex - lastIndex) * 200 + (currentOffset - lastOffset)
         }
-      } else if (delta < 0) {
-        accumulatedUp += (-delta)
-        accumulatedDown = 0
-        if (accumulatedUp >= 25 || currentVal < 40) {
-          // Scrolling up with threshold or near top -> show bottom navigation bar
+
+        if (delta > 0) {
+          accumulatedDown += delta
+          accumulatedUp = 0
+          if (accumulatedDown >= 40 && (currentIndex > 0 || currentOffset > 60)) {
+            appState.isBottomBarVisible = false
+          }
+        } else if (delta < 0) {
+          accumulatedUp += (-delta)
+          accumulatedDown = 0
+          if (accumulatedUp >= 25 || (currentIndex == 0 && currentOffset < 40)) {
+            appState.isBottomBarVisible = true
+          }
+        }
+        if (currentIndex == 0 && currentOffset < 20) {
           appState.isBottomBarVisible = true
+          accumulatedDown = 0
+          accumulatedUp = 0
         }
+        lastIndex = currentIndex
+        lastOffset = currentOffset
       }
-      if (currentVal < 20) {
-        appState.isBottomBarVisible = true
-        accumulatedDown = 0
-        accumulatedUp = 0
-      }
-      lastValue = currentVal
-    }
   }
 
   // Filter Quick Order items dynamically from the selected block canteen
@@ -137,188 +145,196 @@ fun HomeScreen(
       .fillMaxSize()
       .background(WarmCream)
   ) {
-    Column(
+    LazyColumn(
+      state = listState,
       modifier = Modifier
         .fillMaxSize()
-        .verticalScroll(scrollState)
-        .statusBarsPadding()
-        .padding(bottom = 24.dp)
+        .statusBarsPadding(),
+      contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 20.dp),
     ) {
       // ── Top Header with Staggered Menu Icon + Design Logo + QuickBite Name ─
-      HomeScreenHeader(
-        userName = userName,
-        appState = appState,
-        onProfileClick = onOpenProfileDrawer,
-        onNotificationClick = {
-          showNotificationsDialog = true
-          appState.markNotificationsRead()
-        },
-      )
-
-      Spacer(modifier = Modifier.height(4.dp))
+      item(key = "header") {
+        HomeScreenHeader(
+          userName = userName,
+          appState = appState,
+          onProfileClick = onOpenProfileDrawer,
+          onNotificationClick = {
+            showNotificationsDialog = true
+            appState.markNotificationsRead()
+          },
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+      }
 
       if (currentCanteen.allItems.isNotEmpty()) {
-        // ── Hero Featured Steak-Style Banner Card (Replaces small icons row) ──
-        Box(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp),
-        ) {
-          FeaturedSpecialBannerCard(
-            onOrderClick = {
-              val special = popularItems.firstOrNull() ?: quickItems.firstOrNull()
-              if (special != null) {
-                appState.openFoodDetail(special)
+        // ── Hero Featured Steak-Style Banner Card ──
+        item(key = "featured_special") {
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 14.dp),
+          ) {
+            FeaturedSpecialBannerCard(
+              onOrderClick = {
+                val special = popularItems.firstOrNull() ?: quickItems.firstOrNull()
+                if (special != null) {
+                  appState.openFoodDetail(special)
+                }
               }
-            }
-          )
+            )
+          }
+          Spacer(modifier = Modifier.height(10.dp))
         }
-
-        Spacer(modifier = Modifier.height(10.dp))
       }
 
       if (!currentCanteen.isOpen) {
-        Spacer(modifier = Modifier.height(10.dp))
-        androidx.compose.material3.Card(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-          shape = RoundedCornerShape(16.dp),
-          colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
-          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEF5350).copy(alpha = 0.5f)),
-        ) {
-          Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        item(key = "closed_banner") {
+          Spacer(modifier = Modifier.height(10.dp))
+          androidx.compose.material3.Card(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 20.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEF5350).copy(alpha = 0.5f)),
           ) {
-            Box(
-              modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFFFFCDD2)),
-              contentAlignment = Alignment.Center,
+            Row(
+              modifier = Modifier.padding(14.dp),
+              verticalAlignment = Alignment.CenterVertically,
             ) {
-              Text("⛔", fontSize = 20.sp)
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = "${currentCanteen.name} is Currently Closed",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFFC62828),
-              )
-              Text(
-                text = if (!currentCanteen.closeReason.isNullOrBlank()) {
-                  "Reason: ${currentCanteen.closeReason}"
-                } else {
-                  "Orders are paused right now. You can still browse the menu."
-                },
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color(0xFFD32F2F),
-              )
+              Box(
+                modifier = Modifier
+                  .size(40.dp)
+                  .clip(RoundedCornerShape(10.dp))
+                  .background(Color(0xFFFFCDD2)),
+                contentAlignment = Alignment.Center,
+              ) {
+                Text("⛔", fontSize = 20.sp)
+              }
+              Spacer(modifier = Modifier.width(12.dp))
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = "${currentCanteen.name} is Currently Closed",
+                  fontSize = 14.sp,
+                  fontWeight = FontWeight.ExtraBold,
+                  color = Color(0xFFC62828),
+                )
+                Text(
+                  text = if (!currentCanteen.closeReason.isNullOrBlank()) {
+                    "Reason: ${currentCanteen.closeReason}"
+                  } else {
+                    "Orders are paused right now. You can still browse the menu."
+                  },
+                  fontSize = 12.sp,
+                  fontWeight = FontWeight.Medium,
+                  color = Color(0xFFD32F2F),
+                )
+              }
             }
           }
+          Spacer(modifier = Modifier.height(6.dp))
         }
       }
 
-      Spacer(modifier = Modifier.height(6.dp))
-
       if (currentCanteen.allItems.isEmpty()) {
-        Spacer(modifier = Modifier.height(20.dp))
-        androidx.compose.material3.Card(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-          shape = RoundedCornerShape(16.dp),
-          colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = PureWhite),
-          border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray.copy(alpha = 0.6f)),
-        ) {
-          Column(
+        item(key = "empty_menu") {
+          Spacer(modifier = Modifier.height(20.dp))
+          androidx.compose.material3.Card(
             modifier = Modifier
               .fillMaxWidth()
-              .padding(28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+              .padding(horizontal = 20.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = PureWhite),
+            border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray.copy(alpha = 0.6f)),
           ) {
-            Text("🍽️", fontSize = 42.sp)
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-              text = "No menu items available yet.",
-              fontSize = 17.sp,
-              fontWeight = FontWeight.Bold,
-              color = TextDark,
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-              text = "The menu for ${currentCanteen.name} is currently empty.\nItems added in the Owner Dashboard will appear here automatically.",
-              fontSize = 13.sp,
-              color = TextMuted,
-              textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-              lineHeight = 18.sp,
-            )
+            Column(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(28.dp),
+              horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+              Text("🍽️", fontSize = 42.sp)
+              Spacer(modifier = Modifier.height(12.dp))
+              Text(
+                text = "No menu items available yet.",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark,
+              )
+              Spacer(modifier = Modifier.height(6.dp))
+              Text(
+                text = "The menu for ${currentCanteen.name} is currently empty.\nItems added in the Owner Dashboard will appear here automatically.",
+                fontSize = 13.sp,
+                color = TextMuted,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = 18.sp,
+              )
+            }
           }
         }
       } else {
         // ── Section 1: QUICK ORDER (Big Vertical Cards) ──────────────────────
         if (quickItems.isNotEmpty()) {
-          SectionHeaderRow(
-            iconVector = Icons.Default.FlashOn,
-            title = "QUICK ORDER",
-            onSeeAllClick = {
-              appState.selectedMenuCategory = FoodCategory.QUICK_ORDER
-              onNavigateToTab(BottomNavTab.MENU)
-            },
-            onFilterClick = {
-              showQuickFilterDialog = true
-            },
-            isFilterActive = appState.selectedQuickFilterMinutes < 20,
-          )
-
-          Spacer(modifier = Modifier.height(14.dp))
-
-          // Quick Order Side-scrolling Big Cards with LazyRow recycling and keys
-          LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-          ) {
-            items(
-              items = quickItems,
-              key = { it.id },
-            ) { item ->
-              QuickOrderCard(
-                foodItem = item,
-                onAddToCart = { appState.addToCart(item) },
-                onCardClick = { appState.openFoodDetail(item) },
-              )
-            }
+          item(key = "quick_order_header") {
+            SectionHeaderRow(
+              iconVector = Icons.Default.FlashOn,
+              title = "QUICK ORDER",
+              onSeeAllClick = {
+                appState.selectedMenuCategory = FoodCategory.QUICK_ORDER
+                onNavigateToTab(BottomNavTab.MENU)
+              },
+              onFilterClick = {
+                showQuickFilterDialog = true
+              },
+              isFilterActive = appState.selectedQuickFilterMinutes < 20,
+            )
+            Spacer(modifier = Modifier.height(14.dp))
           }
 
-          Spacer(modifier = Modifier.height(26.dp))
+          item(key = "quick_order_row") {
+            LazyRow(
+              modifier = Modifier.fillMaxWidth(),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp),
+              horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+              items(
+                items = quickItems,
+                key = { it.id },
+              ) { item ->
+                QuickOrderCard(
+                  foodItem = item,
+                  onAddToCart = { appState.addToCart(item) },
+                  onCardClick = { appState.openFoodDetail(item) },
+                )
+              }
+            }
+            Spacer(modifier = Modifier.height(26.dp))
+          }
         }
 
         // ── Section 2: POPULAR RIGHT NOW (Big Vertical Cards with Image Placeholder) ──
         if (popularItems.isNotEmpty()) {
-          SectionHeaderRow(
-            iconVector = Icons.Default.LocalFireDepartment,
-            title = "POPULAR RIGHT NOW",
-            onSeeAllClick = {
-              appState.selectedMenuCategory = FoodCategory.POPULAR
-              onNavigateToTab(BottomNavTab.MENU)
-            },
-          )
+          item(key = "popular_header") {
+            SectionHeaderRow(
+              iconVector = Icons.Default.LocalFireDepartment,
+              title = "POPULAR RIGHT NOW",
+              onSeeAllClick = {
+                appState.selectedMenuCategory = FoodCategory.POPULAR
+                onNavigateToTab(BottomNavTab.MENU)
+              },
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+          }
 
-          Spacer(modifier = Modifier.height(14.dp))
-
-          // Popular Dishes Down-scrolling Big Cards
-          Column(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(horizontal = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-          ) {
-            popularItems.forEach { item ->
+          items(
+            items = popularItems,
+            key = { "pop_${it.id}" },
+          ) { item ->
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 7.dp)
+            ) {
               PopularCard(
                 foodItem = item,
                 onAddToCart = { appState.addToCart(item) },
@@ -327,29 +343,34 @@ fun HomeScreen(
             }
           }
 
-          Spacer(modifier = Modifier.height(24.dp))
+          item(key = "popular_spacer") {
+            Spacer(modifier = Modifier.height(18.dp))
+          }
         }
 
-        // ── Section: ORDER IN 10 MINUTES ─────────────────────────────────────
+        // ── Section 3: ORDER IN 10 MINUTES ─────────────────────────────────────
         if (readyIn10.isNotEmpty()) {
-          SectionHeaderRow(
-            iconVector = Icons.Default.Speed,
-            title = "ORDER IN 10 MINUTES",
-            onSeeAllClick = {
-              appState.selectedMenuCategory = FoodCategory.READY_UNDER_10
-              onNavigateToTab(BottomNavTab.MENU)
-            },
-          )
+          item(key = "ready10_header") {
+            SectionHeaderRow(
+              iconVector = Icons.Default.Speed,
+              title = "ORDER IN 10 MINUTES",
+              onSeeAllClick = {
+                appState.selectedMenuCategory = FoodCategory.READY_UNDER_10
+                onNavigateToTab(BottomNavTab.MENU)
+              },
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+          }
 
-          Spacer(modifier = Modifier.height(14.dp))
-
-          Column(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(horizontal = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-          ) {
-            readyIn10.take(6).forEach { item ->
+          items(
+            items = readyIn10.take(6),
+            key = { "r10_${it.id}" },
+          ) { item ->
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 5.dp)
+            ) {
               ReadyIn10Card(
                 foodItem = item,
                 onAddToCart = { appState.addToCart(item) },
@@ -358,32 +379,38 @@ fun HomeScreen(
             }
           }
 
-          Spacer(modifier = Modifier.height(24.dp))
+          item(key = "ready10_spacer") {
+            Spacer(modifier = Modifier.height(18.dp))
+          }
         }
 
-        // ── Section 3: YOUR USUAL ORDER CARD (Below Popular Right Now) ───────
+        // ── Section 4: YOUR USUAL ORDER CARD ────────────────────────────────
         val usual = appState.usualOrderInfo
         if (!appState.isUsualBannerDismissed && usual != null && usual.foodItem != null) {
-          Box(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(horizontal = 14.dp)
-          ) {
-            YourUsualBanner(
-              usualInfo = usual,
-              onReorder = {
-                appState.addToCart(usual.foodItem)
-              },
-              onDismiss = {
-                appState.dismissUsualBanner()
-              }
-            )
+          item(key = "usual_order") {
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp)
+            ) {
+              YourUsualBanner(
+                usualInfo = usual,
+                onReorder = {
+                  appState.addToCart(usual.foodItem)
+                },
+                onDismiss = {
+                  appState.dismissUsualBanner()
+                }
+              )
+            }
+            Spacer(modifier = Modifier.height(18.dp))
           }
-          Spacer(modifier = Modifier.height(18.dp))
         }
       }
 
-      Spacer(modifier = Modifier.height(16.dp))
+      item(key = "bottom_space") {
+        Spacer(modifier = Modifier.height(16.dp))
+      }
     }
   }
 

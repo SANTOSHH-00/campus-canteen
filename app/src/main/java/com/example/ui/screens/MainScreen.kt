@@ -117,10 +117,16 @@ fun MainScreen(
         }
       },
     ) { innerPadding ->
+      val isDetailOrTracking = appState.selectedFoodForDetail != null || appState.selectedOrderForTracking != null || appState.isMenuFilterOpen
+      val animatedBottomPadding by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (!isDetailOrTracking && appState.isBottomBarVisible) innerPadding.calculateBottomPadding() else 0.dp,
+        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+        label = "animatedBottomPadding"
+      )
       Box(
         modifier = Modifier
           .fillMaxSize()
-          .padding(innerPadding)
+          .padding(top = innerPadding.calculateTopPadding(), bottom = animatedBottomPadding)
       ) {
         if (appState.selectedOrderForTracking != null) {
           val trackingOrder = appState.selectedOrderForTracking!!

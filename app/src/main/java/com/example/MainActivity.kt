@@ -21,6 +21,7 @@ import com.example.ui.screens.MainScreen
 import com.example.ui.state.rememberCanteenAppState
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.AuthViewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
   private val TAG = "MainActivity"
@@ -36,6 +37,30 @@ class MainActivity : ComponentActivity() {
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
       if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
         requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+      }
+    }
+
+    // Connect to Quick Bite real-time WebSockets
+    com.example.data.api.WebSocketManager.connect()
+
+    // Sync FCM Token to Backend if available
+    FirebaseConfig.messaging?.token?.addOnCompleteListener { task ->
+      if (task.isSuccessful && !task.result.isNullOrBlank()) {
+        val fcmToken: String = task.result ?: return@addOnCompleteListener
+        Log.i(TAG, "Current FCM Token retrieved: $fcmToken")
+        val currentUid = SessionManager.getUserSession()?.uid
+        if (!currentUid.isNullOrBlank()) {
+          kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+              com.example.data.api.ApiClient.apiService.updateUserFcmToken(
+                currentUid,
+                com.example.data.api.FcmTokenDto(fcmToken = fcmToken)
+              )
+            } catch (e: Exception) {
+              Log.w(TAG, "FCM token sync skipped: ${e.message}")
+            }
+          }
+        }
       }
     }
 
