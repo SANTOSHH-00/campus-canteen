@@ -26,7 +26,9 @@ function getTransporter() {
         user: user || '',
         pass: pass ? pass.replace(/\s+/g, '') : '', // strip accidental spaces in app password
       },
-      family: 4, // Force IPv4 to avoid ENETUNREACH on cloud hosts like Render
+      lookup: (hostname, options, callback) => {
+        dns.lookup(hostname, { family: 4 }, callback);
+      },
       connectionTimeout: 8000,
       greetingTimeout: 8000,
       socketTimeout: 10000,

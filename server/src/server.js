@@ -3,6 +3,12 @@ const cors = require('cors');
 const morgan = require('morgan');
 const path = require('path');
 const dotenv = require('dotenv');
+const dns = require('dns');
+
+// Force IPv4 resolution to prevent ENETUNREACH in cloud environments (e.g. Render)
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 // Load environment variables
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
