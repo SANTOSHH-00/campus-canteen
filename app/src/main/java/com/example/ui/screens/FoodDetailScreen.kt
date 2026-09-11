@@ -144,15 +144,8 @@ fun FoodDetailScreen(
           .clip(RoundedCornerShape(24.dp))
           .background(Color(0xFFEFE8DD)),
       ) {
-        if (foodItem.imageUrl.isNotBlank()) {
-          coil.compose.AsyncImage(
-            model = foodItem.imageUrl,
-            contentDescription = foodItem.name,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-          )
-        } else {
-          // Beautiful decorative fallback canvas with food styling
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val decorativeFallback: @Composable () -> Unit = {
           Box(
             modifier = Modifier
               .fillMaxSize()
@@ -190,6 +183,31 @@ fun FoodDetailScreen(
               )
             }
           }
+        }
+
+        if (foodItem.imageUrl.isNotBlank()) {
+          val imageReq = remember(foodItem.imageUrl) {
+            coil.request.ImageRequest.Builder(context)
+              .data(foodItem.imageUrl)
+              .crossfade(200)
+              .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+              .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+              .build()
+          }
+          coil.compose.SubcomposeAsyncImage(
+            model = imageReq,
+            contentDescription = foodItem.name,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+            loading = {
+              com.example.ui.components.ShimmerPlaceholder(modifier = Modifier.fillMaxSize())
+            },
+            error = {
+              decorativeFallback()
+            }
+          )
+        } else {
+          decorativeFallback()
         }
 
         // Floating Back Button (Top-Left)

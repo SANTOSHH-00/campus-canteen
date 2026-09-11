@@ -594,12 +594,10 @@ fun ProfileScreen(
       )
     }
 
-    // 6. Notifications Dialog
+    // 6. Notifications Sheet
     if (showNotificationsDialog) {
-      SimpleFeatureDialog(
-        title = "Notifications & Alerts",
-        icon = "🔔",
-        message = "You are receiving:\n• Realtime token preparation updates\n• Food ready for pickup bell alerts\n• Special daily discounts & offers",
+      com.example.ui.components.ModernNotificationsSheet(
+        appState = appState,
         onDismiss = { showNotificationsDialog = false }
       )
     }

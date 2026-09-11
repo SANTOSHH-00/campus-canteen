@@ -56,6 +56,9 @@ object WebSocketManager {
   private val _newOrders = MutableSharedFlow<MongoOrderDto>(extraBufferCapacity = 64)
   val newOrders: Flow<MongoOrderDto> = _newOrders.asSharedFlow()
 
+  private val _queueUpdates = MutableSharedFlow<String>(extraBufferCapacity = 64)
+  val queueUpdates: Flow<String> = _queueUpdates.asSharedFlow()
+
   fun getWsUrl(): String {
     val base = ApiClient.baseUrl.trimEnd('/')
     val wsPrefix = if (base.startsWith("https://", ignoreCase = true)) "wss://" else "ws://"
@@ -153,6 +156,13 @@ object WebSocketManager {
         extractAndEmitOrder(text, _orderUpdates)
       } else if (text.contains("\"type\":\"ORDER_CREATED\"")) {
         extractAndEmitOrder(text, _newOrders)
+      } else if (text.contains("\"type\":\"QUEUE_UPDATED\"")) {
+        val canteenIdx = text.indexOf("\"canteenId\":")
+        if (canteenIdx != -1) {
+          val canteenId = text.substring(canteenIdx + 12).substringBefore(",").substringBefore("}").trim('"', ' ', '\n', '\r')
+          _queueUpdates.tryEmit(canteenId)
+          Log.i(TAG, "Real-time Queue Update for canteen: $canteenId")
+        }
       } else if (text.contains("\"type\":\"CONNECTED\"")) {
         Log.d(TAG, "Received server welcome: $text")
       }
@@ -193,6 +203,9 @@ object WebSocketManager {
         if (parsed != null && parsed.orderId.isNotBlank()) {
           Log.i(TAG, "Real-time Order Event Received: ${parsed.orderId} status: ${parsed.status}")
           targetFlow.tryEmit(parsed)
+          if (parsed.canteenId.isNotBlank()) {
+            _queueUpdates.tryEmit(parsed.canteenId)
+          }
         }
       }
     } catch (e: Exception) {

@@ -51,6 +51,8 @@ object SessionManager {
         }
       }
     }
+    com.example.data.api.ApiClient.initialize(context)
+    com.example.util.NetworkMonitor.initialize(context)
   }
 
   // ── Student Session Management ─────────────────────────────────────────────
@@ -289,5 +291,59 @@ object SessionManager {
 
   fun clearPendingResetEmail() {
     prefs?.edit()?.remove(KEY_PENDING_RESET_EMAIL)?.apply()
+  }
+
+  // ── Cart Persistence (Preserves cart during network drops or app restarts) ─
+
+  private const val KEY_SAVED_CART_JSON = "saved_cart_items_json"
+
+  fun saveCartJson(json: String) {
+    prefs?.edit()?.putString(KEY_SAVED_CART_JSON, json)?.apply()
+  }
+
+  fun getCartJson(): String? {
+    return prefs?.getString(KEY_SAVED_CART_JSON, null)?.ifBlank { null }
+  }
+
+  fun clearCartJson() {
+    prefs?.edit()?.remove(KEY_SAVED_CART_JSON)?.apply()
+  }
+
+  // ── Notification Persistence ──────────────────────────────────────────────
+
+  private const val KEY_SAVED_NOTIFICATIONS_JSON = "saved_notifications_json"
+
+  fun saveIncomingNotification(title: String, message: String) {
+    try {
+      val existing = getSavedNotificationsJson()
+      val array = if (existing != null) org.json.JSONArray(existing) else org.json.JSONArray()
+      val obj = org.json.JSONObject().apply {
+        put("id", java.util.UUID.randomUUID().toString())
+        put("title", title)
+        put("message", message)
+        put("timestamp", System.currentTimeMillis())
+        put("isUnread", true)
+      }
+      val newArray = org.json.JSONArray()
+      newArray.put(obj)
+      for (i in 0 until array.length().coerceAtMost(29)) {
+        newArray.put(array.get(i))
+      }
+      prefs?.edit()?.putString(KEY_SAVED_NOTIFICATIONS_JSON, newArray.toString())?.apply()
+    } catch (e: Exception) {
+      android.util.Log.e("SessionManager", "Failed to save notification: ${e.message}")
+    }
+  }
+
+  fun getSavedNotificationsJson(): String? {
+    return prefs?.getString(KEY_SAVED_NOTIFICATIONS_JSON, null)?.ifBlank { null }
+  }
+
+  fun saveAllNotificationsJson(json: String) {
+    prefs?.edit()?.putString(KEY_SAVED_NOTIFICATIONS_JSON, json)?.apply()
+  }
+
+  fun clearNotifications() {
+    prefs?.edit()?.remove(KEY_SAVED_NOTIFICATIONS_JSON)?.apply()
   }
 }

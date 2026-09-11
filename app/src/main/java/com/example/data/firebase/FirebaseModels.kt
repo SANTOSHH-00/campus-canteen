@@ -297,6 +297,8 @@ data class OrderDocument(
       pickupCanteenName = pickupCanteenName.ifBlank { "Campus Canteen" },
       pickupLocation = pickupLocation.ifBlank { "Counter 1" },
       pickupPreference = pickupPreference,
+      pickupCounter = pickupCounter.ifBlank { "Counter 1" },
+      canteenId = canteenId.ifBlank { "canteen_33" },
     )
   }
 

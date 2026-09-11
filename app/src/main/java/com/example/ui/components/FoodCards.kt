@@ -41,7 +41,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.material.icons.filled.Fastfood
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import coil.compose.SubcomposeAsyncImage
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.util.lerp
 import kotlin.math.absoluteValue
@@ -74,9 +84,59 @@ import com.example.ui.theme.SoftGray
 import com.example.ui.theme.TextDark
 import com.example.ui.theme.TextMuted
 
+@Composable
+fun ShimmerPlaceholder(modifier: Modifier = Modifier) {
+  val transition = rememberInfiniteTransition(label = "shimmer")
+  val translateAnim by transition.animateFloat(
+    initialValue = 0f,
+    targetValue = 1000f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 1100, easing = LinearEasing),
+      repeatMode = RepeatMode.Restart
+    ),
+    label = "shimmerTranslate"
+  )
+  val brush = Brush.linearGradient(
+    colors = listOf(
+      Color(0xFFE2E8F0),
+      Color(0xFFF8FAFC),
+      Color(0xFFE2E8F0),
+    ),
+    start = Offset(translateAnim - 400f, translateAnim - 400f),
+    end = Offset(translateAnim, translateAnim)
+  )
+  Box(modifier = modifier.background(brush))
+}
+
+@Composable
+private fun FallbackFoodCardView(itemName: String, compact: Boolean) {
+  Column(
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.Center,
+    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+  ) {
+    Icon(
+      imageVector = Icons.Default.Fastfood,
+      contentDescription = null,
+      tint = Color(0xFF64748B),
+      modifier = Modifier.size(if (compact) 20.dp else 24.dp),
+    )
+    Spacer(modifier = Modifier.height(3.dp))
+    Text(
+      text = itemName,
+      fontSize = if (compact) 11.sp else 12.sp,
+      fontWeight = FontWeight.Bold,
+      color = TextDark,
+      textAlign = TextAlign.Center,
+      maxLines = 2,
+      overflow = TextOverflow.Ellipsis,
+    )
+  }
+}
+
 /**
- * Clean styled image placeholder container that displays the item name clearly
- * or renders the real image asset when available.
+ * Clean styled image container that renders images progressively with shimmer skeleton placeholders,
+ * eliminating layout jump and gracefully falling back to clean icons on poor/offline networks.
  */
 @Composable
 fun FoodImagePlaceholder(
@@ -98,48 +158,25 @@ fun FoodImagePlaceholder(
       val imageRequest = remember(imageUrl) {
         coil.request.ImageRequest.Builder(context)
           .data(imageUrl)
-          .crossfade(true)
+          .crossfade(200)
           .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
           .diskCachePolicy(coil.request.CachePolicy.ENABLED)
           .build()
       }
-      coil.compose.AsyncImage(
+      SubcomposeAsyncImage(
         model = imageRequest,
         contentDescription = itemName,
         contentScale = ContentScale.Crop,
         modifier = Modifier.fillMaxSize(),
+        loading = {
+          ShimmerPlaceholder(modifier = Modifier.fillMaxSize())
+        },
+        error = {
+          FallbackFoodCardView(itemName = itemName, compact = compact)
+        }
       )
     } else {
-      Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-      ) {
-        Icon(
-          imageVector = Icons.Default.Image,
-          contentDescription = "Image Placeholder",
-          tint = DeliveryOrange,
-          modifier = Modifier.size(if (compact) 18.dp else 22.dp),
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-          text = itemName,
-          fontSize = if (compact) 11.sp else 12.sp,
-          fontWeight = FontWeight.ExtraBold,
-          color = TextDark,
-          textAlign = TextAlign.Center,
-          maxLines = 2,
-          overflow = TextOverflow.Ellipsis,
-        )
-        if (!compact) {
-          Text(
-            text = "[Image Area]",
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextMuted,
-          )
-        }
-      }
+      FallbackFoodCardView(itemName = itemName, compact = compact)
     }
 
     // Top Right Rating Badge (for Popular items)

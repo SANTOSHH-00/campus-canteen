@@ -148,9 +148,24 @@ function broadcastNewOrder(order) {
   }
 }
 
+/**
+ * Broadcast an updated queue notification to all clients subscribed to a canteen.
+ * @param {string} canteenId
+ */
+function broadcastQueueUpdate(canteenId) {
+  if (!canteenId) return;
+  const payload = {
+    type: 'QUEUE_UPDATED',
+    canteenId,
+    timestamp: Date.now(),
+  };
+  broadcastToChannel(`canteen:${canteenId}`, payload);
+}
+
 module.exports = {
   initWebSocket,
   broadcastToChannel,
   broadcastOrderStatus,
   broadcastNewOrder,
+  broadcastQueueUpdate,
 };

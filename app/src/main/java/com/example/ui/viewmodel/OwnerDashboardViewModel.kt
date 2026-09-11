@@ -2,6 +2,8 @@ package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.api.MongoRepository
+import com.example.data.api.toDocument
 import com.example.data.firebase.CanteenDocument
 import com.example.data.firebase.FirestoreRepository
 import com.example.data.firebase.ItemDocument
@@ -46,6 +48,7 @@ open class OwnerDashboardViewModel(
   private val firestoreRepo: FirestoreRepository = FirestoreRepository(),
   private val itemRepo: ItemRepository = ItemRepository(),
   private val ownerRepo: OwnerRepository = OwnerRepository(),
+  private val mongoRepo: MongoRepository = MongoRepository(),
   initialOwner: OwnerDocument? = null,
 ) : ViewModel() {
 
@@ -113,29 +116,66 @@ open class OwnerDashboardViewModel(
   }
 
   fun isGuestOrder(order: OrderDocument): Boolean {
-    return order.studentId.contains("guest", ignoreCase = true) ||
-        order.studentName.contains("guest", ignoreCase = true)
+    // All orders belonging to this canteen participate in kitchen preparation
+    return false
   }
 
   private fun setupDashboard(owner: OwnerDocument) {
     val canteenId = owner.canteenId.ifBlank { "canteen_33" }
+
+    // 0. Pre-populate with memory cache if available
+    MongoRepository.cachedCanteenItems[canteenId]?.let {
+      if (it.isNotEmpty()) _items.value = it
+    }
+    MongoRepository.cachedCanteenOrders[canteenId]?.let {
+      if (it.isNotEmpty()) _orders.value = it.filter { o -> !isGuestOrder(o) }
+    }
+
+    // Immediately provide initial canteen doc so the UI transitions to Ready instantly
+    if (_canteen.value == null) {
+      _canteen.value = CanteenDocument(
+        id = canteenId,
+        name = if (owner.block.isNotBlank()) "Campus Canteen ${owner.block}" else "Campus Canteen",
+        block = owner.block,
+        location = "Block ${owner.block}",
+        isOpen = true,
+      )
+    }
+    recomputeUiState()
+
+    // 1. Direct one-shot async fetch for instant items loading
     viewModelScope.launch {
-      // 1. Observe Canteen Document
-      firestoreRepo.observeCanteen(canteenId).collect { remoteCanteen ->
-        val effectiveCanteen = remoteCanteen ?: CanteenDocument(
-          id = canteenId,
-          name = if (owner.block.isNotBlank()) "Campus Canteen ${owner.block}" else "Campus Canteen",
-          block = owner.block,
-          location = "Block ${owner.block}",
-          isOpen = true,
-        )
-        _canteen.value = effectiveCanteen
+      val itemsRes = mongoRepo.getCanteenItems(canteenId)
+      if (itemsRes.isSuccess) {
+        val list = itemsRes.getOrThrow().map { it.toDocument() }
+        if (list.isNotEmpty()) {
+          _items.value = list
+          recomputeUiState()
+        }
+      }
+    }
+
+    // 2. Direct one-shot async fetch for instant orders loading
+    viewModelScope.launch {
+      val ordersRes = mongoRepo.getCanteenOrders(canteenId)
+      if (ordersRes.isSuccess) {
+        val list = ordersRes.getOrThrow().map { it.toDocument() }.filter { !isGuestOrder(it) }
+        _orders.value = list
         recomputeUiState()
       }
     }
 
+    // 3. Continuous real-time flows
     viewModelScope.launch {
-      // 2. Observe Canteen Orders in Real-Time (Filter out guest orders)
+      firestoreRepo.observeCanteen(canteenId).catch {}.collect { remoteCanteen ->
+        if (remoteCanteen != null) {
+          _canteen.value = remoteCanteen
+          recomputeUiState()
+        }
+      }
+    }
+
+    viewModelScope.launch {
       firestoreRepo.observeCanteenOrders(canteenId).catch {}.collect { ordersList ->
         _orders.value = ordersList.filter { !isGuestOrder(it) }
         recomputeUiState()
@@ -143,17 +183,24 @@ open class OwnerDashboardViewModel(
     }
 
     viewModelScope.launch {
-      // 3. Observe Canteen Food Items in Real-Time
       itemRepo.observeCanteenItems(canteenId).catch {}.collect { itemsList ->
-        _items.value = itemsList
-        recomputeUiState()
+        if (itemsList.isNotEmpty()) {
+          _items.value = itemsList
+          recomputeUiState()
+        }
       }
     }
   }
 
   private fun recomputeUiState() {
     val owner = _currentOwner.value ?: return
-    val canteenDoc = _canteen.value ?: return
+    val canteenDoc = _canteen.value ?: CanteenDocument(
+      id = owner.canteenId.ifBlank { "canteen_33" },
+      name = if (owner.block.isNotBlank()) "Campus Canteen ${owner.block}" else "Campus Canteen",
+      block = owner.block,
+      location = "Block ${owner.block}",
+      isOpen = true,
+    )
     val ordersList = _orders.value.filter { !isGuestOrder(it) }
     val itemsList = _items.value
 
@@ -181,9 +228,8 @@ open class OwnerDashboardViewModel(
     // Low stock items (stock <= 5 or out of stock)
     val lowStock = itemsList.filter { it.stock <= 5 || !it.available }
 
-    // Recent orders: strictly show previous delivered/completed orders
+    // Recent orders: show recent canteen orders sorted by latest activity
     val recent = ordersList
-      .filter { it.status.equals("COMPLETED", ignoreCase = true) || it.status.equals("DELIVERED", ignoreCase = true) }
       .sortedByDescending { it.updatedAt.coerceAtLeast(it.createdAt) }
       .take(10)
 

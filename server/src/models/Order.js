@@ -24,7 +24,7 @@ const orderSchema = new mongoose.Schema(
     totalAmount: { type: Number, required: true },
     status: {
       type: String,
-      enum: ['NEW', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED'],
+      enum: ['NEW', 'WAITING', 'CONFIRMED', 'PREPARING', 'READY', 'COMPLETED', 'PICKED_UP', 'CANCELLED'],
       default: 'PREPARING',
       index: true,
     },
@@ -35,8 +35,12 @@ const orderSchema = new mongoose.Schema(
     pickupLocation: { type: String, default: '' },
     pickupCounter: { type: String, default: 'Counter 1' },
     estimatedReadyTime: { type: String, default: '' },
+    estimatedPrepMinutes: { type: Number, default: 7 },
   },
   { timestamps: true }
 );
+
+// High performance deterministic compound index for canteen queue ordering
+orderSchema.index({ canteenId: 1, status: 1, createdAt: 1, orderId: 1 });
 
 module.exports = mongoose.model('Order', orderSchema);

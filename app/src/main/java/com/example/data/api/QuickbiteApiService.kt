@@ -96,6 +96,12 @@ interface QuickbiteApiService {
   @POST("orders")
   suspend fun createOrder(@Body order: MongoOrderDto): Response<MongoOrderDto>
 
+  @GET("orders/queue/canteen/{canteenId}")
+  suspend fun getCanteenQueue(@Path("canteenId") canteenId: String): Response<CanteenQueueDto>
+
+  @GET("orders/{id}/queue")
+  suspend fun getOrderQueuePosition(@Path("id") id: String): Response<OrderQueuePositionDto>
+
   @PATCH("orders/{id}/status")
   suspend fun updateOrderStatus(
     @Path("id") id: String,

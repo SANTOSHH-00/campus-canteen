@@ -35,12 +35,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -80,6 +82,12 @@ import com.example.ui.theme.WarmCream
 import androidx.compose.ui.text.style.TextAlign
 import com.example.ui.state.UserProfile
 
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import com.example.data.api.CanteenQueueDto
+import com.example.data.api.MongoRepository
+import com.example.data.api.WebSocketManager
+
 @Composable
 fun CartScreen(
   appState: CanteenAppState,
@@ -91,6 +99,45 @@ fun CartScreen(
   var showTimePickerDialog by remember { mutableStateOf(false) }
   var showNetworkErrorDialog by remember { mutableStateOf(false) }
   val context = LocalContext.current
+  val coroutineScope = rememberCoroutineScope()
+
+  val selectedCanteenId = appState.selectedCanteen.id
+  var queueData by remember { mutableStateOf<CanteenQueueDto?>(null) }
+
+  // Load and refresh queue data
+  val refreshQueue: () -> Unit = {
+    coroutineScope.launch {
+      MongoRepository.getCanteenQueue(selectedCanteenId).onSuccess {
+        queueData = it
+      }
+    }
+  }
+
+  // Clean subscription lifecycle for canteen queue channel
+  DisposableEffect(selectedCanteenId) {
+    refreshQueue()
+    WebSocketManager.subscribe("canteen:$selectedCanteenId")
+    onDispose {
+      WebSocketManager.unsubscribe("canteen:$selectedCanteenId")
+    }
+  }
+
+  // Live WebSocket reactive update: when preceding order picked up / updated, auto-refresh
+  LaunchedEffect(selectedCanteenId) {
+    WebSocketManager.queueUpdates.collect { canteenId ->
+      if (canteenId.isBlank() || canteenId == selectedCanteenId) {
+        refreshQueue()
+      }
+    }
+  }
+
+  // Fallback periodic poll in case WebSocket is disconnected
+  LaunchedEffect(selectedCanteenId) {
+    while (true) {
+      kotlinx.coroutines.delay(10000)
+      refreshQueue()
+    }
+  }
 
   val cartListState = rememberLazyListState()
 
@@ -255,6 +302,121 @@ fun CartScreen(
               )
             }
           }
+          Spacer(modifier = Modifier.height(10.dp))
+
+          // ── Kitchen Live Queue & Avg Wait Time Card (Normal neutral icons, clean layout) ──
+          Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = CardSurface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray),
+          ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Icon(
+                    imageVector = Icons.Default.AccessTime,
+                    contentDescription = null,
+                    tint = TextDark,
+                    modifier = Modifier.size(16.dp),
+                  )
+                  Spacer(Modifier.width(6.dp))
+                  Text(
+                    text = "Kitchen Live Queue",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextDark,
+                  )
+                }
+
+                // Live status dot
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Box(
+                    modifier = Modifier
+                      .size(7.dp)
+                      .clip(CircleShape)
+                      .background(Color(0xFF16A34A))
+                  )
+                  Spacer(Modifier.width(5.dp))
+                  Text(
+                    text = "Live",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF16A34A),
+                  )
+                }
+              }
+
+              Spacer(Modifier.height(10.dp))
+
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clip(RoundedCornerShape(10.dp))
+                  .background(Color(0xFFF9FAFB))
+                  .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                val queueCount = queueData?.queueCount ?: 0
+                val waitTime = queueData?.avgWaitMinutes ?: 5
+
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = "Orders Ahead",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextMuted,
+                  )
+                  Spacer(Modifier.height(2.dp))
+                  Text(
+                    text = if (queueCount == 0) "No Queue (You're First)" else "$queueCount order${if (queueCount > 1) "s" else ""} ahead",
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = TextDark,
+                  )
+                }
+
+                Box(
+                  modifier = Modifier
+                    .width(1.dp)
+                    .height(28.dp)
+                    .background(BorderGray)
+                )
+
+                Column(
+                  modifier = Modifier.weight(1f),
+                  horizontalAlignment = Alignment.End,
+                ) {
+                  Text(
+                    text = "Avg. Wait Time",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextMuted,
+                  )
+                  Spacer(Modifier.height(2.dp))
+                  Text(
+                    text = "~$waitTime mins",
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = TextDark,
+                  )
+                }
+              }
+
+              Spacer(Modifier.height(6.dp))
+              Text(
+                text = "Updates automatically when preceding orders are prepared or picked up.",
+                fontSize = 10.5.sp,
+                color = TextMuted,
+              )
+            }
+          }
+
           Spacer(modifier = Modifier.height(12.dp))
         }
 
@@ -589,30 +751,53 @@ fun CartScreen(
               )
             }
 
+            val canPlaceOrder = isCanteenOpen && !appState.isPlacingOrder
             Box(
               modifier = Modifier
                 .clip(RoundedCornerShape(14.dp))
-                .background(if (isCanteenOpen) BlackPrimary else BorderGray)
-                .clickable(enabled = isCanteenOpen) {
-                  if (!NetworkUtils.isOnline(context)) {
+                .background(if (canPlaceOrder) BlackPrimary else BorderGray)
+                .clickable(enabled = canPlaceOrder) {
+                  if (!com.example.util.NetworkMonitor.isCurrentlyOnline()) {
                     showNetworkErrorDialog = true
                     return@clickable
                   }
                   if (appState.isGuest) {
                     showLoginPrompt = true
                   } else {
-                    newlyPlacedOrder = appState.placeOrder()
+                    appState.isPlacingOrder = true
+                    try {
+                      newlyPlacedOrder = appState.placeOrder()
+                    } finally {
+                      appState.isPlacingOrder = false
+                    }
                   }
                 }
                 .padding(horizontal = 28.dp, vertical = 13.dp),
               contentAlignment = Alignment.Center,
             ) {
-              Text(
-                text = if (isCanteenOpen) "Place Order →" else "Canteen Closed",
-                fontSize = 14.5.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = if (isCanteenOpen) PureWhite else TextMuted,
-              )
+              if (appState.isPlacingOrder) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  CircularProgressIndicator(
+                    color = PureWhite,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(16.dp),
+                  )
+                  Spacer(modifier = Modifier.width(8.dp))
+                  Text(
+                    text = "Placing...",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PureWhite,
+                  )
+                }
+              } else {
+                Text(
+                  text = if (isCanteenOpen) "Place Order →" else "Canteen Closed",
+                  fontSize = 14.5.sp,
+                  fontWeight = FontWeight.ExtraBold,
+                  color = if (isCanteenOpen) PureWhite else TextMuted,
+                )
+              }
             }
           }
         }

@@ -813,11 +813,14 @@ private fun AddEditItemDialog(
           ) {
             val previewSource = selectedImageUri ?: item?.imageUrl?.ifBlank { null }
             if (previewSource != null) {
-              coil.compose.AsyncImage(
+              coil.compose.SubcomposeAsyncImage(
                 model = previewSource,
                 contentDescription = "Selected Item Image",
                 modifier = Modifier.fillMaxSize(),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                loading = {
+                  com.example.ui.components.ShimmerPlaceholder(modifier = Modifier.fillMaxSize())
+                },
               )
             } else {
               Icon(

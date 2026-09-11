@@ -92,16 +92,14 @@ fun OwnerOrderDetailsScreen(
 
   val order = remember(allOrders, fetchedOrder, orderId) {
     allOrders.find { it.orderId == orderId }
-      ?: com.example.data.api.MongoRepository.getCachedOrder(orderId)
       ?: fetchedOrder
+      ?: com.example.data.api.MongoRepository.getCachedOrder(orderId)
   }
 
   LaunchedEffect(orderId) {
-    if (order == null) {
-      isFetching = true
-      dashboardViewModel.observeOrder(orderId).collect {
-        fetchedOrder = it
-        isFetching = false
+    dashboardViewModel.observeOrder(orderId).collect { remoteOrder ->
+      if (remoteOrder != null) {
+        fetchedOrder = remoteOrder
       }
     }
   }
@@ -505,57 +503,103 @@ fun OwnerOrderDetailsScreen(
       Spacer(modifier = Modifier.height(20.dp))
     }
 
-    // ── Bottom Fixed Action Buttons (Image 2) ───────────────────────────────
-    Column(
+    // ── Bottom Fixed Action Button (Sequential Process: NEW -> PREPARING -> READY -> Picked Up) ──
+    val isNew = order.status.equals("NEW", ignoreCase = true)
+
+    Box(
       modifier = Modifier
         .align(Alignment.BottomCenter)
         .fillMaxWidth()
         .background(PureWhite)
         .padding(horizontal = 16.dp, vertical = 12.dp),
-      verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-      // 1. Mark as Ready (Outlined White with Orange border)
-      OutlinedButton(
-        onClick = {
-          dashboardViewModel.updateOrderStatus(order.orderId, "READY")
-          Toast.makeText(context, "Order ${order.tokenNumber} marked Ready at Counter 1", Toast.LENGTH_SHORT).show()
-        },
-        enabled = !isPickedUp,
-        modifier = Modifier
-          .fillMaxWidth()
-          .height(48.dp)
-          .testTag("mark_ready_button"),
-        shape = RoundedCornerShape(24.dp),
-        border = androidx.compose.foundation.BorderStroke(1.5.dp, OrangeAccent),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = OrangeAccent),
-      ) {
-        Text(
-          text = if (isReady) "Order Ready (Counter 1) ✓" else "Mark as Ready",
-          fontSize = 15.sp,
-          fontWeight = FontWeight.Bold,
-          color = OrangeAccent,
-        )
-      }
-
-      // 2. Mark as Picked Up (Solid Orange button)
-      Button(
-        onClick = {
-          dashboardViewModel.updateOrderStatus(order.orderId, "COMPLETED")
-          Toast.makeText(context, "Order ${order.tokenNumber} marked Picked Up", Toast.LENGTH_SHORT).show()
-        },
-        modifier = Modifier
-          .fillMaxWidth()
-          .height(48.dp)
-          .testTag("mark_picked_up_button"),
-        shape = RoundedCornerShape(24.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent),
-      ) {
-        Text(
-          text = if (isPickedUp) "Picked Up ✓" else "Mark as Picked Up",
-          fontSize = 15.sp,
-          fontWeight = FontWeight.Bold,
-          color = PureWhite,
-        )
+      when {
+        isNew -> {
+          Button(
+            onClick = {
+              val targetId = order.orderId.ifBlank { orderId }
+              dashboardViewModel.updateOrderStatus(targetId, "PREPARING")
+              Toast.makeText(context, "Order ${order.tokenNumber} moved to Preparing", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(50.dp)
+              .testTag("owner_next_button"),
+            shape = RoundedCornerShape(25.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent),
+          ) {
+            Text(
+              text = "Next: Start Preparing ➔",
+              fontSize = 15.5.sp,
+              fontWeight = FontWeight.Bold,
+              color = PureWhite,
+            )
+          }
+        }
+        isPreparing -> {
+          Button(
+            onClick = {
+              val targetId = order.orderId.ifBlank { orderId }
+              dashboardViewModel.updateOrderStatus(targetId, "READY")
+              Toast.makeText(context, "Order ${order.tokenNumber} marked Ready for Pickup", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(50.dp)
+              .testTag("owner_next_button"),
+            shape = RoundedCornerShape(25.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent),
+          ) {
+            Text(
+              text = "Next: Ready for Pickup ➔",
+              fontSize = 15.5.sp,
+              fontWeight = FontWeight.Bold,
+              color = PureWhite,
+            )
+          }
+        }
+        isReady -> {
+          // As requested: Once ready, button displays "Picked Up" (not Next) and exits on click
+          Button(
+            onClick = {
+              val targetId = order.orderId.ifBlank { orderId }
+              dashboardViewModel.updateOrderStatus(targetId, "COMPLETED")
+              Toast.makeText(context, "Order ${order.tokenNumber} Handled & Picked Up", Toast.LENGTH_SHORT).show()
+              onBack() // Exits to live orders screen
+            },
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(50.dp)
+              .testTag("owner_picked_up_button"),
+            shape = RoundedCornerShape(25.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+          ) {
+            Text(
+              text = "Picked Up (Handled Parcel) ✓",
+              fontSize = 15.5.sp,
+              fontWeight = FontWeight.Bold,
+              color = PureWhite,
+            )
+          }
+        }
+        else -> {
+          // Already completed/picked up
+          OutlinedButton(
+            onClick = onBack,
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(48.dp),
+            shape = RoundedCornerShape(24.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF9CA3AF)),
+          ) {
+            Text(
+              text = "Order Completed • Back to Orders",
+              fontSize = 14.5.sp,
+              fontWeight = FontWeight.SemiBold,
+              color = TextDark,
+            )
+          }
+        }
       }
     }
   }

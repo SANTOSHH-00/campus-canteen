@@ -243,6 +243,8 @@ data class MongoOrderDto(
       pickupCanteenName = pickupCanteenName.ifBlank { "Campus Canteen" },
       pickupLocation = pickupLocation.ifBlank { "Counter 1" },
       pickupPreference = pickupPreference,
+      pickupCounter = pickupCounter.ifBlank { "Counter 1" },
+      canteenId = canteenId.ifBlank { "canteen_33" },
     )
   }
 
@@ -456,6 +458,26 @@ data class ImageUploadResponseDto(
   @Json(name = "imageUrl") val imageUrl: String = "",
   @Json(name = "cloudinaryPublicId") val cloudinaryPublicId: String? = null,
   @Json(name = "error") val error: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class CanteenQueueDto(
+  @Json(name = "canteenId") val canteenId: String = "",
+  @Json(name = "queueCount") val queueCount: Int = 0,
+  @Json(name = "avgWaitMinutes") val avgWaitMinutes: Int = 5,
+  @Json(name = "activeOrdersCount") val activeOrdersCount: Int = 0,
+)
+
+@JsonClass(generateAdapter = true)
+data class OrderQueuePositionDto(
+  @Json(name = "orderId") val orderId: String = "",
+  @Json(name = "tokenNumber") val tokenNumber: String = "",
+  @Json(name = "status") val status: String = "",
+  @Json(name = "canteenId") val canteenId: String = "",
+  @Json(name = "queuePosition") val queuePosition: Int = 1,
+  @Json(name = "ordersAhead") val ordersAhead: Int = 0,
+  @Json(name = "estWaitMinutes") val estWaitMinutes: Int = 5,
+  @Json(name = "message") val message: String = "",
 )
 
 

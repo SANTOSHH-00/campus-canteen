@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Tune
 import com.example.ui.components.FeaturedSpecialBannerCard
 import com.example.ui.components.HomeScreenHeader
+import com.example.ui.components.ModernNotificationsSheet
 import com.example.ui.components.PopularCard
 import com.example.ui.components.QuickOrderCard
 import com.example.ui.components.YourUsualBanner
@@ -138,31 +139,32 @@ fun HomeScreen(
   }
   val popularItems = currentCanteen.popularItems
 
-  Box(
+  Column(
     modifier = modifier
       .fillMaxSize()
       .background(WarmCream)
   ) {
+    // ── Constant Top Header & Greetings (Pinned at top like Owner Dashboard) ──
+    HomeScreenHeader(
+      userName = userName,
+      appState = appState,
+      onProfileClick = onOpenProfileDrawer,
+      onNotificationClick = {
+        showNotificationsDialog = true
+      },
+      modifier = Modifier
+        .fillMaxWidth()
+        .background(WarmCream)
+        .padding(horizontal = 14.dp, vertical = 2.dp),
+    )
+
     LazyColumn(
       state = listState,
       modifier = Modifier
-        .fillMaxSize()
-        .statusBarsPadding(),
+        .fillMaxWidth()
+        .weight(1f),
       contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 20.dp),
     ) {
-      // ── Top Header with Staggered Menu Icon + Design Logo + QuickBite Name ─
-      item(key = "header") {
-        HomeScreenHeader(
-          userName = userName,
-          appState = appState,
-          onProfileClick = onOpenProfileDrawer,
-          onNotificationClick = {
-            showNotificationsDialog = true
-            appState.markNotificationsRead()
-          },
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-      }
 
       if (currentCanteen.allItems.isNotEmpty()) {
         // ── Hero Featured Steak-Style Banner Card ──
@@ -378,70 +380,11 @@ fun HomeScreen(
     }
   }
 
-  // Notification Dialog
+  // Modern Notifications Bottom Sheet (Smooth slide-in-up transition)
   if (showNotificationsDialog) {
-    AlertDialog(
-      onDismissRequest = { showNotificationsDialog = false },
-      title = {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
-          Text("Canteen Updates", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = BlackPrimary)
-          IconButton(onClick = { showNotificationsDialog = false }) {
-            Icon(Icons.Default.Close, contentDescription = "Close", tint = BlackPrimary)
-          }
-        }
-      },
-      text = {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-          if (appState.notifications.isEmpty()) {
-            Box(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 20.dp),
-              contentAlignment = Alignment.Center,
-            ) {
-              Text(
-                text = "No notifications yet.",
-                fontSize = 13.5.sp,
-                color = TextMuted,
-                fontWeight = FontWeight.Medium,
-              )
-            }
-          } else {
-            appState.notifications.forEach { notif ->
-              Box(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .clip(RoundedCornerShape(12.dp))
-                  .background(SoftGray)
-                  .padding(12.dp)
-              ) {
-                Column {
-                  Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                  ) {
-                    Text(notif.title, fontWeight = FontWeight.Bold, fontSize = 13.5.sp, color = BlackPrimary)
-                    Text(notif.timeAgo, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = TextMuted)
-                  }
-                  Spacer(modifier = Modifier.height(4.dp))
-                  Text(notif.message, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = TextDark)
-                }
-              }
-            }
-          }
-        }
-      },
-      confirmButton = {
-        TextButton(onClick = { showNotificationsDialog = false }) {
-          Text("Close", color = BlackPrimary, fontWeight = FontWeight.Bold)
-        }
-      },
-      containerColor = PureWhite,
-      shape = RoundedCornerShape(20.dp),
+    ModernNotificationsSheet(
+      appState = appState,
+      onDismiss = { showNotificationsDialog = false },
     )
   }
 

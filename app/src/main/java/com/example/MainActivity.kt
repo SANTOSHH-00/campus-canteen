@@ -11,10 +11,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.compose.rememberNavController
 import com.example.data.firebase.FirebaseConfig
 import com.example.data.session.SessionManager
+import com.example.ui.components.OfflineBanner
 import com.example.ui.navigation.MessQDestinations
 import com.example.ui.navigation.MessQNavHost
 import com.example.ui.screens.MainScreen
@@ -31,6 +37,8 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     SessionManager.initialize(applicationContext)
     FirebaseConfig.initialize(applicationContext)
+    com.example.util.NetworkMonitor.initialize(applicationContext)
+    com.example.data.api.ApiClient.initialize(applicationContext)
 
     processPasswordResetDeepLink(intent)
 
@@ -132,11 +140,19 @@ fun AppEntry(
     }
   }
 
-  MessQNavHost(
-    navController = navController,
-    appState = appState,
-    deepLinkDestination = deepLinkDestination,
-  )
+  Box(modifier = Modifier.fillMaxSize()) {
+    MessQNavHost(
+      navController = navController,
+      appState = appState,
+      deepLinkDestination = deepLinkDestination,
+    )
+
+    OfflineBanner(
+      modifier = Modifier
+        .align(Alignment.TopCenter)
+        .statusBarsPadding()
+    )
+  }
 }
 
 @Preview(showBackground = true)

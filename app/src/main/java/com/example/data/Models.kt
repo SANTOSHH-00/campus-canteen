@@ -137,6 +137,8 @@ data class OrderRecord(
   val pickupCanteenName: String = "Govinda's Kitchen",
   val pickupLocation: String = "Block 33 · 6th Floor",
   val pickupPreference: String = "Pickup ASAP",
+  val pickupCounter: String = "Counter 1",
+  val canteenId: String = "canteen_33",
 )
 
 data class NotificationItem(

@@ -340,6 +340,7 @@ class CanteenAppState(val context: android.content.Context? = null) {
 
   // Cart State
   val cartItems = mutableStateListOf<CartItem>()
+  var isPlacingOrder by mutableStateOf(false)
 
   val totalCartCount: Int
     get() = cartItems.sumOf { it.quantity }
@@ -352,6 +353,90 @@ class CanteenAppState(val context: android.content.Context? = null) {
 
   val grandTotal: Int
     get() = if (subtotal > 0) subtotal + taxAmount else 0
+
+  private fun persistCartToSession() {
+    try {
+      val jsonArray = org.json.JSONArray()
+      for (item in cartItems) {
+        val obj = org.json.JSONObject()
+        obj.put("foodId", item.foodItem.id)
+        obj.put("foodName", item.foodItem.name)
+        obj.put("foodPrice", item.foodItem.price)
+        obj.put("foodCategory", item.foodItem.category.name)
+        obj.put("foodDescription", item.foodItem.description)
+        obj.put("foodImageUrl", item.foodItem.imageUrl)
+        obj.put("foodPrepMinutes", item.foodItem.prepMinutes)
+        obj.put("foodPrepTime", item.foodItem.prepTime)
+        obj.put("foodImageLabel", item.foodItem.imageLabel)
+        obj.put("quantity", item.quantity)
+        obj.put("selectedOption", item.selectedOption ?: "")
+
+        val addonsArray = org.json.JSONArray()
+        for (addon in item.selectedAddons) {
+          val addonObj = org.json.JSONObject()
+          addonObj.put("name", addon.name)
+          addonObj.put("price", addon.price)
+          addonsArray.put(addonObj)
+        }
+        obj.put("selectedAddons", addonsArray)
+        jsonArray.put(obj)
+      }
+      SessionManager.saveCartJson(jsonArray.toString())
+    } catch (e: Exception) {
+      android.util.Log.w("CanteenAppState", "Failed persisting cart: ${e.message}")
+    }
+  }
+
+  fun loadCartFromSession() {
+    try {
+      val rawJson = SessionManager.getCartJson() ?: return
+      val jsonArray = org.json.JSONArray(rawJson)
+      val loaded = mutableListOf<CartItem>()
+      for (i in 0 until jsonArray.length()) {
+        val obj = jsonArray.getJSONObject(i)
+        val foodId = obj.optString("foodId")
+        val foodName = obj.optString("foodName")
+        val foodPrice = obj.optInt("foodPrice", 0)
+        val catStr = obj.optString("foodCategory", "SNACKS")
+        val category = try { FoodCategory.valueOf(catStr) } catch (_: Exception) { FoodCategory.SNACKS }
+        val desc = obj.optString("foodDescription")
+        val imgUrl = obj.optString("foodImageUrl")
+        val prep = obj.optInt("foodPrepMinutes", 10)
+        val prepTime = obj.optString("foodPrepTime", "${prep}m")
+        val imgLabel = obj.optString("foodImageLabel", foodName)
+        val qty = obj.optInt("quantity", 1)
+        val opt = obj.optString("selectedOption").ifBlank { null }
+
+        val addonsList = mutableListOf<FoodAddon>()
+        val addonsArray = obj.optJSONArray("selectedAddons")
+        if (addonsArray != null) {
+          for (j in 0 until addonsArray.length()) {
+            val addonObj = addonsArray.getJSONObject(j)
+            addonsList.add(FoodAddon(name = addonObj.optString("name"), price = addonObj.optInt("price", 0)))
+          }
+        }
+
+        val food = FoodItem(
+          id = foodId,
+          name = foodName,
+          price = foodPrice,
+          prepTime = prepTime,
+          prepMinutes = prep,
+          category = category,
+          imageLabel = imgLabel,
+          imageUrl = imgUrl,
+          description = desc,
+        )
+        loaded.add(CartItem(foodItem = food, quantity = qty, selectedOption = opt, selectedAddons = addonsList))
+      }
+      if (loaded.isNotEmpty()) {
+        cartItems.clear()
+        cartItems.addAll(loaded)
+      }
+    } catch (e: Exception) {
+      android.util.Log.w("CanteenAppState", "Failed restoring cart: ${e.message}")
+    }
+  }
 
   // Orders State
   val orders = mutableStateListOf<OrderRecord>()
@@ -392,6 +477,7 @@ class CanteenAppState(val context: android.content.Context? = null) {
       cartItems.add(CartItem(foodItem = item, quantity = 1))
     }
     notifyCartAdded(item.name)
+    persistCartToSession()
   }
 
   fun addCustomizedToCart(
@@ -419,6 +505,7 @@ class CanteenAppState(val context: android.content.Context? = null) {
       )
     }
     notifyCartAdded(item.name)
+    persistCartToSession()
   }
 
   fun decreaseQuantity(item: FoodItem) {
@@ -430,6 +517,7 @@ class CanteenAppState(val context: android.content.Context? = null) {
       } else {
         cartItems.removeAt(index)
       }
+      persistCartToSession()
     }
   }
 
@@ -441,6 +529,7 @@ class CanteenAppState(val context: android.content.Context? = null) {
       } else {
         cartItems.removeAt(index)
       }
+      persistCartToSession()
     }
   }
 
@@ -448,19 +537,23 @@ class CanteenAppState(val context: android.content.Context? = null) {
     val index = cartItems.indexOf(cartItem)
     if (index >= 0) {
       cartItems[index] = cartItem.copy(quantity = cartItem.quantity + 1)
+      persistCartToSession()
     }
   }
 
   fun removeCartItem(cartItem: CartItem) {
     cartItems.remove(cartItem)
+    persistCartToSession()
   }
 
   fun removeFromCart(item: FoodItem) {
     cartItems.removeAll { it.foodItem.id == item.id }
+    persistCartToSession()
   }
 
   fun clearCart() {
     cartItems.clear()
+    SessionManager.clearCartJson()
   }
 
   // Category filter state for MenuScreen (e.g. set by Quick Order 'See All')
@@ -578,6 +671,67 @@ class CanteenAppState(val context: android.content.Context? = null) {
     }
   }
 
+  fun loadNotificationsFromSession() {
+    try {
+      val raw = SessionManager.getSavedNotificationsJson()
+      val loaded = mutableListOf<NotificationItem>()
+      if (raw != null) {
+        val array = org.json.JSONArray(raw)
+        for (i in 0 until array.length()) {
+          val obj = array.getJSONObject(i)
+          val id = obj.optString("id", java.util.UUID.randomUUID().toString())
+          val title = obj.optString("title", "QuickBite Update")
+          val message = obj.optString("message", "")
+          val ts = obj.optLong("timestamp", System.currentTimeMillis())
+          val isUnread = obj.optBoolean("isUnread", true)
+
+          val diffMin = ((System.currentTimeMillis() - ts) / (1000 * 60)).coerceAtLeast(0)
+          val timeAgo = when {
+            diffMin < 1 -> "Just now"
+            diffMin < 60 -> "${diffMin}m ago"
+            diffMin < 1440 -> "${diffMin / 60}h ago"
+            else -> "${diffMin / 1440}d ago"
+          }
+          loaded.add(NotificationItem(id = id, title = title, message = message, timeAgo = timeAgo, isUnread = isUnread))
+        }
+      }
+      if (loaded.isEmpty()) {
+        loaded.add(
+          NotificationItem(
+            id = "welcome_system_1",
+            title = "Welcome to QuickBite! 👋",
+            message = "Skip the line! Order your favorite meals from campus canteens and pick them up quickly.",
+            timeAgo = "Today",
+            isUnread = false,
+          )
+        )
+      }
+      notifications.clear()
+      notifications.addAll(loaded)
+    } catch (e: Exception) {
+      android.util.Log.e("AppState", "Failed to load notifications: ${e.message}")
+    }
+  }
+
+  fun syncNotificationsToSession() {
+    try {
+      val array = org.json.JSONArray()
+      for (notif in notifications) {
+        val obj = org.json.JSONObject().apply {
+          put("id", notif.id)
+          put("title", notif.title)
+          put("message", notif.message)
+          put("isUnread", notif.isUnread)
+          put("timestamp", System.currentTimeMillis())
+        }
+        array.put(obj)
+      }
+      SessionManager.saveAllNotificationsJson(array.toString())
+    } catch (e: Exception) {
+      android.util.Log.e("AppState", "Failed to sync notifications: ${e.message}")
+    }
+  }
+
   fun addNotification(title: String, message: String, isUnread: Boolean = true) {
     val notif = NotificationItem(
       id = java.util.UUID.randomUUID().toString(),
@@ -587,6 +741,7 @@ class CanteenAppState(val context: android.content.Context? = null) {
       isUnread = isUnread,
     )
     notifications.add(0, notif)
+    syncNotificationsToSession()
   }
 
   // Pickup Preference State
@@ -610,15 +765,17 @@ class CanteenAppState(val context: android.content.Context? = null) {
     if (cartItems.isEmpty()) return null
     if (!selectedCanteen.isOpen) return null
 
-    val token = String.format(Locale.getDefault(), "%03d", (orders.size + 42))
+    // Generate unique 3-digit token & unique collision-safe order ID
+    val token = String.format(Locale.getDefault(), "%03d", (100..999).random())
     val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
     val now = Date()
     val orderTime = timeFormat.format(now)
 
     val estimatedReady = estimatedReadyTimeFormatted
+    val uniqueOrderId = "ORD-${System.currentTimeMillis()}-${(1000..9999).random()}"
 
     val newOrder = OrderRecord(
-      id = "ORD-${System.currentTimeMillis() % 10000}",
+      id = uniqueOrderId,
       tokenNumber = token,
       items = cartItems.map { it.copy() },
       totalPrice = grandTotal,
@@ -628,14 +785,16 @@ class CanteenAppState(val context: android.content.Context? = null) {
       pickupCanteenName = selectedCanteen.name,
       pickupLocation = "${selectedCanteen.betweenBlocks} (${selectedCanteen.floorInfo})",
       pickupPreference = if (isPickupAsap) "Pickup ASAP" else "Pickup at $estimatedReady",
+      canteenId = selectedCanteen.id,
     )
     orders.add(0, newOrder)
     cartItems.clear()
 
-    // Sync order to Cloud Firestore in background
+    // Sync order to backend/MongoDB in background
     CoroutineScope(Dispatchers.IO).launch {
       try {
-        val studentUid = currentUser?.registrationNumber ?: "guest_student"
+        val studentUid = currentUser?.registrationNumber?.ifBlank { currentUser?.email }?.ifBlank { null }
+          ?: "student_guest"
         val assignedCounter = if ((orders.size % 2) == 0) "Counter 1" else "Counter 2"
         val orderDoc = OrderDocument.fromOrderRecord(
           record = newOrder,
@@ -730,6 +889,7 @@ class CanteenAppState(val context: android.content.Context? = null) {
     for (i in notifications.indices) {
       notifications[i] = notifications[i].copy(isUnread = false)
     }
+    syncNotificationsToSession()
     CoroutineScope(Dispatchers.IO).launch {
       try {
         for (notif in notifications) {
@@ -825,6 +985,47 @@ class CanteenAppState(val context: android.content.Context? = null) {
       startCanteenObservation(selectedCanteen.id)
     } catch (e: Exception) {
       android.util.Log.e("CanteenAppState", "Failed to start canteen observation: ${e.message}", e)
+    }
+
+    // 4. Restore persisted cart items
+    try {
+      loadCartFromSession()
+    } catch (e: Exception) {
+      android.util.Log.e("CanteenAppState", "Failed to restore cart: ${e.message}", e)
+    }
+
+    // 5. Restore persisted notifications
+    try {
+      loadNotificationsFromSession()
+    } catch (e: Exception) {
+      android.util.Log.e("CanteenAppState", "Failed to restore notifications: ${e.message}", e)
+    }
+
+    // 6. Listen to real-time order status updates for notifications
+    CoroutineScope(Dispatchers.IO).launch {
+      try {
+        com.example.data.api.WebSocketManager.orderUpdates.collect { orderDto ->
+          val status = orderDto.status.uppercase()
+          val token = orderDto.tokenNumber.ifBlank { orderDto.orderId.takeLast(4) }
+          val title = when (status) {
+            "PREPARING" -> "Order #$token in Kitchen 👨‍🍳"
+            "READY" -> "Order #$token Ready for Pickup! 🔔"
+            "COMPLETED", "PICKED_UP" -> "Order #$token Picked Up ✓"
+            else -> "Order #$token Status Update"
+          }
+          val msg = when (status) {
+            "PREPARING" -> "Your meal is being prepared at ${orderDto.pickupCounter.ifBlank { "the counter" }}."
+            "READY" -> "Your order is ready! Please collect it from ${orderDto.pickupCounter.ifBlank { "the counter" }}."
+            "COMPLETED", "PICKED_UP" -> "Order picked up. Enjoy your food!"
+            else -> "Order status: $status"
+          }
+          kotlinx.coroutines.withContext(Dispatchers.Main) {
+            addNotification(title, msg, isUnread = true)
+          }
+        }
+      } catch (e: Exception) {
+        android.util.Log.w("CanteenAppState", "Order updates notification listener error: ${e.message}")
+      }
     }
   }
 }

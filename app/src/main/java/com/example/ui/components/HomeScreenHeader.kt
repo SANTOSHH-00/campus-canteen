@@ -61,9 +61,7 @@ fun HomeScreenHeader(
   var showCanteenSelectorSheet by remember { mutableStateOf(false) }
 
   Column(
-    modifier = modifier
-      .fillMaxWidth()
-      .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 0.dp)
+    modifier = modifier.fillMaxWidth()
   ) {
     // ── Row 1: Staggered Menu Icon (Image 3) + App Brand & Logo + Location & Bell ───
     Row(
@@ -123,8 +121,8 @@ fun HomeScreenHeader(
           )
         }
 
-        // Bell Icon with unread badge
-        Box {
+        // Bell Icon with unread count badge
+        Box(contentAlignment = Alignment.Center) {
           IconButton(
             onClick = onNotificationClick,
             modifier = Modifier.size(38.dp),
@@ -136,16 +134,24 @@ fun HomeScreenHeader(
               modifier = Modifier.size(24.dp),
             )
           }
-          if (appState.notifications.any { it.isUnread }) {
+          val unreadCount = appState.notifications.count { it.isUnread }
+          if (unreadCount > 0) {
             Box(
               modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 6.dp, end = 6.dp)
-                .size(8.dp)
+                .padding(top = 4.dp, end = 4.dp)
+                .size(if (unreadCount > 9) 18.dp else 16.dp)
                 .clip(CircleShape)
-                .background(DeliveryOrange)
-            )
-
+                .background(DeliveryOrange),
+              contentAlignment = Alignment.Center,
+            ) {
+              Text(
+                text = if (unreadCount > 9) "9+" else unreadCount.toString(),
+                fontSize = 9.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = PureWhite,
+              )
+            }
           }
         }
       }
@@ -153,10 +159,19 @@ fun HomeScreenHeader(
 
     Spacer(modifier = Modifier.height(8.dp))
 
+    val timeGreeting = remember {
+      val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+      when {
+        hour < 12 -> "Good Morning"
+        hour < 17 -> "Good Afternoon"
+        else -> "Good Evening"
+      }
+    }
+
     val greeting = if (userName.isBlank() || userName.equals("Guest", ignoreCase = true)) {
       "Welcome to QuickBite 👋"
     } else {
-      "Good Morning, $userName 👋"
+      "$timeGreeting, $userName 👋"
     }
 
     Text(

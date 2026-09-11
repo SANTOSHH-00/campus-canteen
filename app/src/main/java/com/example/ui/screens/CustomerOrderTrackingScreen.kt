@@ -1,9 +1,5 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -25,22 +21,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,33 +47,27 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.OrderRecord
 import com.example.data.OrderStatus
-import com.example.ui.components.CustomerThumbsUpIllustration
-import com.example.ui.components.TakeoutBagIllustration
+import com.example.data.api.MongoRepository
+import com.example.data.api.OrderQueuePositionDto
+import com.example.data.api.WebSocketManager
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
-import com.example.ui.theme.DrawerAmber
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.TextDark
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.WarmCream
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val OrangeAccent = Color(0xFFF97316)
+private val PageBackground = Color(0xFFF9FAFB)
 private val GreenReady = Color(0xFF16A34A)
-private val BluePickedUp = Color(0xFF2563EB)
-private val BadgeReadyBg = Color(0xFFF0FDF4)
-private val BadgePickedUpBg = Color(0xFFEFF6FF)
-private val BadgePreparingBg = Color(0xFFFFF7ED)
-private val CounterCardBg = PureWhite
-private val CounterTitleColor = BlackPrimary
-private val PageBackground = WarmCream
+private val DarkCardBg = PureWhite
 
 @Composable
 fun CustomerOrderTrackingScreen(
@@ -83,20 +76,101 @@ fun CustomerOrderTrackingScreen(
   onOrderAgain: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
-  // If order is already picked up, start in Detailed Timeline state (Image 3)
-  // Otherwise if ready, start in Ready state (Image 2) and user can click Navigate
-  val isPickedUp = order.status == OrderStatus.COMPLETED
-  var showDetailedTimeline by remember(isPickedUp) { mutableStateOf(isPickedUp) }
+  val coroutineScope = rememberCoroutineScope()
+  var queuePositionData by remember { mutableStateOf<OrderQueuePositionDto?>(null) }
+  var isLoadingQueue by remember { mutableStateOf(true) }
+
+  val effectiveCanteenId = queuePositionData?.canteenId?.ifBlank { null }
+    ?: order.canteenId.ifBlank { "canteen_33" }
 
   val tokenRaw = order.tokenNumber.ifBlank { "1042" }
   val tokenDisplay = if (tokenRaw.startsWith("#")) tokenRaw else "#Q$tokenRaw"
-  val tokenPlain = tokenRaw.replace("#", "").replace("Q", "")
 
-  // Format device local time for realistic milestones
+  val isPickedUp = order.status == OrderStatus.COMPLETED
+  val isReady = order.status == OrderStatus.READY
+  val isPreparing = order.status == OrderStatus.PREPARING || order.status == OrderStatus.NEW
+
   val deviceTimeFormat = remember {
     SimpleDateFormat("h:mm a", Locale.getDefault())
   }
   val nowTime = remember { deviceTimeFormat.format(Date()) }
+
+  // Load and refresh real-time queue position
+  val refreshQueue: () -> Unit = {
+    coroutineScope.launch {
+      val queryId = order.id.ifBlank { order.tokenNumber }
+      MongoRepository.getOrderQueuePosition(queryId).onSuccess {
+        queuePositionData = it
+        isLoadingQueue = false
+      }.onFailure {
+        // Fallback: try by raw token number if distinct from orderId
+        val rawToken = order.tokenNumber.replace("^[^0-9]+".toRegex(), "")
+        if (rawToken.isNotBlank() && rawToken != queryId) {
+          MongoRepository.getOrderQueuePosition(rawToken).onSuccess {
+            queuePositionData = it
+            isLoadingQueue = false
+          }.onFailure {
+            // Further fallback: fetch canteen overall active queue to estimate position
+            MongoRepository.getCanteenQueue(effectiveCanteenId).onSuccess { cq ->
+              queuePositionData = OrderQueuePositionDto(
+                orderId = order.id,
+                tokenNumber = order.tokenNumber,
+                status = order.status.name,
+                canteenId = effectiveCanteenId,
+                queuePosition = cq.queueCount.coerceAtLeast(1),
+                ordersAhead = (cq.queueCount - 1).coerceAtLeast(0),
+                estWaitMinutes = cq.avgWaitMinutes.coerceAtLeast(5),
+              )
+              isLoadingQueue = false
+            }.onFailure {
+              isLoadingQueue = false
+            }
+          }
+        } else {
+          isLoadingQueue = false
+        }
+      }
+    }
+  }
+
+  // Subscribe to both order channel and canteen queue channel for live kitchen advancement
+  DisposableEffect(order.id, effectiveCanteenId) {
+    refreshQueue()
+    WebSocketManager.subscribe("order:${order.id}")
+    WebSocketManager.subscribe("canteen:$effectiveCanteenId")
+    onDispose {
+      WebSocketManager.unsubscribe("order:${order.id}")
+      WebSocketManager.unsubscribe("canteen:$effectiveCanteenId")
+    }
+  }
+
+  // Live WebSocket queue updates when kitchen updates/completes preceding orders
+  LaunchedEffect(effectiveCanteenId) {
+    WebSocketManager.queueUpdates.collect { updatedCanteenId ->
+      if (updatedCanteenId.isBlank() || updatedCanteenId == effectiveCanteenId) {
+        refreshQueue()
+      }
+    }
+  }
+
+  // Live Order Status updates for this order specifically
+  LaunchedEffect(order.id) {
+    WebSocketManager.orderUpdates.collect { updatedOrder ->
+      if (updatedOrder.orderId == order.id) {
+        refreshQueue()
+      }
+    }
+  }
+
+  // Graceful API polling fallback every 8 seconds if WebSocket is interrupted
+  LaunchedEffect(order.id) {
+    while (true) {
+      kotlinx.coroutines.delay(8000)
+      if (!isPickedUp) {
+        refreshQueue()
+      }
+    }
+  }
 
   Column(
     modifier = modifier
@@ -106,12 +180,12 @@ fun CustomerOrderTrackingScreen(
       .navigationBarsPadding()
       .testTag("customer_order_tracking_screen"),
   ) {
-    // ── Top Bar matching Images 2 & 3: ← Order Tracking  🔍 ─────────────
+    // ── Clean Minimal Top Bar ───────────────────────────────────────────────
     Row(
       modifier = Modifier
         .fillMaxWidth()
         .background(PureWhite)
-        .padding(horizontal = 8.dp, vertical = 10.dp),
+        .padding(horizontal = 12.dp, vertical = 10.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       IconButton(
@@ -122,310 +196,319 @@ fun CustomerOrderTrackingScreen(
           imageVector = Icons.AutoMirrored.Filled.ArrowBack,
           contentDescription = "Back",
           tint = TextDark,
-          modifier = Modifier.size(24.dp),
+          modifier = Modifier.size(22.dp),
         )
       }
 
-      Spacer(Modifier.width(4.dp))
+      Spacer(Modifier.width(6.dp))
 
       Text(
         text = "Order Tracking",
-        fontSize = 19.sp,
+        fontSize = 18.sp,
         fontWeight = FontWeight.Bold,
         color = TextDark,
         modifier = Modifier.weight(1f),
       )
 
-      IconButton(onClick = {}) {
-        Icon(
-          imageVector = Icons.Default.Search,
-          contentDescription = "Search",
-          tint = TextDark,
-          modifier = Modifier.size(24.dp),
+      // Token Badge in Top Bar
+      Box(
+        modifier = Modifier
+          .clip(RoundedCornerShape(8.dp))
+          .background(Color(0xFFF3F4F6))
+          .border(1.dp, BorderGray, RoundedCornerShape(8.dp))
+          .padding(horizontal = 10.dp, vertical = 4.dp),
+      ) {
+        Text(
+          text = tokenDisplay,
+          fontSize = 13.sp,
+          fontWeight = FontWeight.ExtraBold,
+          color = TextDark,
         )
       }
     }
 
-    // ── Animated Switcher Between Image 2 (Ready) & Image 3 (Navigate / Timeline)
-    AnimatedContent(
-      targetState = showDetailedTimeline,
-      transitionSpec = { fadeIn() togetherWith fadeOut() },
-      label = "order_tracking_state_anim",
-    ) { inTimelineState ->
-      if (!inTimelineState) {
-        // ── STATE A: READY STATE (Matches Image 2) ──────────────────────────
-        Column(
-          modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        ) {
-          // Token and Status Badge
+    HorizontalDivider(thickness = 1.dp, color = Color(0xFFE5E7EB))
+
+    // ── Scrollable Body ─────────────────────────────────────────────────────
+    Column(
+      modifier = Modifier
+        .fillMaxSize()
+        .weight(1f)
+        .verticalScroll(rememberScrollState())
+        .padding(horizontal = 16.dp, vertical = 14.dp),
+      verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+
+      // ── Card 1: Queue Feedback & Status Hero Card ─────────────────────────
+      Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkCardBg),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E7EB)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+      ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+          // Status Badge + Live Dot
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
           ) {
-            Text(
-              text = tokenDisplay,
-              fontSize = 24.sp,
-              fontWeight = FontWeight.ExtraBold,
-              color = TextDark,
-            )
-
             Box(
               modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(BlackPrimary)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .clip(RoundedCornerShape(8.dp))
+                .background(
+                  when {
+                    isPickedUp -> Color(0xFFF3F4F6)
+                    isReady -> Color(0xFFF0FDF4)
+                    else -> Color(0xFFFFF7ED)
+                  }
+                )
+                .padding(horizontal = 10.dp, vertical = 4.dp),
             ) {
-              Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                  imageVector = Icons.Default.Check,
-                  contentDescription = null,
-                  tint = Color(0xFF4ADE80),
-                  modifier = Modifier.size(13.dp),
-                )
-                Spacer(Modifier.width(5.dp))
-                Text(
-                  text = "Ready",
-                  fontSize = 12.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = PureWhite,
-                )
-              }
+              Text(
+                text = when {
+                  isPickedUp -> "Picked Up"
+                  isReady -> "Ready for Pickup"
+                  else -> "In Kitchen Queue"
+                },
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = when {
+                  isPickedUp -> Color(0xFF4B5563)
+                  isReady -> GreenReady
+                  else -> Color(0xFFEA580C)
+                },
+              )
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Box(
+                modifier = Modifier
+                  .size(7.dp)
+                  .clip(CircleShape)
+                  .background(if (isPickedUp) Color(0xFF9CA3AF) else GreenReady)
+              )
+              Spacer(Modifier.width(5.dp))
+              Text(
+                text = if (isPickedUp) "Completed" else "Live Tracking",
+                fontSize = 11.5.sp,
+                color = TextMuted,
+                fontWeight = FontWeight.Medium,
+              )
             }
           }
 
           Spacer(Modifier.height(14.dp))
 
-          // Headline & Subtitle
+          // Main Headline with Queue Feedback
+          val headlineText = when {
+            isPickedUp -> "Order Picked Up ✓"
+            isReady -> "Your order is ready for pickup!"
+            isLoadingQueue && queuePositionData == null -> "Checking Kitchen Queue..."
+            else -> {
+              val ahead = queuePositionData?.ordersAhead ?: 0
+              val pos = queuePositionData?.queuePosition ?: 1
+              if (ahead == 0) "You are next in line"
+              else "You are #$pos in line"
+            }
+          }
+
           Text(
-            text = "Your order is ready!",
+            text = headlineText,
             fontSize = 20.sp,
             fontWeight = FontWeight.ExtraBold,
             color = TextDark,
           )
-          Spacer(Modifier.height(4.dp))
-          Text(
-            text = "Please pick up your order.",
-            fontSize = 14.5.sp,
-            color = Color(0xFF4B5563),
-          )
 
-          Spacer(Modifier.height(28.dp))
+          Spacer(Modifier.height(6.dp))
 
-          // Center Takeout Bag Illustration (Image 2)
-          Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center,
-          ) {
-            TakeoutBagIllustration()
+          val sublineText = when {
+            isPickedUp -> "Handed over to you. Thank you for dining with QuickBite!"
+            isReady -> "Please show Token $tokenDisplay at ${order.pickupCounter.ifBlank { "Counter 1" }} to collect."
+            isLoadingQueue && queuePositionData == null -> "Retrieving live wait time and position from canteen..."
+            else -> {
+              val ahead = queuePositionData?.ordersAhead ?: 0
+              val estMins = queuePositionData?.estWaitMinutes ?: 7
+              if (ahead == 0) "0 orders ahead of you • Estimated wait ~$estMins min"
+              else "$ahead ${if (ahead == 1) "order" else "orders"} ahead of you • Estimated wait ~$estMins min"
+            }
           }
 
-          Spacer(Modifier.height(32.dp))
+          Text(
+            text = sublineText,
+            fontSize = 13.5.sp,
+            color = Color(0xFF4B5563),
+            lineHeight = 18.sp,
+          )
 
-          // Pickup Counter Card (Clean theme matching card)
-          Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = PureWhite),
-            border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray.copy(alpha = 0.7f)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-          ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-              Text(
-                text = "Pickup Counter",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = BlackPrimary,
-              )
-              Spacer(Modifier.height(4.dp))
-              Text(
-                text = if (order.pickupPreference.contains("Counter 1", ignoreCase = true)) "Counter 1" else "Counter 2",
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextDark,
-              )
+          // Live Anonymous Queue Statistics Bar (Active kitchen queue)
+          if (isPreparing) {
+            val ahead = queuePositionData?.ordersAhead ?: 0
+            val pos = queuePositionData?.queuePosition ?: 1
+            val estMins = queuePositionData?.estWaitMinutes ?: 7
 
-              val cafeName = order.pickupCanteenName.ifBlank { "Campus Canteen" }
-              val blockLoc = order.pickupLocation.substringBefore("(").trim()
-              val displayLoc = if (blockLoc.isNotBlank() && !cafeName.contains(blockLoc, ignoreCase = true)) {
-                val cleanCafe = cafeName.replace(" 26-27", "").trim()
-                val cleanBlock = blockLoc.replace("Between Block", "Block", ignoreCase = true).trim()
-                "$cleanCafe • $cleanBlock"
-              } else {
-                cafeName
-              }
-
-              Spacer(Modifier.height(6.dp))
-              Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                  imageVector = Icons.Default.LocationOn,
-                  contentDescription = null,
-                  tint = Color(0xFF6B7280),
-                  modifier = Modifier.size(14.dp),
-                )
-                Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.height(14.dp))
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFFF9FAFB))
+                .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(12.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column {
                 Text(
-                  text = displayLoc,
-                  fontSize = 12.5.sp,
+                  text = "Queue Status",
+                  fontSize = 11.sp,
+                  color = TextMuted,
                   fontWeight = FontWeight.Medium,
-                  color = Color(0xFF6B7280),
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                  text = if (ahead == 0) "Next in Line" else "#$pos in Line",
+                  fontSize = 14.sp,
+                  fontWeight = FontWeight.ExtraBold,
+                  color = TextDark,
                 )
               }
 
-              Spacer(Modifier.height(18.dp))
-
-              Text(
-                text = "Show this code at the counter",
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color(0xFF6B7280),
+              Box(
+                modifier = Modifier
+                  .width(1.dp)
+                  .height(24.dp)
+                  .background(Color(0xFFE5E7EB))
               )
-              Spacer(Modifier.height(8.dp))
 
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-              ) {
-                // Code box with Q1042
-                Box(
-                  modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFFF7F3EC))
-                    .border(1.dp, BorderGray.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
-                    .padding(horizontal = 24.dp, vertical = 12.dp),
-                  contentAlignment = Alignment.Center,
-                ) {
-                  Text(
-                    text = "Q$tokenPlain",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = TextDark,
-                  )
-                }
+              Column {
+                Text(
+                  text = "Orders Ahead",
+                  fontSize = 11.sp,
+                  color = TextMuted,
+                  fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                  text = "$ahead",
+                  fontSize = 14.sp,
+                  fontWeight = FontWeight.ExtraBold,
+                  color = TextDark,
+                )
+              }
 
-                // Sleek Black Primary "Navigate" Button
-                Button(
-                  onClick = { showDetailedTimeline = true },
-                  shape = RoundedCornerShape(14.dp),
-                  colors = ButtonDefaults.buttonColors(containerColor = BlackPrimary),
-                  modifier = Modifier.testTag("navigate_order_button"),
-                ) {
-                  Text(
-                    text = "Navigate",
-                    fontSize = 14.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PureWhite,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                  )
-                }
+              Box(
+                modifier = Modifier
+                  .width(1.dp)
+                  .height(24.dp)
+                  .background(Color(0xFFE5E7EB))
+              )
+
+              Column(horizontalAlignment = Alignment.End) {
+                Text(
+                  text = "Est. Wait Time",
+                  fontSize = 11.sp,
+                  color = TextMuted,
+                  fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                  text = "~$estMins min",
+                  fontSize = 14.sp,
+                  fontWeight = FontWeight.ExtraBold,
+                  color = Color(0xFFEA580C),
+                )
               }
             }
           }
         }
-      } else {
-        // ── STATE B: DETAILED TIMELINE / PICKED UP STATE (Matches Image 3) ───
-        Column(
-          modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        ) {
-          // Token & Status Badge
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            Text(
-              text = tokenDisplay,
-              fontSize = 24.sp,
-              fontWeight = FontWeight.ExtraBold,
-              color = TextDark,
-            )
+      }
 
-            Box(
-              modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(BlackPrimary)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            ) {
-              Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                  imageVector = Icons.Default.Check,
-                  contentDescription = null,
-                  tint = if (order.status == OrderStatus.COMPLETED) PureWhite else DrawerAmber,
-                  modifier = Modifier.size(13.dp),
-                )
-                Spacer(Modifier.width(5.dp))
-                Text(
-                  text = when (order.status) {
-                    OrderStatus.COMPLETED -> "Picked Up"
-                    OrderStatus.READY -> "Ready"
-                    OrderStatus.PREPARING -> "Preparing"
-                    else -> "Placed"
-                  },
-                  fontSize = 12.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = PureWhite,
-                )
-              }
-            }
-          }
-
-          val cafeName = order.pickupCanteenName.ifBlank { "Campus Canteen" }
-          val blockLoc = order.pickupLocation.substringBefore("(").trim()
-          val displayLoc = if (blockLoc.isNotBlank() && !cafeName.contains(blockLoc, ignoreCase = true)) {
-            val cleanCafe = cafeName.replace(" 26-27", "").trim()
-            val cleanBlock = blockLoc.replace("Between Block", "Block", ignoreCase = true).trim()
-            "$cleanCafe • $cleanBlock"
-          } else {
-            cafeName
-          }
-
-          Spacer(Modifier.height(6.dp))
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-              imageVector = Icons.Default.LocationOn,
-              contentDescription = null,
-              tint = Color(0xFF6B7280),
-              modifier = Modifier.size(14.dp),
-            )
-            Spacer(Modifier.width(4.dp))
-            Text(
-              text = displayLoc,
-              fontSize = 12.5.sp,
-              fontWeight = FontWeight.Medium,
-              color = Color(0xFF6B7280),
-            )
-          }
-
-          Spacer(Modifier.height(14.dp))
-
-          // Headline matching Image 3
+      // ── Card 2: Pickup Location & Counter ─────────────────────────────────
+      Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = PureWhite),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E7EB)),
+      ) {
+        Column(modifier = Modifier.padding(16.dp)) {
           Text(
-            text = if (order.status == OrderStatus.COMPLETED) "Enjoy your meal!" else "Tracking your order",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.ExtraBold,
+            text = "Pickup Details",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
             color = TextDark,
           )
+          Spacer(Modifier.height(10.dp))
 
-          Spacer(Modifier.height(16.dp))
-
-          // Center Thumbs Up Illustration (Image 3)
-          Box(
+          Row(
             modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center,
+            verticalAlignment = Alignment.CenterVertically,
           ) {
-            CustomerThumbsUpIllustration()
+            Box(
+              modifier = Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFFF3F4F6)),
+              contentAlignment = Alignment.Center,
+            ) {
+              Icon(
+                imageVector = Icons.Default.LocationOn,
+                contentDescription = null,
+                tint = TextDark,
+                modifier = Modifier.size(20.dp),
+              )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = order.pickupCanteenName.ifBlank { "Campus Canteen" },
+                fontSize = 14.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark,
+              )
+              Text(
+                text = order.pickupLocation.ifBlank { "Block 26-27 Food Court" },
+                fontSize = 12.5.sp,
+                color = TextMuted,
+              )
+            }
+
+            // Counter Assigned Badge
+            Box(
+              modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFFF9FAFB))
+                .border(1.dp, BorderGray, RoundedCornerShape(8.dp))
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            ) {
+              Text(
+                text = order.pickupCounter.ifBlank { "Counter 1" },
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark,
+              )
+            }
           }
+        }
+      }
 
-          Spacer(Modifier.height(20.dp))
+      // ── Card 3: Minimal Timeline Milestones ────────────────────────────────
+      Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = PureWhite),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E7EB)),
+      ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+          Text(
+            text = "Order Progress",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark,
+          )
+          Spacer(Modifier.height(14.dp))
 
-          // Vertical Step-by-Step Milestones Progress (Image 3)
           TrackingMilestone(
             title = "Order Placed",
             time = nowTime,
@@ -439,54 +522,163 @@ fun CustomerOrderTrackingScreen(
             isLast = false,
           )
           TrackingMilestone(
-            title = "Preparing Your Food",
-            time = nowTime,
-            isCompleted = order.status == OrderStatus.PREPARING || order.status == OrderStatus.READY || order.status == OrderStatus.COMPLETED,
+            title = "Kitchen Preparing",
+            time = if (isPreparing || isReady || isPickedUp) nowTime else "-",
+            isCompleted = isPreparing || isReady || isPickedUp,
             isLast = false,
           )
           TrackingMilestone(
             title = "Ready for Pickup",
-            time = if (order.status == OrderStatus.READY || order.status == OrderStatus.COMPLETED) nowTime else "-",
-            isCompleted = order.status == OrderStatus.READY || order.status == OrderStatus.COMPLETED,
+            time = if (isReady || isPickedUp) nowTime else "-",
+            isCompleted = isReady || isPickedUp,
             isLast = false,
           )
           TrackingMilestone(
             title = "Picked Up",
-            time = if (order.status == OrderStatus.COMPLETED) nowTime else "-",
-            isCompleted = order.status == OrderStatus.COMPLETED,
+            time = if (isPickedUp) nowTime else "-",
+            isCompleted = isPickedUp,
             isLast = true,
           )
+        }
+      }
 
-          Spacer(Modifier.height(28.dp))
-
-          // Solid Black Primary "Order Again" Button
-          Button(
-            onClick = {
-              onOrderAgain()
-              onBack()
-            },
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = BlackPrimary),
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(50.dp)
-              .testTag("order_again_button"),
+      // ── Card 4: Order Summary ─────────────────────────────────────────────
+      Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = PureWhite),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E7EB)),
+      ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
           ) {
             Text(
-              text = "Order Again",
-              fontSize = 16.sp,
+              text = "Ordered Items",
+              fontSize = 15.sp,
               fontWeight = FontWeight.Bold,
-              color = PureWhite,
+              color = TextDark,
+            )
+            Text(
+              text = "${order.items.size} item(s)",
+              fontSize = 12.sp,
+              color = TextMuted,
             )
           }
 
-          Spacer(Modifier.height(16.dp))
+          Spacer(Modifier.height(10.dp))
+
+          order.items.forEach { item ->
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = "${item.quantity}x  ${item.foodItem.name}",
+                  fontSize = 13.5.sp,
+                  fontWeight = FontWeight.SemiBold,
+                  color = TextDark,
+                )
+                if (item.selectedOption != null || item.selectedAddons.isNotEmpty()) {
+                  val details = buildList {
+                    if (item.selectedOption != null) add(item.selectedOption)
+                    item.selectedAddons.forEach { add("+${it.name}") }
+                  }.joinToString(" • ")
+                  Text(
+                    text = details,
+                    fontSize = 11.5.sp,
+                    color = TextMuted,
+                  )
+                }
+              }
+              Text(
+                text = "₹${item.totalPrice}",
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark,
+              )
+            }
+          }
+
+          Spacer(Modifier.height(10.dp))
+          HorizontalDivider(thickness = 0.8.dp, color = Color(0xFFE5E7EB))
+          Spacer(Modifier.height(10.dp))
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text(
+              text = "Total Paid",
+              fontSize = 15.sp,
+              fontWeight = FontWeight.Bold,
+              color = TextDark,
+            )
+            Text(
+              text = "₹${order.totalPrice}",
+              fontSize = 18.sp,
+              fontWeight = FontWeight.ExtraBold,
+              color = TextDark,
+            )
+          }
+        }
+      }
+
+      Spacer(Modifier.height(10.dp))
+    }
+
+    // ── Bottom Clean Action Bar ─────────────────────────────────────────────
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .background(PureWhite)
+        .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+      if (isPickedUp) {
+        Button(
+          onClick = onOrderAgain,
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+          shape = RoundedCornerShape(24.dp),
+          colors = ButtonDefaults.buttonColors(containerColor = BlackPrimary),
+        ) {
+          Text(
+            text = "Order Again",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            color = PureWhite,
+          )
+        }
+      } else {
+        Button(
+          onClick = onBack,
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+          shape = RoundedCornerShape(24.dp),
+          colors = ButtonDefaults.buttonColors(containerColor = BlackPrimary),
+        ) {
+          Text(
+            text = "Back to Menu",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            color = PureWhite,
+          )
         }
       }
     }
   }
 }
 
+// ── Clean Minimal Timeline Milestone ────────────────────────────────────────
 @Composable
 private fun TrackingMilestone(
   title: String,
@@ -497,14 +689,13 @@ private fun TrackingMilestone(
   Row(
     modifier = Modifier
       .fillMaxWidth()
-      .padding(vertical = 2.dp),
+      .padding(vertical = 3.dp),
     verticalAlignment = Alignment.Top,
   ) {
-    // Checkmark circle & vertical connecting line
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
       Box(
         modifier = Modifier
-          .size(22.dp)
+          .size(20.dp)
           .clip(CircleShape)
           .background(if (isCompleted) Color(0xFF16A34A) else Color(0xFFE5E7EB)),
         contentAlignment = Alignment.Center,
@@ -514,7 +705,7 @@ private fun TrackingMilestone(
             imageVector = Icons.Default.Check,
             contentDescription = null,
             tint = PureWhite,
-            modifier = Modifier.size(13.dp),
+            modifier = Modifier.size(12.dp),
           )
         }
       }
@@ -522,16 +713,15 @@ private fun TrackingMilestone(
       if (!isLast) {
         Box(
           modifier = Modifier
-            .width(2.dp)
-            .height(24.dp)
-            .background(if (isCompleted) Color(0xFF16A34A).copy(alpha = 0.5f) else Color(0xFFE5E7EB))
+            .width(1.5.dp)
+            .height(26.dp)
+            .background(if (isCompleted) Color(0xFF16A34A).copy(alpha = 0.4f) else Color(0xFFE5E7EB))
         )
       }
     }
 
-    Spacer(Modifier.width(14.dp))
+    Spacer(Modifier.width(12.dp))
 
-    // Milestone Title & Time
     Row(
       modifier = Modifier
         .fillMaxWidth()
@@ -541,14 +731,14 @@ private fun TrackingMilestone(
     ) {
       Text(
         text = title,
-        fontSize = 14.5.sp,
+        fontSize = 14.sp,
         fontWeight = if (isCompleted) FontWeight.Bold else FontWeight.Medium,
         color = if (isCompleted) TextDark else Color(0xFF9CA3AF),
       )
 
       Text(
         text = time,
-        fontSize = 12.5.sp,
+        fontSize = 12.sp,
         color = Color(0xFF6B7280),
       )
     }

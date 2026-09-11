@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -84,6 +85,7 @@ fun MainScreen(
     Scaffold(
       modifier = Modifier.fillMaxSize(),
       containerColor = WarmCream,
+      contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
       bottomBar = {
         if (appState.selectedFoodForDetail == null && appState.selectedOrderForTracking == null && !appState.isMenuFilterOpen) {
           val slideFraction by animateFloatAsState(
@@ -118,15 +120,13 @@ fun MainScreen(
       },
     ) { innerPadding ->
       val isDetailOrTracking = appState.selectedFoodForDetail != null || appState.selectedOrderForTracking != null || appState.isMenuFilterOpen
-      val animatedBottomPadding by androidx.compose.animation.core.animateDpAsState(
-        targetValue = if (!isDetailOrTracking && appState.isBottomBarVisible) innerPadding.calculateBottomPadding() else 0.dp,
-        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
-        label = "animatedBottomPadding"
-      )
       Box(
         modifier = Modifier
           .fillMaxSize()
-          .padding(top = innerPadding.calculateTopPadding(), bottom = animatedBottomPadding)
+          .statusBarsPadding()
+          .padding(
+            bottom = if (!isDetailOrTracking) innerPadding.calculateBottomPadding() else 0.dp,
+          )
       ) {
         if (appState.selectedOrderForTracking != null) {
           val trackingOrder = appState.selectedOrderForTracking!!

@@ -42,6 +42,8 @@ class MessQFirebaseMessagingService : FirebaseMessagingService() {
     val title = remoteMessage.notification?.title ?: remoteMessage.data["title"] ?: "MessQ Campus Canteen"
     val body = remoteMessage.notification?.body ?: remoteMessage.data["message"] ?: "New notification for your order."
 
+    com.example.data.session.SessionManager.saveIncomingNotification(title, body)
+
     showNotification(title, body)
   }
 

@@ -18,6 +18,9 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 
+// Trust first reverse proxy (Render, Cloudflare, Heroku, Nginx) so client IP is accurately extracted
+app.set('trust proxy', 1);
+
 // Security Middlewares (Option 3B: Helmet HTTP Security Headers)
 app.use(helmet({
   contentSecurityPolicy: false,
@@ -27,24 +30,49 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
 
+const isDev = process.env.NODE_ENV !== 'production';
+const isLocalOrPrivateIp = (ip) => {
+  if (!ip) return false;
+  return (
+    ip === '127.0.0.1' ||
+    ip === '::1' ||
+    ip.endsWith('127.0.0.1') ||
+    ip === '10.0.2.2' ||
+    ip.startsWith('192.168.') ||
+    ip.startsWith('10.') ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip)
+  );
+};
+
 // Option 3A: Rate Limiting
-// 1. General API Rate Limiter (600 requests / 15 mins per IP)
+// 1. General API Rate Limiter (Campus-friendly & Proxy-aware: 10,000 requests / 15 mins per IP)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 600,
+  max: 10000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests from this IP, please try again in 15 minutes.' },
+  skip: (req) => {
+    if (req.path === '/health' || req.path === '/api/health' || req.path === '/') return true;
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    if (isDev || isLocalOrPrivateIp(ip)) return true;
+    return false;
+  },
 });
 app.use('/api/', apiLimiter);
 
-// 2. Sensitive Authentication & OTP Rate Limiter (15 attempts / 10 mins per IP)
+// 2. Sensitive Authentication & OTP Rate Limiter (100 attempts / 15 mins per real IP)
 const authLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: 15,
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many login or OTP attempts. Please wait 10 minutes before trying again.' },
+  skip: (req) => {
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    if (isDev || isLocalOrPrivateIp(ip)) return true;
+    return false;
+  },
 });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);

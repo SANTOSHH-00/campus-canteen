@@ -48,9 +48,7 @@ fun MessQNavHost(
       CampusCanteenSplashScreen(
         onLoadingFinished = {
           val isOnline = NetworkUtils.isOnline(context)
-          val nextDestination = if (!isOnline) {
-            MessQDestinations.NO_INTERNET
-          } else if (!deepLinkDestination.isNullOrBlank()) {
+          val nextDestination = if (!deepLinkDestination.isNullOrBlank()) {
             deepLinkDestination
           } else if (com.example.ui.viewmodel.AuthViewModel.deepLinkToken.isNotBlank()) {
             MessQDestinations.RESET_PASSWORD
@@ -58,6 +56,7 @@ fun MessQNavHost(
             when {
               SessionManager.isStudentLoggedIn() -> MessQDestinations.STUDENT_MAIN
               SessionManager.isOwnerLoggedIn() -> MessQDestinations.OWNER_MAIN
+              !isOnline -> MessQDestinations.NO_INTERNET
               else -> MessQDestinations.WELCOME
             }
           }
@@ -144,6 +143,7 @@ fun MessQNavHost(
         },
         onLoginSuccess = { ownerDoc ->
           SessionManager.saveOwnerSession(ownerDoc)
+          ownerDashboardViewModel.setOwner(ownerDoc)
           navController.navigate(MessQDestinations.OWNER_MAIN) {
             popUpTo(MessQDestinations.WELCOME) { inclusive = false }
           }
@@ -192,6 +192,7 @@ fun MessQNavHost(
         },
         onLoginSuccess = { ownerDoc ->
           SessionManager.saveOwnerSession(ownerDoc)
+          ownerDashboardViewModel.setOwner(ownerDoc)
           navController.navigate(MessQDestinations.OWNER_MAIN) {
             popUpTo(MessQDestinations.WELCOME) { inclusive = false }
           }
@@ -211,6 +212,7 @@ fun MessQNavHost(
         },
         onLoginSuccess = { ownerDoc ->
           SessionManager.saveOwnerSession(ownerDoc)
+          ownerDashboardViewModel.setOwner(ownerDoc)
           navController.navigate(MessQDestinations.OWNER_MAIN) {
             popUpTo(MessQDestinations.WELCOME) { inclusive = false }
           }
