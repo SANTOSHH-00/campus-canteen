@@ -83,6 +83,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -142,6 +144,7 @@ fun OwnerDashboardScreen(
         if (owner != null) dashboardViewModel.setOwner(owner)
     }
 
+    val context = LocalContext.current
     val uiState by dashboardViewModel.uiState.collectAsState()
     val ownerOrders by dashboardViewModel.orders.collectAsState()
 
@@ -150,6 +153,16 @@ fun OwnerDashboardScreen(
     var showCloseReasonDialog by remember { mutableStateOf(false) }
     var selectedReason by remember { mutableStateOf("Break") }
     var customReason by remember { mutableStateOf("") }
+
+    // Intercept back gesture to close drawer, close dialog, or minimize app instead of logging out
+    BackHandler(enabled = true) {
+        when {
+            drawerOpen -> drawerOpen = false
+            showCloseReasonDialog -> showCloseReasonDialog = false
+            selectedNavItem != "Dashboard" -> selectedNavItem = "Dashboard"
+            else -> (context as? android.app.Activity)?.moveTaskToBack(true)
+        }
+    }
 
     Box(
         modifier = modifier

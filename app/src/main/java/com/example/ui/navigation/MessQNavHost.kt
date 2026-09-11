@@ -105,7 +105,8 @@ fun MessQNavHost(
         onExploreAsGuest = {
           appState.logoutUser()
           navController.navigate(MessQDestinations.STUDENT_MAIN) {
-            popUpTo(MessQDestinations.WELCOME) { inclusive = false }
+            popUpTo(0) { inclusive = true }
+            launchSingleTop = true
           }
         },
       )
@@ -121,7 +122,8 @@ fun MessQNavHost(
         onLoginSuccess = { profile ->
           appState.loginUser(profile)
           navController.navigate(MessQDestinations.STUDENT_MAIN) {
-            popUpTo(MessQDestinations.WELCOME) { inclusive = false }
+            popUpTo(0) { inclusive = true }
+            launchSingleTop = true
           }
         },
         onNavigateToOwnerLogin = {
@@ -145,7 +147,8 @@ fun MessQNavHost(
           SessionManager.saveOwnerSession(ownerDoc)
           ownerDashboardViewModel.setOwner(ownerDoc)
           navController.navigate(MessQDestinations.OWNER_MAIN) {
-            popUpTo(MessQDestinations.WELCOME) { inclusive = false }
+            popUpTo(0) { inclusive = true }
+            launchSingleTop = true
           }
         },
         onNavigateToForgotPassword = {
@@ -194,7 +197,8 @@ fun MessQNavHost(
           SessionManager.saveOwnerSession(ownerDoc)
           ownerDashboardViewModel.setOwner(ownerDoc)
           navController.navigate(MessQDestinations.OWNER_MAIN) {
-            popUpTo(MessQDestinations.WELCOME) { inclusive = false }
+            popUpTo(0) { inclusive = true }
+            launchSingleTop = true
           }
         },
         onNavigateToForgotPassword = {
@@ -214,7 +218,8 @@ fun MessQNavHost(
           SessionManager.saveOwnerSession(ownerDoc)
           ownerDashboardViewModel.setOwner(ownerDoc)
           navController.navigate(MessQDestinations.OWNER_MAIN) {
-            popUpTo(MessQDestinations.WELCOME) { inclusive = false }
+            popUpTo(0) { inclusive = true }
+            launchSingleTop = true
           }
         },
         onNavigateToForgotPassword = {

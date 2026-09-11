@@ -67,6 +67,10 @@ import com.example.ui.components.PopularCard
 import com.example.ui.components.QuickOrderCard
 import com.example.ui.components.YourUsualBanner
 import com.example.ui.state.CanteenAppState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.DisposableEffect
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
 import com.example.ui.theme.CardSurface
@@ -92,9 +96,61 @@ fun HomeScreen(
 
   val currentCanteen = appState.selectedCanteen
 
-  LaunchedEffect(Unit) {
+  DisposableEffect(Unit) {
     appState.isBottomBarVisible = true
+    onDispose {
+      appState.isBottomBarVisible = true
+    }
   }
+
+  // Hide bottom bar when scrolling down on Home, reveal when scrolling up or at top
+  LaunchedEffect(listState) {
+    var lastIndex = listState.firstVisibleItemIndex
+    var lastOffset = listState.firstVisibleItemScrollOffset
+    var accumulatedDown = 0
+    var accumulatedUp = 0
+
+    snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+      .collect { (currentIndex, currentOffset) ->
+        val delta = if (currentIndex == lastIndex) {
+          currentOffset - lastOffset
+        } else {
+          (currentIndex - lastIndex) * 200 + (currentOffset - lastOffset)
+        }
+
+        if (delta > 0) {
+          // Scrolling down
+          accumulatedDown += delta
+          accumulatedUp = 0
+          if (accumulatedDown >= 35 && (currentIndex > 0 || currentOffset > 50)) {
+            appState.isBottomBarVisible = false
+          }
+        } else if (delta < 0) {
+          // Scrolling up
+          accumulatedUp += (-delta)
+          accumulatedDown = 0
+          if (accumulatedUp >= 25 || (currentIndex == 0 && currentOffset < 30)) {
+            appState.isBottomBarVisible = true
+          }
+        }
+
+        if (currentIndex == 0 && currentOffset < 15) {
+          appState.isBottomBarVisible = true
+          accumulatedDown = 0
+          accumulatedUp = 0
+        }
+
+        lastIndex = currentIndex
+        lastOffset = currentOffset
+      }
+  }
+
+  // Animate bottom padding so when the bottom bar slides down, items fill the screen with zero dead space
+  val listBottomPadding by animateDpAsState(
+    targetValue = if (appState.isBottomBarVisible) 90.dp else 24.dp,
+    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+    label = "homeListBottomPadding"
+  )
 
   // Filter Quick Order items dynamically from the selected block canteen
   val quickItems = remember(currentCanteen, appState.selectedQuickFilterMinutes) {
@@ -130,7 +186,7 @@ fun HomeScreen(
       modifier = Modifier
         .fillMaxWidth()
         .weight(1f),
-      contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 20.dp),
+      contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = listBottomPadding),
     ) {
 
       if (currentCanteen.allItems.isNotEmpty()) {
