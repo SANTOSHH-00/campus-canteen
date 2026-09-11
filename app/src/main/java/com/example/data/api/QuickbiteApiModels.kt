@@ -477,6 +477,7 @@ data class OrderQueuePositionDto(
   @Json(name = "status") val status: String = "",
   @Json(name = "canteenId") val canteenId: String = "",
   @Json(name = "queuePosition") val queuePosition: Int = 1,
+  @Json(name = "queueNumber") val queueNumber: Int = 1,
   @Json(name = "ordersAhead") val ordersAhead: Int = 0,
   @Json(name = "estWaitMinutes") val estWaitMinutes: Int = 5,
   @Json(name = "message") val message: String = "",

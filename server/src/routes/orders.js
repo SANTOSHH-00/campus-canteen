@@ -7,23 +7,25 @@ const Item = require('../models/Item');
 const { broadcastOrderStatus, broadcastNewOrder, broadcastQueueUpdate } = require('../services/socketService');
 const { sendPushToUser } = require('../services/fcmService');
 
-// Active kitchen preparation statuses
-const ACTIVE_QUEUE_STATUSES = ['NEW', 'WAITING', 'CONFIRMED', 'PREPARING'];
+// Active kitchen preparation statuses (case-insensitive fallback coverage)
+const ACTIVE_QUEUE_STATUSES = ['NEW', 'WAITING', 'CONFIRMED', 'PREPARING', 'new', 'waiting', 'confirmed', 'preparing'];
 
 /**
  * Helper to compute an order's estimated prep time in minutes based on its individual items.
+ * Prioritizes actual item prepMinutes, accounting for item quantity and packaging overhead.
  */
 function getOrderPrepTime(order, defaultWait = 7) {
-  if (order && order.estimatedPrepMinutes && order.estimatedPrepMinutes > 0) {
-    return order.estimatedPrepMinutes;
-  }
   if (order && order.items && Array.isArray(order.items) && order.items.length > 0) {
     const itemPreps = order.items.map(it => it.prepMinutes || 0).filter(p => p > 0);
     if (itemPreps.length > 0) {
       const maxPrep = Math.max(...itemPreps);
-      const extraItemsBuffer = Math.min(5, Math.max(0, order.items.length - 1));
-      return Math.min(45, maxPrep + extraItemsBuffer);
+      const totalItemCount = order.items.reduce((acc, it) => acc + (it.quantity || 1), 0);
+      const extraItemsBuffer = Math.min(10, Math.max(0, (totalItemCount - 1) * 1.5));
+      return Math.min(60, Math.round(maxPrep + extraItemsBuffer));
     }
+  }
+  if (order && order.estimatedPrepMinutes && order.estimatedPrepMinutes > 0) {
+    return order.estimatedPrepMinutes;
   }
   return defaultWait;
 }
@@ -70,7 +72,7 @@ async function findOrderByIdOrToken(idParam, canteenId = null) {
 /**
  * Accurately calculate queue position, orders ahead, and estimated wait time
  * based on order placement time (createdAt), individual item prep times,
- * elapsed cooking time, and kitchen preparation concurrency.
+ * elapsed cooking time, and dynamic kitchen preparation concurrency.
  *
  * Supports single-user, multi-user, and large-scale (50+ orders) rush hours.
  */
@@ -81,6 +83,7 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, kitch
   const ownTotalPrep = getOrderPrepTime(targetOrder, defaultWait);
   const targetCreatedAt = targetOrder.createdAt ? new Date(targetOrder.createdAt).getTime() : now;
   const targetElapsedMin = Math.max(0, (now - targetCreatedAt) / 60000);
+  const ownRemaining = Math.max(1, Math.round(ownTotalPrep - targetElapsedMin));
 
   if (targetIndex === -1) {
     // Target order is in transition or was placed outside current active window
@@ -90,30 +93,31 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, kitch
     });
     const ordersAhead = earlier.length;
     const queuePosition = ordersAhead + 1;
+    const capacity = kitchenCapacity || Math.min(4, Math.max(2, Math.floor(ordersAhead / 6) + 2));
     const estWaitMinutes = Math.min(
       120,
       Math.max(
         1,
         Math.round(
           ordersAhead === 0
-            ? Math.max(1, ownTotalPrep - targetElapsedMin)
-            : (ordersAhead * defaultWait) / kitchenCapacity + ownTotalPrep
+            ? ownRemaining
+            : (ordersAhead * defaultWait) / capacity + ownRemaining
         )
       )
     );
-    return { ordersAhead, queuePosition, estWaitMinutes };
+    return { ordersAhead, queuePosition, queueNumber: queuePosition, estWaitMinutes };
   }
 
   const ordersAhead = targetIndex;
   const queuePosition = targetIndex + 1;
 
   if (ordersAhead === 0) {
-    // First in line - wait time is own prep time minus elapsed time
-    const remainingOwn = Math.max(1, Math.round(ownTotalPrep - targetElapsedMin));
+    // First in line - wait time is remaining own prep time
     return {
       ordersAhead: 0,
       queuePosition: 1,
-      estWaitMinutes: Math.min(120, remainingOwn),
+      queueNumber: 1,
+      estWaitMinutes: Math.min(120, ownRemaining),
     };
   }
 
@@ -131,13 +135,14 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, kitch
     sumRemainingAhead += aheadRemaining;
   }
 
+  const capacity = kitchenCapacity || Math.min(4, Math.max(2, Math.floor(ordersAhead / 6) + 2));
   let totalWait;
   if (ordersAhead === 1) {
     // Exactly 1 order ahead: wait for Order 1's remaining time + own order's preparation
     totalWait = Math.round(sumRemainingAhead + ownTotalPrep);
   } else {
     // 2 or more orders ahead: kitchen prepares across parallel cooking counters/stations
-    const queueWaitAhead = Math.ceil(sumRemainingAhead / kitchenCapacity);
+    const queueWaitAhead = Math.ceil(sumRemainingAhead / capacity);
     totalWait = Math.round(queueWaitAhead + ownTotalPrep);
   }
 
@@ -146,6 +151,7 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, kitch
   return {
     ordersAhead,
     queuePosition,
+    queueNumber: queuePosition,
     estWaitMinutes,
   };
 }
@@ -182,7 +188,8 @@ router.get('/queue/canteen/:canteenId', async (req, res) => {
         const elapsed = Math.max(0, (now - created) / 60000);
         sumRemaining += Math.max(1, prep - elapsed);
       }
-      const queueWait = Math.ceil(sumRemaining / 2);
+      const capacity = Math.min(4, Math.max(2, Math.floor(queueCount / 6) + 2));
+      const queueWait = Math.ceil(sumRemaining / capacity);
       avgWaitMinutes = Math.min(120, Math.max(defaultWait, queueWait + defaultWait));
     }
 
@@ -191,6 +198,7 @@ router.get('/queue/canteen/:canteenId', async (req, res) => {
     res.json({
       canteenId,
       queueCount,
+      queueNumber: queueCount + 1,
       avgWaitMinutes,
       activeOrdersCount: queueCount,
       ordersAhead: queueCount,
@@ -217,6 +225,7 @@ router.get('/:id/queue', async (req, res) => {
         status: 'READY',
         canteenId: targetOrder.canteenId,
         queuePosition: 0,
+        queueNumber: 0,
         ordersAhead: 0,
         estWaitMinutes: 0,
         message: 'Ready for Pickup',
@@ -230,6 +239,7 @@ router.get('/:id/queue', async (req, res) => {
         status: 'COMPLETED',
         canteenId: targetOrder.canteenId,
         queuePosition: 0,
+        queueNumber: 0,
         ordersAhead: 0,
         estWaitMinutes: 0,
         message: 'Picked Up',
@@ -243,6 +253,7 @@ router.get('/:id/queue', async (req, res) => {
         status: 'CANCELLED',
         canteenId: targetOrder.canteenId,
         queuePosition: 0,
+        queueNumber: 0,
         ordersAhead: 0,
         estWaitMinutes: 0,
         message: 'Order Cancelled',
@@ -266,7 +277,7 @@ router.get('/:id/queue', async (req, res) => {
       .lean();
 
     // Compute dynamic, time-based queue metrics with kitchen concurrency
-    const { ordersAhead, queuePosition, estWaitMinutes } = calculateQueueMetrics(
+    const { ordersAhead, queuePosition, queueNumber, estWaitMinutes } = calculateQueueMetrics(
       targetOrder,
       activeOrders,
       defaultWait,
@@ -297,6 +308,7 @@ router.get('/:id/queue', async (req, res) => {
       status: targetOrder.status,
       canteenId: targetOrder.canteenId,
       queuePosition,
+      queueNumber: queuePosition,
       ordersAhead,
       estWaitMinutes,
       message,
@@ -350,15 +362,26 @@ router.post('/', async (req, res) => {
       orderData.orderId = 'ORD-' + Date.now();
     }
 
-    // Auto-populate item prepMinutes from Item collection if missing
+    // Auto-populate item prepMinutes from Item collection if missing or default
     if (orderData.items && Array.isArray(orderData.items) && orderData.items.length > 0) {
       const itemIds = orderData.items.map(it => it.itemId).filter(Boolean);
-      if (itemIds.length > 0) {
-        const dbItems = await Item.find({ id: { $in: itemIds } }).select('id prepMinutes').lean();
-        const prepMap = new Map(dbItems.map(d => [d.id, d.prepMinutes]));
+      const itemNames = orderData.items.map(it => it.name).filter(Boolean);
+      if (itemIds.length > 0 || itemNames.length > 0) {
+        const dbItems = await Item.find({
+          $or: [
+            { id: { $in: itemIds } },
+            { name: { $in: itemNames } },
+          ],
+        }).select('id name prepMinutes').lean();
+        const prepMapById = new Map(dbItems.map(d => [d.id, d.prepMinutes]));
+        const prepMapByName = new Map(dbItems.map(d => [(d.name || '').toLowerCase().trim(), d.prepMinutes]));
         for (const it of orderData.items) {
-          if (!it.prepMinutes && prepMap.has(it.itemId)) {
-            it.prepMinutes = prepMap.get(it.itemId);
+          if (!it.prepMinutes || it.prepMinutes === 7) {
+            if (it.itemId && prepMapById.has(it.itemId)) {
+              it.prepMinutes = prepMapById.get(it.itemId);
+            } else if (it.name && prepMapByName.has((it.name || '').toLowerCase().trim())) {
+              it.prepMinutes = prepMapByName.get((it.name || '').toLowerCase().trim());
+            }
           }
         }
       }
@@ -448,5 +471,10 @@ router.patch('/:id/status', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+
+router.calculateQueueMetrics = calculateQueueMetrics;
+router.getOrderPrepTime = getOrderPrepTime;
+router.findOrderByIdOrToken = findOrderByIdOrToken;
+router.ACTIVE_QUEUE_STATUSES = ACTIVE_QUEUE_STATUSES;
 
 module.exports = router;

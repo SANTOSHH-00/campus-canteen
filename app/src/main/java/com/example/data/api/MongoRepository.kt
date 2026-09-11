@@ -833,6 +833,7 @@ fun OrderDocument.toMongoDto(): MongoOrderDto {
         name = it.name,
         price = it.price,
         quantity = it.quantity,
+        prepMinutes = if (it.prepMinutes > 0) it.prepMinutes else 7,
         selectedOption = it.selectedOption,
         selectedAddons = it.selectedAddons,
       )
