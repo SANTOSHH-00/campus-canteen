@@ -15,6 +15,41 @@ import com.squareup.moshi.JsonClass
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
+
+fun formatUtcToLocalTime(timestampStr: String?): String {
+  if (timestampStr.isNullOrBlank()) return ""
+  return try {
+    val epochMillis = timestampStr.toLongOrNull()
+    if (epochMillis != null && epochMillis > 0) {
+      val localFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+      return localFormat.format(Date(epochMillis))
+    }
+    val isoWithMillis = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+      timeZone = TimeZone.getTimeZone("UTC")
+    }
+    val parsed = isoWithMillis.parse(timestampStr) ?: run {
+      val isoStandard = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+      }
+      isoStandard.parse(timestampStr)
+    }
+    if (parsed != null) {
+      val localFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+      localFormat.format(parsed)
+    } else {
+      ""
+    }
+  } catch (e: Exception) {
+    ""
+  }
+}
+
+@JsonClass(generateAdapter = true)
+data class StatusHistoryDto(
+  @Json(name = "status") val status: String = "",
+  @Json(name = "timestamp") val timestamp: String = "",
+)
 
 @JsonClass(generateAdapter = true)
 data class MongoUserDto(
@@ -206,6 +241,14 @@ data class MongoOrderDto(
   @Json(name = "pickupLocation") val pickupLocation: String = "",
   @Json(name = "pickupCounter") val pickupCounter: String = "Counter 1",
   @Json(name = "estimatedReadyTime") val estimatedReadyTime: String = "",
+  @Json(name = "orderPlacedAt") val orderPlacedAt: String? = null,
+  @Json(name = "confirmedAt") val confirmedAt: String? = null,
+  @Json(name = "preparingAt") val preparingAt: String? = null,
+  @Json(name = "readyAt") val readyAt: String? = null,
+  @Json(name = "completedAt") val completedAt: String? = null,
+  @Json(name = "cancelledAt") val cancelledAt: String? = null,
+  @Json(name = "createdAt") val createdAt: String? = null,
+  @Json(name = "statusHistory") val statusHistory: List<StatusHistoryDto> = emptyList(),
 ) {
   fun toOrderRecord(): OrderRecord {
     val parsedStatus = when (status.uppercase()) {
@@ -231,7 +274,13 @@ data class MongoOrderDto(
       )
     }
 
-    val timeFormatted = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+    val placedLocalTime = formatUtcToLocalTime(orderPlacedAt ?: createdAt)
+    val confirmedLocalTime = formatUtcToLocalTime(confirmedAt)
+    val preparingLocalTime = formatUtcToLocalTime(preparingAt)
+    val readyLocalTime = formatUtcToLocalTime(readyAt)
+    val completedLocalTime = formatUtcToLocalTime(completedAt)
+
+    val displayOrderTime = if (placedLocalTime.isNotBlank()) "Today, $placedLocalTime" else "Today, 10:42 AM"
 
     return OrderRecord(
       id = orderId,
@@ -239,13 +288,18 @@ data class MongoOrderDto(
       items = cartItems,
       totalPrice = totalAmount,
       status = parsedStatus,
-      orderTime = "Today, $timeFormatted",
+      orderTime = displayOrderTime,
       estimatedReadyTime = estimatedReadyTime.ifBlank { "Ready soon" },
       pickupCanteenName = pickupCanteenName.ifBlank { "Campus Canteen" },
       pickupLocation = pickupLocation.ifBlank { "Counter 1" },
       pickupPreference = pickupPreference,
       pickupCounter = pickupCounter.ifBlank { "Counter 1" },
       canteenId = canteenId.ifBlank { "canteen_33" },
+      orderPlacedAt = placedLocalTime,
+      confirmedAt = confirmedLocalTime,
+      preparingAt = preparingLocalTime,
+      readyAt = readyLocalTime,
+      completedAt = completedLocalTime,
     )
   }
 
@@ -481,6 +535,13 @@ data class OrderQueuePositionDto(
   @Json(name = "ordersAhead") val ordersAhead: Int = 0,
   @Json(name = "estWaitMinutes") val estWaitMinutes: Int = 5,
   @Json(name = "message") val message: String = "",
+  @Json(name = "orderPlacedAt") val orderPlacedAt: String? = null,
+  @Json(name = "confirmedAt") val confirmedAt: String? = null,
+  @Json(name = "preparingAt") val preparingAt: String? = null,
+  @Json(name = "readyAt") val readyAt: String? = null,
+  @Json(name = "completedAt") val completedAt: String? = null,
+  @Json(name = "cancelledAt") val cancelledAt: String? = null,
+  @Json(name = "statusHistory") val statusHistory: List<StatusHistoryDto> = emptyList(),
 )
 
 

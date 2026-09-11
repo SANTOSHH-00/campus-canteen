@@ -13,6 +13,14 @@ const orderItemSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const statusHistorySchema = new mongoose.Schema(
+  {
+    status: { type: String, required: true },
+    timestamp: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     orderId: { type: String, required: true, unique: true, index: true },
@@ -37,11 +45,19 @@ const orderSchema = new mongoose.Schema(
     pickupCounter: { type: String, default: 'Counter 1' },
     estimatedReadyTime: { type: String, default: '' },
     estimatedPrepMinutes: { type: Number, default: 7 },
+    // Server-authoritative UTC status event timestamps
+    orderPlacedAt: { type: Date, default: Date.now, index: true },
+    confirmedAt: { type: Date, default: null },
+    preparingAt: { type: Date, default: null },
+    readyAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+    cancelledAt: { type: Date, default: null },
+    statusHistory: { type: [statusHistorySchema], default: [] },
   },
   { timestamps: true }
 );
 
-// High performance deterministic compound index for canteen queue ordering
-orderSchema.index({ canteenId: 1, status: 1, createdAt: 1, orderId: 1 });
+// High performance deterministic compound index for canteen queue ordering on server time
+orderSchema.index({ canteenId: 1, status: 1, orderPlacedAt: 1, createdAt: 1, orderId: 1 });
 
 module.exports = mongoose.model('Order', orderSchema);

@@ -54,6 +54,7 @@ import com.example.data.OrderStatus
 import com.example.data.api.MongoRepository
 import com.example.data.api.OrderQueuePositionDto
 import com.example.data.api.WebSocketManager
+import com.example.data.api.formatUtcToLocalTime
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
 import com.example.ui.theme.PureWhite
@@ -90,10 +91,36 @@ fun CustomerOrderTrackingScreen(
   val isReady = order.status == OrderStatus.READY
   val isPreparing = order.status == OrderStatus.PREPARING || order.status == OrderStatus.NEW
 
-  val deviceTimeFormat = remember {
-    SimpleDateFormat("h:mm a", Locale.getDefault())
-  }
-  val nowTime = remember { deviceTimeFormat.format(Date()) }
+  // Server-authoritative status timestamps (converted to user's local display format, never device clock)
+  val placedTimeDisplay = order.orderPlacedAt.ifBlank {
+    formatUtcToLocalTime(queuePositionData?.orderPlacedAt).ifBlank {
+      order.orderTime.removePrefix("Today, ")
+    }
+  }.ifBlank { "-" }
+
+  val confirmedTimeDisplay = order.confirmedAt.ifBlank {
+    formatUtcToLocalTime(queuePositionData?.confirmedAt).ifBlank {
+      placedTimeDisplay
+    }
+  }.ifBlank { "-" }
+
+  val preparingTimeDisplay = order.preparingAt.ifBlank {
+    formatUtcToLocalTime(queuePositionData?.preparingAt).ifBlank {
+      if (isPreparing || isReady || isPickedUp) placedTimeDisplay else "-"
+    }
+  }.ifBlank { "-" }
+
+  val readyTimeDisplay = order.readyAt.ifBlank {
+    formatUtcToLocalTime(queuePositionData?.readyAt).ifBlank {
+      if (isReady || isPickedUp) preparingTimeDisplay else "-"
+    }
+  }.ifBlank { "-" }
+
+  val completedTimeDisplay = order.completedAt.ifBlank {
+    formatUtcToLocalTime(queuePositionData?.completedAt).ifBlank {
+      if (isPickedUp) readyTimeDisplay else "-"
+    }
+  }.ifBlank { "-" }
 
   // Load and refresh real-time queue position
   val refreshQueue: () -> Unit = {
@@ -511,31 +538,31 @@ fun CustomerOrderTrackingScreen(
 
           TrackingMilestone(
             title = "Order Placed",
-            time = nowTime,
+            time = placedTimeDisplay,
             isCompleted = true,
             isLast = false,
           )
           TrackingMilestone(
             title = "Payment Confirmed",
-            time = nowTime,
+            time = confirmedTimeDisplay,
             isCompleted = true,
             isLast = false,
           )
           TrackingMilestone(
             title = "Kitchen Preparing",
-            time = if (isPreparing || isReady || isPickedUp) nowTime else "-",
+            time = if (isPreparing || isReady || isPickedUp) preparingTimeDisplay else "-",
             isCompleted = isPreparing || isReady || isPickedUp,
             isLast = false,
           )
           TrackingMilestone(
             title = "Ready for Pickup",
-            time = if (isReady || isPickedUp) nowTime else "-",
+            time = if (isReady || isPickedUp) readyTimeDisplay else "-",
             isCompleted = isReady || isPickedUp,
             isLast = false,
           )
           TrackingMilestone(
             title = "Picked Up",
-            time = if (isPickedUp) nowTime else "-",
+            time = if (isPickedUp) completedTimeDisplay else "-",
             isCompleted = isPickedUp,
             isLast = true,
           )

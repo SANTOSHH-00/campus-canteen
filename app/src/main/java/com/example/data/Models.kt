@@ -139,6 +139,11 @@ data class OrderRecord(
   val pickupPreference: String = "Pickup ASAP",
   val pickupCounter: String = "Counter 1",
   val canteenId: String = "canteen_33",
+  val orderPlacedAt: String = "",
+  val confirmedAt: String = "",
+  val preparingAt: String = "",
+  val readyAt: String = "",
+  val completedAt: String = "",
 )
 
 data class NotificationItem(

@@ -260,6 +260,11 @@ data class OrderDocument(
   val estimatedReadyTime: String = "",
   val createdAt: Long = System.currentTimeMillis(),
   val updatedAt: Long = System.currentTimeMillis(),
+  val orderPlacedAt: Long = 0L,
+  val confirmedAt: Long = 0L,
+  val preparingAt: Long = 0L,
+  val readyAt: Long = 0L,
+  val completedAt: Long = 0L,
 ) {
   fun toOrderRecord(): OrderRecord {
     val parsedStatus = when (status.uppercase()) {
@@ -285,7 +290,13 @@ data class OrderDocument(
       )
     }
 
-    val timeFormatted = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(createdAt))
+    val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+    val placedTimestamp = if (orderPlacedAt > 0) orderPlacedAt else createdAt
+    val placedFormatted = if (placedTimestamp > 0) timeFormat.format(Date(placedTimestamp)) else ""
+    val confirmedFormatted = if (confirmedAt > 0) timeFormat.format(Date(confirmedAt)) else ""
+    val preparingFormatted = if (preparingAt > 0) timeFormat.format(Date(preparingAt)) else ""
+    val readyFormatted = if (readyAt > 0) timeFormat.format(Date(readyAt)) else ""
+    val completedFormatted = if (completedAt > 0) timeFormat.format(Date(completedAt)) else ""
 
     return OrderRecord(
       id = orderId,
@@ -293,13 +304,18 @@ data class OrderDocument(
       items = cartItems,
       totalPrice = totalAmount,
       status = parsedStatus,
-      orderTime = "Today, $timeFormatted",
+      orderTime = if (placedFormatted.isNotBlank()) "Today, $placedFormatted" else "Today, 10:42 AM",
       estimatedReadyTime = estimatedReadyTime.ifBlank { "Ready soon" },
       pickupCanteenName = pickupCanteenName.ifBlank { "Campus Canteen" },
       pickupLocation = pickupLocation.ifBlank { "Counter 1" },
       pickupPreference = pickupPreference,
       pickupCounter = pickupCounter.ifBlank { "Counter 1" },
       canteenId = canteenId.ifBlank { "canteen_33" },
+      orderPlacedAt = placedFormatted,
+      confirmedAt = confirmedFormatted,
+      preparingAt = preparingFormatted,
+      readyAt = readyFormatted,
+      completedAt = completedFormatted,
     )
   }
 

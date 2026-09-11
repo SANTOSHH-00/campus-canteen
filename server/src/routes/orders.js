@@ -81,14 +81,16 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, kitch
   const now = Date.now();
 
   const ownTotalPrep = getOrderPrepTime(targetOrder, defaultWait);
-  const targetCreatedAt = targetOrder.createdAt ? new Date(targetOrder.createdAt).getTime() : now;
+  const targetPlacedAt = targetOrder.orderPlacedAt || targetOrder.createdAt;
+  const targetCreatedAt = targetPlacedAt ? new Date(targetPlacedAt).getTime() : now;
   const targetElapsedMin = Math.max(0, (now - targetCreatedAt) / 60000);
   const ownRemaining = Math.max(1, Math.round(ownTotalPrep - targetElapsedMin));
 
   if (targetIndex === -1) {
     // Target order is in transition or was placed outside current active window
     const earlier = activeOrders.filter(o => {
-      const oTime = o.createdAt ? new Date(o.createdAt).getTime() : 0;
+      const oPlacedAt = o.orderPlacedAt || o.createdAt;
+      const oTime = oPlacedAt ? new Date(oPlacedAt).getTime() : 0;
       return oTime < targetCreatedAt;
     });
     const ordersAhead = earlier.length;
@@ -128,7 +130,8 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, kitch
   for (let i = 0; i < aheadOrders.length; i++) {
     const ahead = aheadOrders[i];
     const aheadPrep = getOrderPrepTime(ahead, defaultWait);
-    const aheadCreated = ahead.createdAt ? new Date(ahead.createdAt).getTime() : now;
+    const aheadPlacedAt = ahead.orderPlacedAt || ahead.createdAt;
+    const aheadCreated = aheadPlacedAt ? new Date(aheadPlacedAt).getTime() : now;
     const aheadElapsedMin = Math.max(0, (now - aheadCreated) / 60000);
     // An active unfulfilled order requires at least 1 minute until kitchen completes/readies it
     const aheadRemaining = Math.max(1, aheadPrep - aheadElapsedMin);
@@ -166,14 +169,14 @@ router.get('/queue/canteen/:canteenId', async (req, res) => {
     // Filter active orders from the last 24 hours to prevent stale past-day orders
     const activeCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    // Single server-authoritative active queue for this canteen
+    // Single server-authoritative active queue for this canteen sorted by server placement time
     const activeOrders = await Order.find({
       canteenId,
       status: { $in: ACTIVE_QUEUE_STATUSES },
       createdAt: { $gte: activeCutoff },
     })
-      .sort({ createdAt: 1, orderId: 1 })
-      .select('orderId studentId canteenId status createdAt estimatedPrepMinutes items')
+      .sort({ orderPlacedAt: 1, createdAt: 1, orderId: 1 })
+      .select('orderId studentId canteenId status createdAt orderPlacedAt confirmedAt preparingAt readyAt completedAt estimatedPrepMinutes items')
       .lean();
 
     const queueCount = activeOrders.length;
@@ -184,7 +187,8 @@ router.get('/queue/canteen/:canteenId', async (req, res) => {
       let sumRemaining = 0;
       for (const order of activeOrders) {
         const prep = getOrderPrepTime(order, defaultWait);
-        const created = order.createdAt ? new Date(order.createdAt).getTime() : now;
+        const orderPlaced = order.orderPlacedAt || order.createdAt;
+        const created = orderPlaced ? new Date(orderPlaced).getTime() : now;
         const elapsed = Math.max(0, (now - created) / 60000);
         sumRemaining += Math.max(1, prep - elapsed);
       }
@@ -218,6 +222,14 @@ router.get('/:id/queue', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    const orderPlacedAt = targetOrder.orderPlacedAt || targetOrder.createdAt || null;
+    const confirmedAt = targetOrder.confirmedAt || null;
+    const preparingAt = targetOrder.preparingAt || null;
+    const readyAt = targetOrder.readyAt || null;
+    const completedAt = targetOrder.completedAt || null;
+    const cancelledAt = targetOrder.cancelledAt || null;
+    const statusHistory = targetOrder.statusHistory || [];
+
     if (targetOrder.status === 'READY') {
       return res.json({
         orderId: targetOrder.orderId,
@@ -229,6 +241,13 @@ router.get('/:id/queue', async (req, res) => {
         ordersAhead: 0,
         estWaitMinutes: 0,
         message: 'Ready for Pickup',
+        orderPlacedAt,
+        confirmedAt,
+        preparingAt,
+        readyAt,
+        completedAt,
+        cancelledAt,
+        statusHistory,
       });
     }
 
@@ -243,6 +262,13 @@ router.get('/:id/queue', async (req, res) => {
         ordersAhead: 0,
         estWaitMinutes: 0,
         message: 'Picked Up',
+        orderPlacedAt,
+        confirmedAt,
+        preparingAt,
+        readyAt,
+        completedAt,
+        cancelledAt,
+        statusHistory,
       });
     }
 
@@ -257,6 +283,13 @@ router.get('/:id/queue', async (req, res) => {
         ordersAhead: 0,
         estWaitMinutes: 0,
         message: 'Order Cancelled',
+        orderPlacedAt,
+        confirmedAt,
+        preparingAt,
+        readyAt,
+        completedAt,
+        cancelledAt,
+        statusHistory,
       });
     }
 
@@ -266,14 +299,14 @@ router.get('/:id/queue', async (req, res) => {
     // Filter active orders from the last 24 hours to prevent stale past-day orders
     const activeCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    // Fetch all active orders for the SAME canteen, sorted deterministically by createdAt ASC, orderId ASC
+    // Fetch all active orders for the SAME canteen, sorted deterministically by orderPlacedAt ASC, createdAt ASC, orderId ASC
     const activeOrders = await Order.find({
       canteenId: targetOrder.canteenId,
       status: { $in: ACTIVE_QUEUE_STATUSES },
       createdAt: { $gte: activeCutoff },
     })
-      .sort({ createdAt: 1, orderId: 1 })
-      .select('orderId studentId canteenId status createdAt estimatedPrepMinutes items')
+      .sort({ orderPlacedAt: 1, createdAt: 1, orderId: 1 })
+      .select('orderId studentId canteenId status createdAt orderPlacedAt confirmedAt preparingAt readyAt completedAt estimatedPrepMinutes items')
       .lean();
 
     // Compute dynamic, time-based queue metrics with kitchen concurrency
@@ -291,7 +324,7 @@ router.get('/:id/queue', async (req, res) => {
     console.log(`Current Canteen ID: ${targetOrder.canteenId}`);
     console.log(`All active orders for canteen "${targetOrder.canteenId}" (${activeOrders.length}):`);
     activeOrders.forEach((o, i) => {
-      console.log(`  [#${i + 1}] Order ID: ${o.orderId}, Status: ${o.status}, Sequence/CreatedAt: ${o.createdAt}`);
+      console.log(`  [#${i + 1}] Order ID: ${o.orderId}, Status: ${o.status}, Sequence/PlacedAt: ${o.orderPlacedAt || o.createdAt}`);
     });
     console.log(`Calculated queue position: #${queuePosition}`);
     console.log(`Calculated ordersAhead: ${ordersAhead}`);
@@ -312,6 +345,13 @@ router.get('/:id/queue', async (req, res) => {
       ordersAhead,
       estWaitMinutes,
       message,
+      orderPlacedAt,
+      confirmedAt,
+      preparingAt,
+      readyAt,
+      completedAt,
+      cancelledAt,
+      statusHistory,
     });
   } catch (err) {
     console.error('[QUEUE] Error calculating queue position:', err);
@@ -354,13 +394,37 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/orders - Place a new order
+// POST /api/orders - Place a new order with authoritative server timestamps
 router.post('/', async (req, res) => {
   try {
     const orderData = req.body;
+    const now = new Date();
+
+    // The backend/server is the authoritative source of time: discard client timestamps
+    delete orderData._id;
+    delete orderData.createdAt;
+    delete orderData.updatedAt;
+
     if (!orderData.orderId) {
-      orderData.orderId = 'ORD-' + Date.now();
+      orderData.orderId = 'ORD-' + now.getTime() + '-' + Math.floor(1000 + Math.random() * 9000);
     }
+
+    const initialStatus = (orderData.status || 'PREPARING').toUpperCase().trim();
+    orderData.status = initialStatus;
+    orderData.orderPlacedAt = now;
+
+    // Server-authoritative status history and milestone timestamps
+    const statusHistory = [{ status: 'PLACED', timestamp: now }];
+    if (initialStatus === 'CONFIRMED') {
+      orderData.confirmedAt = now;
+      statusHistory.push({ status: 'CONFIRMED', timestamp: now });
+    } else if (initialStatus === 'PREPARING') {
+      orderData.confirmedAt = now;
+      orderData.preparingAt = now;
+      statusHistory.push({ status: 'CONFIRMED', timestamp: now });
+      statusHistory.push({ status: 'PREPARING', timestamp: now });
+    }
+    orderData.statusHistory = statusHistory;
 
     // Auto-populate item prepMinutes from Item collection if missing or default
     if (orderData.items && Array.isArray(orderData.items) && orderData.items.length > 0) {
@@ -416,7 +480,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PATCH /api/orders/:id/status - Update order status (NEW, PREPARING, READY, COMPLETED, CANCELLED)
+// PATCH /api/orders/:id/status - Update order status with server-authoritative timestamps
 router.patch('/:id/status', async (req, res) => {
   try {
     let normalizedStatus = (req.body.status || '').toUpperCase().trim();
@@ -430,9 +494,21 @@ router.patch('/:id/status', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    const now = new Date();
+    const updateFields = { status: normalizedStatus };
+
+    if (normalizedStatus === 'CONFIRMED') updateFields.confirmedAt = now;
+    if (normalizedStatus === 'PREPARING') updateFields.preparingAt = now;
+    if (normalizedStatus === 'READY') updateFields.readyAt = now;
+    if (normalizedStatus === 'COMPLETED') updateFields.completedAt = now;
+    if (normalizedStatus === 'CANCELLED') updateFields.cancelledAt = now;
+
     const updated = await Order.findOneAndUpdate(
       { _id: targetOrder._id },
-      { $set: { status: normalizedStatus } },
+      {
+        $set: updateFields,
+        $push: { statusHistory: { status: normalizedStatus, timestamp: now } },
+      },
       { new: true }
     );
 

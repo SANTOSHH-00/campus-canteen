@@ -159,8 +159,23 @@ fun OwnerOrderDetailsScreen(
 
   val timeFormatter = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
   val dateFormatter = remember { SimpleDateFormat("d MMM yyyy", Locale.getDefault()) }
-  val orderTime = remember(order.createdAt) { timeFormatter.format(Date(order.createdAt)) }
-  val orderDate = remember(order.createdAt) { dateFormatter.format(Date(order.createdAt)) }
+  val orderTime = remember(order.orderPlacedAt, order.createdAt) {
+    if (order.orderPlacedAt > 0) timeFormatter.format(Date(order.orderPlacedAt))
+    else timeFormatter.format(Date(order.createdAt))
+  }
+  val orderDate = remember(order.orderPlacedAt, order.createdAt) {
+    if (order.orderPlacedAt > 0) dateFormatter.format(Date(order.orderPlacedAt))
+    else dateFormatter.format(Date(order.createdAt))
+  }
+  val preparingTime = remember(order.preparingAt, orderTime) {
+    if (order.preparingAt > 0) timeFormatter.format(Date(order.preparingAt)) else orderTime
+  }
+  val readyTime = remember(order.readyAt) {
+    if (order.readyAt > 0) timeFormatter.format(Date(order.readyAt)) else "-"
+  }
+  val completedTime = remember(order.completedAt) {
+    if (order.completedAt > 0) timeFormatter.format(Date(order.completedAt)) else "-"
+  }
 
   // Phone calling & copying action
   val effectivePhone = order.studentPhone
@@ -471,7 +486,7 @@ fun OwnerOrderDetailsScreen(
           StatusTimelineStep(
             title = "Preparing",
             subtitle = "Kitchen started",
-            time = if (isPreparing || isReady || isPickedUp) orderTime else "-",
+            time = if (isPreparing || isReady || isPickedUp) preparingTime else "-",
             isCompleted = isPreparing || isReady || isPickedUp,
             isActive = isPreparing,
             showConnectingLine = true,
@@ -482,7 +497,7 @@ fun OwnerOrderDetailsScreen(
           StatusTimelineStep(
             title = "Ready for Pickup",
             subtitle = if (isReady || isPickedUp) "$counterAssigned assigned" else null,
-            time = if (isReady || isPickedUp) orderTime else "-",
+            time = if (isReady || isPickedUp) readyTime else "-",
             isCompleted = isReady || isPickedUp,
             isActive = isReady,
             showConnectingLine = true,
@@ -492,7 +507,7 @@ fun OwnerOrderDetailsScreen(
           StatusTimelineStep(
             title = "Picked Up",
             subtitle = if (isPickedUp) "Handed over to student" else null,
-            time = if (isPickedUp) orderTime else "-",
+            time = if (isPickedUp) completedTime else "-",
             isCompleted = isPickedUp,
             isActive = isPickedUp,
             showConnectingLine = false,
