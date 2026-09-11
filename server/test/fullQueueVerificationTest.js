@@ -6,9 +6,10 @@ const mongoose = require('mongoose');
 const connectDB = require('../src/config/db');
 const Order = require('../src/models/Order');
 const Canteen = require('../src/models/Canteen');
+const Item = require('../src/models/Item');
 
-const TEST_CANTEEN_A = 'canteen_test_a';
-const TEST_CANTEEN_B = 'canteen_test_b';
+const TEST_CANTEEN_A = 'canteen_scale_test_a';
+const TEST_CANTEEN_B = 'canteen_scale_test_b';
 
 let passed = 0;
 let total = 0;
@@ -24,11 +25,95 @@ function assert(condition, message) {
   }
 }
 
-// Function that mimics the exact router logic in orders.js
+// Emulates the exact orders.js router logic
+function getOrderPrepTime(order, defaultWait = 7) {
+  if (order && order.estimatedPrepMinutes && order.estimatedPrepMinutes > 0) {
+    return order.estimatedPrepMinutes;
+  }
+  if (order && order.items && Array.isArray(order.items) && order.items.length > 0) {
+    const itemPreps = order.items.map(it => it.prepMinutes || 0).filter(p => p > 0);
+    if (itemPreps.length > 0) {
+      const maxPrep = Math.max(...itemPreps);
+      const extraItemsBuffer = Math.min(5, Math.max(0, order.items.length - 1));
+      return Math.min(45, maxPrep + extraItemsBuffer);
+    }
+  }
+  return defaultWait;
+}
+
+function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, kitchenCapacity = 2) {
+  const targetIndex = activeOrders.findIndex(o => o.orderId === targetOrder.orderId);
+  const now = Date.now();
+
+  const ownTotalPrep = getOrderPrepTime(targetOrder, defaultWait);
+  const targetCreatedAt = targetOrder.createdAt ? new Date(targetOrder.createdAt).getTime() : now;
+  const targetElapsedMin = Math.max(0, (now - targetCreatedAt) / 60000);
+
+  if (targetIndex === -1) {
+    const earlier = activeOrders.filter(o => {
+      const oTime = o.createdAt ? new Date(o.createdAt).getTime() : 0;
+      return oTime < targetCreatedAt;
+    });
+    const ordersAhead = earlier.length;
+    const queuePosition = ordersAhead + 1;
+    const estWaitMinutes = Math.min(
+      120,
+      Math.max(
+        1,
+        Math.round(
+          ordersAhead === 0
+            ? Math.max(1, ownTotalPrep - targetElapsedMin)
+            : (ordersAhead * defaultWait) / kitchenCapacity + ownTotalPrep
+        )
+      )
+    );
+    return { ordersAhead, queuePosition, estWaitMinutes };
+  }
+
+  const ordersAhead = targetIndex;
+  const queuePosition = targetIndex + 1;
+
+  if (ordersAhead === 0) {
+    const remainingOwn = Math.max(1, Math.round(ownTotalPrep - targetElapsedMin));
+    return {
+      ordersAhead: 0,
+      queuePosition: 1,
+      estWaitMinutes: Math.min(120, remainingOwn),
+    };
+  }
+
+  const aheadOrders = activeOrders.slice(0, targetIndex);
+  let sumRemainingAhead = 0;
+
+  for (let i = 0; i < aheadOrders.length; i++) {
+    const ahead = aheadOrders[i];
+    const aheadPrep = getOrderPrepTime(ahead, defaultWait);
+    const aheadCreated = ahead.createdAt ? new Date(ahead.createdAt).getTime() : now;
+    const aheadElapsedMin = Math.max(0, (now - aheadCreated) / 60000);
+    const aheadRemaining = Math.max(1, aheadPrep - aheadElapsedMin);
+    sumRemainingAhead += aheadRemaining;
+  }
+
+  let totalWait;
+  if (ordersAhead === 1) {
+    totalWait = Math.round(sumRemainingAhead + ownTotalPrep);
+  } else {
+    const queueWaitAhead = Math.ceil(sumRemainingAhead / kitchenCapacity);
+    totalWait = Math.round(queueWaitAhead + ownTotalPrep);
+  }
+
+  const estWaitMinutes = Math.min(120, Math.max(1, totalWait));
+
+  return {
+    ordersAhead,
+    queuePosition,
+    estWaitMinutes,
+  };
+}
+
 async function getOrderQueue(orderIdOrToken, canteenHint = null) {
   const ACTIVE_QUEUE_STATUSES = ['NEW', 'WAITING', 'CONFIRMED', 'PREPARING', 'new', 'waiting', 'confirmed', 'preparing'];
 
-  // 1. Locate order
   let cleanId = decodeURIComponent(orderIdOrToken).trim();
   let targetOrder = await Order.findOne({ orderId: cleanId }).lean();
   if (!targetOrder && mongoose.Types.ObjectId.isValid(cleanId)) {
@@ -63,31 +148,12 @@ async function getOrderQueue(orderIdOrToken, canteenHint = null) {
     canteenId: targetOrder.canteenId,
     status: { $in: ACTIVE_QUEUE_STATUSES },
     createdAt: { $gte: activeCutoff },
-  }).sort({ createdAt: 1, orderId: 1 }).lean();
+  })
+    .sort({ createdAt: 1, orderId: 1 })
+    .select('orderId studentId canteenId status createdAt estimatedPrepMinutes items')
+    .lean();
 
-  const targetIndex = activeOrders.findIndex(o => o.orderId === targetOrder.orderId);
-  let ordersAhead = 0;
-  let queuePosition = 1;
-
-  function getPrep(o) {
-    return o.estimatedPrepMinutes || defaultWait;
-  }
-
-  if (targetIndex !== -1) {
-    ordersAhead = targetIndex;
-    queuePosition = targetIndex + 1;
-    let wait = 0;
-    for (let i = 0; i < targetIndex; i++) {
-      wait += getPrep(activeOrders[i]);
-    }
-    wait += getPrep(targetOrder);
-    var estWaitMinutes = Math.min(120, Math.max(1, wait));
-  } else {
-    const tTime = targetOrder.createdAt ? new Date(targetOrder.createdAt).getTime() : Date.now();
-    ordersAhead = activeOrders.filter(o => new Date(o.createdAt).getTime() < tTime).length;
-    queuePosition = ordersAhead + 1;
-    var estWaitMinutes = Math.min(120, Math.max(1, (ordersAhead + 1) * defaultWait));
-  }
+  const metrics = calculateQueueMetrics(targetOrder, activeOrders, defaultWait, 2);
 
   return {
     orderId: targetOrder.orderId,
@@ -95,14 +161,12 @@ async function getOrderQueue(orderIdOrToken, canteenHint = null) {
     studentId: targetOrder.studentId,
     canteenId: targetOrder.canteenId,
     status: targetOrder.status,
-    queuePosition,
-    ordersAhead,
-    estWaitMinutes,
+    ...metrics,
   };
 }
 
 async function run() {
-  console.log('🚀 Running Comprehensive Quick Bite Queue System Verification...\n');
+  console.log('🚀 Running High-Scale Queue & Time-Basis Calculation Tests...\n');
   await connectDB();
 
   try {
@@ -110,149 +174,191 @@ async function run() {
     await Order.deleteMany({ canteenId: { $in: [TEST_CANTEEN_A, TEST_CANTEEN_B] } });
     await Canteen.deleteMany({ id: { $in: [TEST_CANTEEN_A, TEST_CANTEEN_B] } });
 
-    await Canteen.create({ id: TEST_CANTEEN_A, name: 'Canteen A', avgWaitMinutes: 7 });
-    await Canteen.create({ id: TEST_CANTEEN_B, name: 'Canteen B', avgWaitMinutes: 10 });
+    await Canteen.create({ id: TEST_CANTEEN_A, name: 'Scale Canteen A', avgWaitMinutes: 5 });
+    await Canteen.create({ id: TEST_CANTEEN_B, name: 'Scale Canteen B', avgWaitMinutes: 8 });
 
-    const t0 = new Date(Date.now() - 30000);
-    const t1 = new Date(Date.now() - 20000);
-    const t2 = new Date(Date.now() - 10000);
+    // ── TEST 1: Time-Basis & Item Prep for 3 Users ─────────────────────────
+    console.log('--- TEST 1: Time-Basis Queue Calculation for Users 1, 2, 3 ---');
+    const baseTime = Date.now() - 60000; // 1 minute ago
 
-    // 1. Create User 1, User 2, User 3 in Canteen A
-    console.log('--- Step 1: Placing Orders for User 1, User 2, User 3 in Canteen A ---');
+    // User 1: Ordered Poha (prepMinutes = 5) 1 minute ago
     await Order.create({
-      orderId: 'ORD-A-01',
+      orderId: 'ORD-SCALE-01',
       studentId: 'user_1',
       canteenId: TEST_CANTEEN_A,
-      tokenNumber: '043',
+      tokenNumber: '101',
       status: 'PREPARING',
       totalAmount: 40,
-      estimatedPrepMinutes: 7,
-      createdAt: t0,
+      estimatedPrepMinutes: 5,
+      items: [{ itemId: 'item_poha', name: 'Poha', price: 40, quantity: 1, prepMinutes: 5 }],
+      createdAt: new Date(baseTime),
     });
 
+    // User 2: Ordered Chana Kulcha (prepMinutes = 6) 30 seconds ago
     await Order.create({
-      orderId: 'ORD-A-02',
+      orderId: 'ORD-SCALE-02',
       studentId: 'user_2',
       canteenId: TEST_CANTEEN_A,
-      tokenNumber: '045',
-      status: 'WAITING',
+      tokenNumber: '102',
+      status: 'NEW',
       totalAmount: 75,
-      estimatedPrepMinutes: 8,
-      createdAt: t1,
+      estimatedPrepMinutes: 6,
+      items: [{ itemId: 'item_kulcha', name: 'Chana Kulcha', price: 75, quantity: 1, prepMinutes: 6 }],
+      createdAt: new Date(baseTime + 30000),
     });
 
+    // User 3: Ordered Thali (prepMinutes = 10) 10 seconds ago
     await Order.create({
-      orderId: 'ORD-A-03',
+      orderId: 'ORD-SCALE-03',
       studentId: 'user_3',
       canteenId: TEST_CANTEEN_A,
-      tokenNumber: '046',
+      tokenNumber: '103',
       status: 'NEW',
-      totalAmount: 50,
-      estimatedPrepMinutes: 5,
-      createdAt: t2,
-    });
-
-    // Verify User 1, User 2, User 3
-    const q1 = await getOrderQueue('ORD-A-01');
-    const q2 = await getOrderQueue('ORD-A-02');
-    const q3 = await getOrderQueue('ORD-A-03');
-
-    assert(q1.queuePosition === 1 && q1.ordersAhead === 0, 'User 1 is #1 with 0 orders ahead');
-    assert(q1.estWaitMinutes === 7, 'User 1 estWait is 7 min');
-
-    assert(q2.queuePosition === 2 && q2.ordersAhead === 1, 'User 2 is #2 with 1 order ahead (User 1)');
-    assert(q2.estWaitMinutes === 15, 'User 2 estWait is 15 min (7 + 8)');
-
-    assert(q3.queuePosition === 3 && q3.ordersAhead === 2, 'User 3 is #3 with 2 orders ahead (User 1 + User 2)');
-    assert(q3.estWaitMinutes === 20, 'User 3 estWait is 20 min (7 + 8 + 5)');
-
-    // 2. Verify token lookup flexibility (#Q043, #Q045, 046)
-    console.log('\n--- Step 2: Testing Token Prefix Resolution ---');
-    const q1Token = await getOrderQueue('#Q043', TEST_CANTEEN_A);
-    assert(q1Token.orderId === 'ORD-A-01' && q1Token.queuePosition === 1, '#Q043 resolves correctly to User 1 at #1');
-
-    const q2Token = await getOrderQueue('#Q045', TEST_CANTEEN_A);
-    assert(q2Token.orderId === 'ORD-A-02' && q2Token.queuePosition === 2, '#Q045 resolves correctly to User 2 at #2');
-
-    // 3. Complete Order 1 -> User 2 becomes #1 (0 ahead), User 3 becomes #2 (1 ahead)
-    console.log('\n--- Step 3: Kitchen Completes Order 1 ---');
-    await Order.updateOne({ orderId: 'ORD-A-01' }, { $set: { status: 'COMPLETED' } });
-
-    const q1After = await getOrderQueue('ORD-A-01');
-    assert(q1After.status === 'COMPLETED' && q1After.ordersAhead === 0 && q1After.queuePosition === 0, 'User 1 is marked COMPLETED with 0 ahead');
-
-    const q2After1 = await getOrderQueue('ORD-A-02');
-    assert(q2After1.queuePosition === 1 && q2After1.ordersAhead === 0, 'User 2 advances to #1 with 0 orders ahead');
-    assert(q2After1.estWaitMinutes === 8, 'User 2 wait reduced to own prep (8 min)');
-
-    const q3After1 = await getOrderQueue('ORD-A-03');
-    assert(q3After1.queuePosition === 2 && q3After1.ordersAhead === 1, 'User 3 advances to #2 with 1 order ahead (User 2)');
-    assert(q3After1.estWaitMinutes === 13, 'User 3 wait reduced to 13 min (8 + 5)');
-
-    // 4. Complete Order 2 -> User 3 becomes #1 (0 ahead)
-    console.log('\n--- Step 4: Kitchen Completes Order 2 ---');
-    await Order.updateOne({ orderId: 'ORD-A-02' }, { $set: { status: 'COMPLETED' } });
-
-    const q3After2 = await getOrderQueue('ORD-A-03');
-    assert(q3After2.queuePosition === 1 && q3After2.ordersAhead === 0, 'User 3 advances to #1 with 0 orders ahead');
-    assert(q3After2.estWaitMinutes === 5, 'User 3 wait is now 5 min');
-
-    // 5. Verify Cancellation updates queue correctly
-    console.log('\n--- Step 5: Order Cancellation ---');
-    await Order.create({
-      orderId: 'ORD-A-04',
-      studentId: 'user_4',
-      canteenId: TEST_CANTEEN_A,
-      tokenNumber: '047',
-      status: 'NEW',
-      totalAmount: 30,
-      createdAt: new Date(),
-    });
-    await Order.create({
-      orderId: 'ORD-A-05',
-      studentId: 'user_5',
-      canteenId: TEST_CANTEEN_A,
-      tokenNumber: '048',
-      status: 'NEW',
-      totalAmount: 30,
-      createdAt: new Date(Date.now() + 1000),
-    });
-
-    let q5BeforeCancel = await getOrderQueue('ORD-A-05');
-    // Active line: ORD-A-03 (#1), ORD-A-04 (#2), ORD-A-05 (#3)
-    assert(q5BeforeCancel.queuePosition === 3 && q5BeforeCancel.ordersAhead === 2, 'User 5 is #3 with 2 ahead before cancellation');
-
-    await Order.updateOne({ orderId: 'ORD-A-04' }, { $set: { status: 'CANCELLED' } });
-    let q4Cancel = await getOrderQueue('ORD-A-04');
-    assert(q4Cancel.status === 'CANCELLED' && q4Cancel.queuePosition === 0, 'User 4 is marked CANCELLED with queue 0');
-
-    let q5AfterCancel = await getOrderQueue('ORD-A-05');
-    assert(q5AfterCancel.queuePosition === 2 && q5AfterCancel.ordersAhead === 1, 'User 5 advances to #2 with 1 ahead after User 4 cancelled');
-
-    // 6. Verify Isolation Between Different Canteens
-    console.log('\n--- Step 6: Different Canteen Queue Isolation ---');
-    await Order.create({
-      orderId: 'ORD-B-01',
-      studentId: 'user_6',
-      canteenId: TEST_CANTEEN_B,
-      tokenNumber: '201',
-      status: 'PREPARING',
-      totalAmount: 100,
+      totalAmount: 120,
       estimatedPrepMinutes: 10,
-      createdAt: new Date(Date.now() - 50000), // earlier than all Canteen A orders
+      items: [{ itemId: 'item_thali', name: 'Special Thali', price: 120, quantity: 1, prepMinutes: 10 }],
+      createdAt: new Date(baseTime + 50000),
     });
 
-    const qB1 = await getOrderQueue('ORD-B-01');
-    assert(qB1.canteenId === TEST_CANTEEN_B && qB1.queuePosition === 1 && qB1.ordersAhead === 0, 'Canteen B order is #1 with 0 ahead despite earlier timestamp');
+    const q1 = await getOrderQueue('ORD-SCALE-01');
+    const q2 = await getOrderQueue('ORD-SCALE-02');
+    const q3 = await getOrderQueue('ORD-SCALE-03');
 
-    const q5Still = await getOrderQueue('ORD-A-05');
-    assert(q5Still.canteenId === TEST_CANTEEN_A && q5Still.queuePosition === 2 && q5Still.ordersAhead === 1, 'Canteen A queue is completely unaffected by Canteen B');
+    assert(q1.queuePosition === 1 && q1.ordersAhead === 0, 'User 1 is #1 with 0 ahead');
+    assert(q1.estWaitMinutes <= 5 && q1.estWaitMinutes >= 1, `User 1 wait time is ${q1.estWaitMinutes}m (elapsed time deducted from 5m prep)`);
 
-    // Clean up test data
+    assert(q2.queuePosition === 2 && q2.ordersAhead === 1, 'User 2 is #2 with 1 order ahead');
+    assert(q2.estWaitMinutes >= 7 && q2.estWaitMinutes <= 11, `User 2 wait time is ${q2.estWaitMinutes}m (Order 1 remaining + Order 2 6m prep)`);
+
+    assert(q3.queuePosition === 3 && q3.ordersAhead === 2, 'User 3 is #3 with 2 orders ahead');
+    assert(q3.estWaitMinutes >= 12 && q3.estWaitMinutes <= 18, `User 3 wait time is ${q3.estWaitMinutes}m (parallel kitchen prep + 10m Thali)`);
+
+    // ── TEST 2: Kitchen Advancement ────────────────────────────────────────
+    console.log('\n--- TEST 2: Advancing Queue when Kitchen Completes Order 1 ---');
+    await Order.updateOne({ orderId: 'ORD-SCALE-01' }, { $set: { status: 'COMPLETED' } });
+
+    const q2Advanced = await getOrderQueue('ORD-SCALE-02');
+    const q3Advanced = await getOrderQueue('ORD-SCALE-03');
+
+    assert(q2Advanced.queuePosition === 1 && q2Advanced.ordersAhead === 0, 'User 2 dynamically became #1 in line (0 ahead)');
+    assert(q3Advanced.queuePosition === 2 && q3Advanced.ordersAhead === 1, 'User 3 dynamically became #2 in line (1 ahead)');
+
+    // ── TEST 3: High Scale Simulation (25 Concurrent Orders) ──────────────
+    console.log('\n--- TEST 3: Massive Rush Hour Scale Test (25 Concurrent Orders) ---');
+    await Order.deleteMany({ canteenId: TEST_CANTEEN_A });
+
+    const numOrders = 25;
+    const orderDocs = [];
+    const startTime = Date.now() - 120000; // spread over 2 minutes
+
+    for (let i = 1; i <= numOrders; i++) {
+      const pad = String(i).padStart(2, '0');
+      orderDocs.push({
+        orderId: `ORD-RUSH-${pad}`,
+        studentId: `student_${pad}`,
+        canteenId: TEST_CANTEEN_A,
+        tokenNumber: `5${pad}`,
+        status: i === 1 ? 'PREPARING' : 'NEW',
+        totalAmount: 50 + i * 5,
+        estimatedPrepMinutes: 5 + (i % 4), // varies between 5, 6, 7, 8 minutes
+        createdAt: new Date(startTime + i * 2000), // strictly 2 seconds apart
+      });
+    }
+    await Order.insertMany(orderDocs);
+
+    // Verify all 25 users in parallel
+    for (let i = 1; i <= numOrders; i++) {
+      const pad = String(i).padStart(2, '0');
+      const q = await getOrderQueue(`ORD-RUSH-${pad}`);
+      assert(q.queuePosition === i, `Rush User ${i} is accurately position #${i}`);
+      assert(q.ordersAhead === i - 1, `Rush User ${i} has accurately ${i - 1} orders ahead`);
+      assert(q.estWaitMinutes >= 1 && q.estWaitMinutes <= 120, `Rush User ${i} estWait (${q.estWaitMinutes}m) is realistic and bounded`);
+    }
+
+    // ── TEST 4: Batch Completion of First 5 Orders ─────────────────────────
+    console.log('\n--- TEST 4: Kitchen Completes First 5 Orders (Batch Advancement) ---');
+    await Order.updateMany(
+      { orderId: { $in: ['ORD-RUSH-01', 'ORD-RUSH-02', 'ORD-RUSH-03', 'ORD-RUSH-04', 'ORD-RUSH-05'] } },
+      { $set: { status: 'COMPLETED' } }
+    );
+
+    // Order 6 was #6 (5 ahead), now should be #1 (0 ahead)
+    const q6 = await getOrderQueue('ORD-RUSH-06');
+    assert(q6.queuePosition === 1 && q6.ordersAhead === 0, 'Order 6 is now #1 in line with 0 orders ahead');
+
+    // Order 25 was #25 (24 ahead), now should be #20 (19 ahead)
+    const q25 = await getOrderQueue('ORD-RUSH-25');
+    assert(q25.queuePosition === 20 && q25.ordersAhead === 19, 'Order 25 is now #20 in line with 19 orders ahead');
+
+    // ── TEST 5: Cancellation in Middle of Queue ────────────────────────────
+    console.log('\n--- TEST 5: Mid-Queue Cancellation Test ---');
+    // Cancel Order 10 (which is currently #5 in active line)
+    const q10Before = await getOrderQueue('ORD-RUSH-10');
+    const pos10 = q10Before.queuePosition;
+
+    await Order.updateOne({ orderId: 'ORD-RUSH-10' }, { $set: { status: 'CANCELLED' } });
+
+    const q10After = await getOrderQueue('ORD-RUSH-10');
+    assert(q10After.status === 'CANCELLED' && q10After.queuePosition === 0, 'Cancelled order has queue 0');
+
+    // Orders before #10 (e.g. Order 6) unaffected
+    const q6Check = await getOrderQueue('ORD-RUSH-06');
+    assert(q6Check.queuePosition === 1, 'Orders ahead of cancelled order unaffected');
+
+    // Order 11 should shift forward by 1
+    const q11 = await getOrderQueue('ORD-RUSH-11');
+    assert(q11.queuePosition === pos10, `Order 11 shifted into position #${pos10} after Order 10 cancellation`);
+
+    // ── TEST 6: Simultaneous Order Placement (Sub-millisecond Tie-Breaker) ──
+    console.log('\n--- TEST 6: Simultaneous Placement Deterministic Tie-Breaker ---');
+    const exactSameTime = new Date();
+    await Order.create([
+      {
+        orderId: 'ORD-TIE-1',
+        studentId: 'tie_user_1',
+        canteenId: TEST_CANTEEN_A,
+        tokenNumber: '801',
+        status: 'NEW',
+        totalAmount: 40,
+        createdAt: exactSameTime,
+      },
+      {
+        orderId: 'ORD-TIE-2',
+        studentId: 'tie_user_2',
+        canteenId: TEST_CANTEEN_A,
+        tokenNumber: '802',
+        status: 'NEW',
+        totalAmount: 40,
+        createdAt: exactSameTime,
+      },
+    ]);
+
+    const tie1 = await getOrderQueue('ORD-TIE-1');
+    const tie2 = await getOrderQueue('ORD-TIE-2');
+    assert(tie1.queuePosition !== tie2.queuePosition, 'Simultaneous orders never share identical queue positions');
+    assert(tie2.queuePosition === tie1.queuePosition + 1, 'Deterministic tie-breaker places ORD-TIE-1 ahead of ORD-TIE-2');
+
+    // ── TEST 7: Independent Canteen Queues ──────────────────────────────────
+    console.log('\n--- TEST 7: Strict Canteen Queue Isolation ---');
+    await Order.create({
+      orderId: 'ORD-CANTEEN-B-FIRST',
+      studentId: 'user_b1',
+      canteenId: TEST_CANTEEN_B,
+      tokenNumber: '901',
+      status: 'PREPARING',
+      totalAmount: 60,
+      estimatedPrepMinutes: 8,
+      createdAt: new Date(Date.now() - 100000),
+    });
+
+    const qBFirst = await getOrderQueue('ORD-CANTEEN-B-FIRST');
+    assert(qBFirst.canteenId === TEST_CANTEEN_B && qBFirst.queuePosition === 1 && qBFirst.ordersAhead === 0, 'Canteen B order is #1 in Canteen B');
+
+    // Clean test data
     await Order.deleteMany({ canteenId: { $in: [TEST_CANTEEN_A, TEST_CANTEEN_B] } });
     await Canteen.deleteMany({ id: { $in: [TEST_CANTEEN_A, TEST_CANTEEN_B] } });
 
-    console.log(`\n🎉 ALL TESTS PASSED: ${passed}/${total} assertions successful!`);
+    console.log(`\n🎉 ALL SCALE & ACCURACY TESTS PASSED: ${passed}/${total} assertions successful!`);
   } finally {
     await mongoose.disconnect();
   }

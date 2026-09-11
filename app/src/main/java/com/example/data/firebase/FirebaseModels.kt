@@ -235,6 +235,7 @@ data class OrderItemDocument(
   val name: String = "",
   val price: Int = 0,
   val quantity: Int = 1,
+  val prepMinutes: Int = 7,
   val selectedOption: String? = null,
   val selectedAddons: List<String> = emptyList(),
 )
@@ -274,8 +275,8 @@ data class OrderDocument(
           id = itemDoc.itemId,
           name = itemDoc.name,
           price = itemDoc.price,
-          prepTime = "5-10 min",
-          prepMinutes = 7,
+          prepTime = "${itemDoc.prepMinutes} min",
+          prepMinutes = if (itemDoc.prepMinutes > 0) itemDoc.prepMinutes else 7,
           category = FoodCategory.QUICK_ORDER,
           imageLabel = itemDoc.name,
         ),
@@ -318,6 +319,7 @@ data class OrderDocument(
           name = cart.foodItem.name,
           price = cart.unitPrice,
           quantity = cart.quantity,
+          prepMinutes = if (cart.foodItem.prepMinutes > 0) cart.foodItem.prepMinutes else 7,
           selectedOption = cart.selectedOption,
           selectedAddons = cart.selectedAddons.map { it.name },
         )

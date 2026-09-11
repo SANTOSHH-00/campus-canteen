@@ -183,6 +183,7 @@ data class MongoOrderItemDto(
   @Json(name = "name") val name: String = "",
   @Json(name = "price") val price: Int = 0,
   @Json(name = "quantity") val quantity: Int = 1,
+  @Json(name = "prepMinutes") val prepMinutes: Int = 7,
   @Json(name = "selectedOption") val selectedOption: String? = null,
   @Json(name = "selectedAddons") val selectedAddons: List<String> = emptyList(),
 )
@@ -220,8 +221,8 @@ data class MongoOrderDto(
           id = itemDto.itemId,
           name = itemDto.name,
           price = itemDto.price,
-          prepTime = "5-10 min",
-          prepMinutes = 7,
+          prepTime = "${itemDto.prepMinutes} min",
+          prepMinutes = if (itemDto.prepMinutes > 0) itemDto.prepMinutes else 7,
           category = FoodCategory.QUICK_ORDER,
           imageLabel = itemDto.name,
         ),
@@ -264,6 +265,7 @@ data class MongoOrderDto(
           name = cart.foodItem.name,
           price = cart.unitPrice,
           quantity = cart.quantity,
+          prepMinutes = if (cart.foodItem.prepMinutes > 0) cart.foodItem.prepMinutes else 7,
           selectedOption = cart.selectedOption,
           selectedAddons = cart.selectedAddons.map { it.name },
         )
