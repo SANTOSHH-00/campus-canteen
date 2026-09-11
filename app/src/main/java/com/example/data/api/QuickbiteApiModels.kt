@@ -525,6 +525,49 @@ data class CanteenQueueDto(
 )
 
 @JsonClass(generateAdapter = true)
+data class CartQueueItemRequestDto(
+  @Json(name = "itemId") val itemId: String,
+  @Json(name = "name") val name: String,
+  @Json(name = "quantity") val quantity: Int = 1,
+)
+
+@JsonClass(generateAdapter = true)
+data class CartQueueRequestDto(
+  @Json(name = "canteenId") val canteenId: String,
+  @Json(name = "items") val items: List<CartQueueItemRequestDto> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class CartItemQueueInfoDto(
+  @Json(name = "itemId") val itemId: String = "",
+  @Json(name = "name") val name: String = "",
+  @Json(name = "quantity") val quantity: Int = 1,
+  @Json(name = "queuePosition") val queuePosition: Int = 1,
+  @Json(name = "similarOrdersAhead") val similarOrdersAhead: Int = 0,
+  @Json(name = "similarItemsAhead") val similarItemsAhead: Int = 0,
+  @Json(name = "estWaitMinutes") val estWaitMinutes: Int = 5,
+  @Json(name = "estimatedReadyTime") val estimatedReadyTime: String = "",
+)
+
+@JsonClass(generateAdapter = true)
+data class CartQueueResponseDto(
+  @Json(name = "canteenId") val canteenId: String = "",
+  @Json(name = "primaryItemName") val primaryItemName: String = "",
+  @Json(name = "queuePosition") val queuePosition: Int = 1,
+  @Json(name = "queueNumber") val queueNumber: Int = 1,
+  @Json(name = "ordersAhead") val ordersAhead: Int = 0,
+  @Json(name = "similarOrdersAhead") val similarOrdersAhead: Int = 0,
+  @Json(name = "similarItemsAhead") val similarItemsAhead: Int = 0,
+  @Json(name = "distinctCustomersAhead") val distinctCustomersAhead: Int = 0,
+  @Json(name = "estWaitMinutes") val estWaitMinutes: Int = 5,
+  @Json(name = "estimatedCompletionTime") val estimatedCompletionTime: String = "",
+  @Json(name = "estimatedCompletionAt") val estimatedCompletionAt: String? = null,
+  @Json(name = "headline") val headline: String = "",
+  @Json(name = "workloadSummary") val workloadSummary: String = "",
+  @Json(name = "itemsQueue") val itemsQueue: List<CartItemQueueInfoDto> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
 data class OrderQueuePositionDto(
   @Json(name = "orderId") val orderId: String = "",
   @Json(name = "tokenNumber") val tokenNumber: String = "",
@@ -533,7 +576,15 @@ data class OrderQueuePositionDto(
   @Json(name = "queuePosition") val queuePosition: Int = 1,
   @Json(name = "queueNumber") val queueNumber: Int = 1,
   @Json(name = "ordersAhead") val ordersAhead: Int = 0,
+  @Json(name = "similarOrdersAhead") val similarOrdersAhead: Int = 0,
+  @Json(name = "similarItemsAhead") val similarItemsAhead: Int = 0,
+  @Json(name = "distinctCustomersAhead") val distinctCustomersAhead: Int = 0,
+  @Json(name = "primaryItemName") val primaryItemName: String = "",
+  @Json(name = "itemSummary") val itemSummary: String = "",
+  @Json(name = "workloadSummary") val workloadSummary: String = "",
   @Json(name = "estWaitMinutes") val estWaitMinutes: Int = 5,
+  @Json(name = "estimatedCompletionTime") val estimatedCompletionTime: String = "",
+  @Json(name = "estimatedCompletionAt") val estimatedCompletionAt: String? = null,
   @Json(name = "message") val message: String = "",
   @Json(name = "orderPlacedAt") val orderPlacedAt: String? = null,
   @Json(name = "confirmedAt") val confirmedAt: String? = null,

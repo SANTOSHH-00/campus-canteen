@@ -41,6 +41,9 @@ class MongoRepository(
     suspend fun getCanteenQueue(canteenId: String): Result<CanteenQueueDto> =
       defaultInstance.getCanteenQueue(canteenId)
 
+    suspend fun getCartQueue(canteenId: String, items: List<CartQueueItemRequestDto>): Result<CartQueueResponseDto> =
+      defaultInstance.getCartQueue(canteenId, items)
+
     suspend fun getOrderQueuePosition(orderId: String): Result<OrderQueuePositionDto> =
       defaultInstance.getOrderQueuePosition(orderId)
   }
@@ -333,6 +336,17 @@ class MongoRepository(
         throw Exception("Failed to fetch canteen queue: ${res.code()}")
       }
     }.onFailure { Log.e(TAG, "getCanteenQueue error: ${it.message}") }
+  }
+
+  suspend fun getCartQueue(canteenId: String, items: List<CartQueueItemRequestDto>): Result<CartQueueResponseDto> {
+    return runCatching {
+      val res = apiService.getCartQueue(CartQueueRequestDto(canteenId = canteenId, items = items))
+      if (res.isSuccessful && res.body() != null) {
+        res.body()!!
+      } else {
+        throw Exception("Failed to fetch cart queue: ${res.code()}")
+      }
+    }.onFailure { Log.e(TAG, "getCartQueue error: ${it.message}") }
   }
 
   suspend fun getOrderQueuePosition(orderId: String): Result<OrderQueuePositionDto> {

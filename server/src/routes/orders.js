@@ -70,11 +70,25 @@ async function findOrderByIdOrToken(idParam, canteenId = null) {
 }
 
 /**
- * Accurately calculate queue position, orders ahead, and estimated wait time
- * based on order placement time (createdAt), individual item prep times,
- * elapsed cooking time, and dynamic kitchen preparation concurrency.
+ * Format a Date or timestamp to user-friendly 12-hour local time (e.g. "12:45 PM")
+ */
+function formatTime12Hour(date) {
+  const d = new Date(date);
+  let hours = d.getHours();
+  const minutes = d.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const minStr = minutes < 10 ? '0' + minutes : minutes;
+  return `${hours}:${minStr} ${ampm}`;
+}
+
+/**
+ * Accurately calculate item-aware queue position, orders ahead, and estimated wait time
+ * based on order placement time (orderPlacedAt/createdAt), specific item prep times,
+ * elapsed preparation time, kitchen concurrency, and intelligent customer deduplication.
  *
- * Supports single-user, multi-user, and large-scale (50+ orders) rush hours.
+ * Scoped strictly to: same canteen + relevant food item(s) + active orders.
  */
 function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, kitchenCapacity = 2) {
   const targetIndex = activeOrders.findIndex(o => o.orderId === targetOrder.orderId);
@@ -86,78 +100,291 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, kitch
   const targetElapsedMin = Math.max(0, (now - targetCreatedAt) / 60000);
   const ownRemaining = Math.max(1, Math.round(ownTotalPrep - targetElapsedMin));
 
+  // Determine ahead orders in FIFO order
+  let aheadOrders = [];
   if (targetIndex === -1) {
-    // Target order is in transition or was placed outside current active window
-    const earlier = activeOrders.filter(o => {
-      const oPlacedAt = o.orderPlacedAt || o.createdAt;
-      const oTime = oPlacedAt ? new Date(oPlacedAt).getTime() : 0;
-      return oTime < targetCreatedAt;
+    if (targetOrder.orderId === 'CART_PREVIEW' || targetOrder.orderId === 'CART_ITEM_PREVIEW') {
+      aheadOrders = [...activeOrders];
+    } else {
+      aheadOrders = activeOrders.filter(o => {
+        const oPlacedAt = o.orderPlacedAt || o.createdAt;
+        const oTime = oPlacedAt ? new Date(oPlacedAt).getTime() : 0;
+        return oTime < targetCreatedAt;
+      });
+    }
+  } else {
+    aheadOrders = activeOrders.slice(0, targetIndex);
+  }
+
+  // Extract target items for item-specific matching
+  const targetItems = targetOrder.items && Array.isArray(targetOrder.items) ? targetOrder.items : [];
+  const hasSpecificItems = targetItems.length > 0;
+  const targetItemIds = new Set(targetItems.map(it => it.itemId).filter(Boolean));
+  const targetItemNames = new Set(targetItems.map(it => (it.name || '').toLowerCase().trim()).filter(Boolean));
+
+  const primaryItemName = hasSpecificItems ? (targetItems[0].name || 'Item') : 'Item';
+  const itemSummary = hasSpecificItems
+    ? (targetItems.length === 1
+        ? `${targetItems[0].name} × ${targetItems[0].quantity || 1}`
+        : `${targetItems[0].name} + ${targetItems.length - 1} other${targetItems.length > 2 ? 's' : ''}`)
+    : 'Order Items';
+
+  function orderMatchesTarget(order) {
+    if (!hasSpecificItems) return true;
+    if (!order.items || !Array.isArray(order.items) || order.items.length === 0) return true;
+    return order.items.some(it => {
+      if (it.itemId && targetItemIds.has(it.itemId)) return true;
+      const n = (it.name || '').toLowerCase().trim();
+      return n && targetItemNames.has(n);
     });
-    const ordersAhead = earlier.length;
-    const queuePosition = ordersAhead + 1;
-    const capacity = kitchenCapacity || Math.min(4, Math.max(2, Math.floor(ordersAhead / 6) + 2));
-    const estWaitMinutes = Math.min(
-      120,
-      Math.max(
-        1,
-        Math.round(
-          ordersAhead === 0
-            ? ownRemaining
-            : (ordersAhead * defaultWait) / capacity + ownRemaining
-        )
-      )
-    );
-    return { ordersAhead, queuePosition, queueNumber: queuePosition, estWaitMinutes };
   }
 
-  const ordersAhead = targetIndex;
-  const queuePosition = targetIndex + 1;
+  // Filter ahead orders that match the target item(s)
+  const matchingAheadOrders = aheadOrders.filter(orderMatchesTarget);
+  const similarOrdersAhead = matchingAheadOrders.length;
+  const ordersAhead = targetIndex === -1 ? aheadOrders.length : targetIndex;
 
-  if (ordersAhead === 0) {
-    // First in line - wait time is remaining own prep time
-    return {
-      ordersAhead: 0,
-      queuePosition: 1,
-      queueNumber: 1,
-      estWaitMinutes: Math.min(120, ownRemaining),
-    };
+  // Calculate total item quantity ahead
+  let similarItemsAhead = 0;
+  for (const o of matchingAheadOrders) {
+    if (o.items && Array.isArray(o.items) && o.items.length > 0) {
+      for (const it of o.items) {
+        if (!hasSpecificItems ||
+            (it.itemId && targetItemIds.has(it.itemId)) ||
+            targetItemNames.has((it.name || '').toLowerCase().trim())) {
+          similarItemsAhead += (it.quantity || 1);
+        }
+      }
+    } else {
+      similarItemsAhead += 1;
+    }
   }
 
-  // Calculate remaining preparation time for all orders ahead based on each order's items & placement time
-  const aheadOrders = activeOrders.slice(0, targetIndex);
+  // Group by studentId to prevent counting multiple orders from the same customer as separate people
+  const distinctItemCustomersSet = new Set();
+  for (const o of matchingAheadOrders) {
+    if (o.studentId) distinctItemCustomersSet.add(o.studentId);
+  }
+  const distinctCustomersAhead = distinctItemCustomersSet.size;
+
+  const totalCustomersSet = new Set();
+  for (const o of aheadOrders) {
+    if (o.studentId) totalCustomersSet.add(o.studentId);
+  }
+  const totalCustomersAhead = totalCustomersSet.size;
+
+  // Realistic queue position:
+  // For cart preview: scoped to the item queue (first for item = #1, or ahead item customers + 1)
+  // For placed order: customer's position among active customers ahead in the canteen (User A with 4 orders is 1 customer ahead -> User B is #2)
+  let queuePosition = 1;
+  if (targetOrder.orderId === 'CART_PREVIEW' || targetOrder.orderId === 'CART_ITEM_PREVIEW') {
+    queuePosition = similarOrdersAhead > 0 ? (distinctCustomersAhead > 0 ? distinctCustomersAhead + 1 : similarOrdersAhead + 1) : 1;
+  } else {
+    queuePosition = totalCustomersAhead > 0 ? totalCustomersAhead + 1 : (ordersAhead > 0 ? ordersAhead + 1 : 1);
+  }
+
+  // Calculate remaining preparation workload ahead for matching items
   let sumRemainingAhead = 0;
+  for (let i = 0; i < matchingAheadOrders.length; i++) {
+    const ahead = matchingAheadOrders[i];
+    let aheadPrep = defaultWait;
+    if (ahead.items && Array.isArray(ahead.items) && ahead.items.length > 0) {
+      const matchingItemPreps = ahead.items
+        .filter(it => {
+          if (!hasSpecificItems) return true;
+          if (it.itemId && targetItemIds.has(it.itemId)) return true;
+          const n = (it.name || '').toLowerCase().trim();
+          return n && targetItemNames.has(n);
+        })
+        .map(it => it.prepMinutes || defaultWait);
+      if (matchingItemPreps.length > 0) {
+        aheadPrep = Math.max(...matchingItemPreps);
+      }
+    } else {
+      aheadPrep = getOrderPrepTime(ahead, defaultWait);
+    }
 
-  for (let i = 0; i < aheadOrders.length; i++) {
-    const ahead = aheadOrders[i];
-    const aheadPrep = getOrderPrepTime(ahead, defaultWait);
     const aheadPlacedAt = ahead.orderPlacedAt || ahead.createdAt;
     const aheadCreated = aheadPlacedAt ? new Date(aheadPlacedAt).getTime() : now;
     const aheadElapsedMin = Math.max(0, (now - aheadCreated) / 60000);
-    // An active unfulfilled order requires at least 1 minute until kitchen completes/readies it
     const aheadRemaining = Math.max(1, aheadPrep - aheadElapsedMin);
     sumRemainingAhead += aheadRemaining;
   }
 
-  const capacity = kitchenCapacity || Math.min(4, Math.max(2, Math.floor(ordersAhead / 6) + 2));
+  const capacity = kitchenCapacity || Math.min(4, Math.max(2, Math.floor(similarOrdersAhead / 6) + 2));
   let totalWait;
-  if (ordersAhead === 1) {
-    // Exactly 1 order ahead: wait for Order 1's remaining time + own order's preparation
+  if (similarOrdersAhead === 0) {
+    totalWait = ownRemaining;
+  } else if (similarOrdersAhead === 1) {
     totalWait = Math.round(sumRemainingAhead + ownTotalPrep);
   } else {
-    // 2 or more orders ahead: kitchen prepares across parallel cooking counters/stations
     const queueWaitAhead = Math.ceil(sumRemainingAhead / capacity);
     totalWait = Math.round(queueWaitAhead + ownTotalPrep);
   }
 
   const estWaitMinutes = Math.min(120, Math.max(1, totalWait));
+  const completionDate = new Date(now + estWaitMinutes * 60000);
+  const estimatedCompletionTime = formatTime12Hour(completionDate);
+  const estimatedCompletionAt = completionDate.toISOString();
+
+  let workloadSummary = '';
+  if (similarOrdersAhead === 0) {
+    workloadSummary = `0 ${hasSpecificItems ? primaryItemName + ' ' : ''}orders ahead`;
+  } else if (similarOrdersAhead === 1) {
+    workloadSummary = `1 ${hasSpecificItems ? primaryItemName + ' ' : ''}order ahead`;
+  } else {
+    workloadSummary = `${similarOrdersAhead} ${hasSpecificItems ? primaryItemName + ' ' : ''}orders ahead`;
+  }
+
+  const message = similarOrdersAhead === 0
+    ? 'You are next in line'
+    : `You are #${queuePosition} in line (${workloadSummary})`;
 
   return {
     ordersAhead,
+    similarOrdersAhead,
+    similarItemsAhead,
+    distinctCustomersAhead,
     queuePosition,
     queueNumber: queuePosition,
     estWaitMinutes,
+    estimatedCompletionTime,
+    estimatedCompletionAt,
+    primaryItemName,
+    itemSummary,
+    workloadSummary,
+    message,
   };
 }
+
+// POST /api/orders/queue/cart - Get item-specific queue and wait time preview for Cart
+router.post('/queue/cart', async (req, res) => {
+  try {
+    const { canteenId, items = [] } = req.body;
+    if (!canteenId) {
+      return res.status(400).json({ error: 'canteenId is required' });
+    }
+
+    const canteen = await Canteen.findOne({ id: canteenId }).select('avgWaitMinutes').lean();
+    const defaultWait = (canteen && canteen.avgWaitMinutes) ? canteen.avgWaitMinutes : 7;
+    const activeCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const activeOrders = await Order.find({
+      canteenId,
+      status: { $in: ACTIVE_QUEUE_STATUSES },
+      createdAt: { $gte: activeCutoff },
+    })
+      .sort({ orderPlacedAt: 1, createdAt: 1, orderId: 1 })
+      .select('orderId studentId canteenId status createdAt orderPlacedAt confirmedAt preparingAt readyAt completedAt estimatedPrepMinutes items')
+      .lean();
+
+    // Auto-populate prepMinutes from Item collection if not provided in cart items
+    let enrichedItems = items;
+    if (Array.isArray(items) && items.length > 0) {
+      const itemIds = items.map(it => it.itemId).filter(Boolean);
+      const itemNames = items.map(it => it.name).filter(Boolean);
+      const dbItems = await Item.find({
+        $or: [
+          { id: { $in: itemIds } },
+          { name: { $in: itemNames } },
+        ],
+      }).select('id name prepMinutes').lean();
+      const prepMapById = new Map(dbItems.map(d => [d.id, d.prepMinutes]));
+      const prepMapByName = new Map(dbItems.map(d => [(d.name || '').toLowerCase().trim(), d.prepMinutes]));
+      enrichedItems = items.map(it => ({
+        ...it,
+        prepMinutes: it.prepMinutes || prepMapById.get(it.itemId) || prepMapByName.get((it.name || '').toLowerCase().trim()) || defaultWait,
+      }));
+    }
+
+    const mockCartOrder = {
+      orderId: 'CART_PREVIEW',
+      canteenId,
+      items: enrichedItems,
+      orderPlacedAt: new Date(),
+      createdAt: new Date(),
+    };
+
+    const metrics = calculateQueueMetrics(mockCartOrder, activeOrders, defaultWait, 2);
+
+    // Compute per-item breakdown
+    const itemsQueue = (enrichedItems || []).map(cartItem => {
+      const singleItemMock = {
+        orderId: 'CART_ITEM_PREVIEW',
+        canteenId,
+        items: [cartItem],
+        orderPlacedAt: new Date(),
+        createdAt: new Date(),
+      };
+      const singleMetrics = calculateQueueMetrics(singleItemMock, activeOrders, defaultWait, 2);
+      return {
+        itemId: cartItem.itemId || '',
+        name: cartItem.name || '',
+        quantity: cartItem.quantity || 1,
+        queuePosition: singleMetrics.queuePosition,
+        similarOrdersAhead: singleMetrics.similarOrdersAhead,
+        similarItemsAhead: singleMetrics.similarItemsAhead,
+        estWaitMinutes: singleMetrics.estWaitMinutes,
+        estimatedReadyTime: singleMetrics.estimatedCompletionTime,
+      };
+    });
+
+    res.json({
+      canteenId,
+      primaryItemName: metrics.primaryItemName,
+      queuePosition: metrics.queuePosition,
+      queueNumber: metrics.queuePosition,
+      ordersAhead: metrics.ordersAhead,
+      similarOrdersAhead: metrics.similarOrdersAhead,
+      similarItemsAhead: metrics.similarItemsAhead,
+      distinctCustomersAhead: metrics.distinctCustomersAhead,
+      estWaitMinutes: metrics.estWaitMinutes,
+      estimatedCompletionTime: metrics.estimatedCompletionTime,
+      estimatedCompletionAt: metrics.estimatedCompletionAt,
+      headline: metrics.similarOrdersAhead === 0 ? "No Queue (You're First)" : `Queue #${metrics.queuePosition}`,
+      workloadSummary: metrics.similarOrdersAhead === 0 ? '0 similar orders ahead' : `${metrics.similarOrdersAhead} similar order${metrics.similarOrdersAhead > 1 ? 's' : ''} ahead`,
+      itemsQueue,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/orders/queue/item/:itemId - Direct single item queue preview
+router.get('/queue/item/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const canteenId = req.query.canteenId;
+    if (!canteenId) return res.status(400).json({ error: 'canteenId query param required' });
+
+    const item = await Item.findOne({ id: itemId }).lean();
+    const itemName = item ? item.name : itemId;
+    const prepMinutes = item?.prepMinutes || 7;
+
+    const mockCartOrder = {
+      orderId: 'CART_ITEM_PREVIEW',
+      canteenId,
+      items: [{ itemId, name: itemName, prepMinutes, quantity: 1 }],
+      orderPlacedAt: new Date(),
+      createdAt: new Date(),
+    };
+
+    const activeCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const activeOrders = await Order.find({
+      canteenId,
+      status: { $in: ACTIVE_QUEUE_STATUSES },
+      createdAt: { $gte: activeCutoff },
+    })
+      .sort({ orderPlacedAt: 1, createdAt: 1, orderId: 1 })
+      .select('orderId studentId canteenId status createdAt orderPlacedAt confirmedAt preparingAt readyAt completedAt estimatedPrepMinutes items')
+      .lean();
+
+    const metrics = calculateQueueMetrics(mockCartOrder, activeOrders, prepMinutes, 2);
+    res.json(metrics);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // GET /api/orders/queue/canteen/:canteenId - Get live queue depth & avg wait time
 router.get('/queue/canteen/:canteenId', async (req, res) => {
@@ -229,6 +456,10 @@ router.get('/:id/queue', async (req, res) => {
     const completedAt = targetOrder.completedAt || null;
     const cancelledAt = targetOrder.cancelledAt || null;
     const statusHistory = targetOrder.statusHistory || [];
+    const firstItemName = targetOrder.items?.[0]?.name || 'Item';
+    const singleItemSummary = targetOrder.items?.length === 1
+      ? `${targetOrder.items[0].name} × ${targetOrder.items[0].quantity || 1}`
+      : `${firstItemName}`;
 
     if (targetOrder.status === 'READY') {
       return res.json({
@@ -239,7 +470,15 @@ router.get('/:id/queue', async (req, res) => {
         queuePosition: 0,
         queueNumber: 0,
         ordersAhead: 0,
+        similarOrdersAhead: 0,
+        similarItemsAhead: 0,
+        distinctCustomersAhead: 0,
+        primaryItemName: firstItemName,
+        itemSummary: singleItemSummary,
+        workloadSummary: '0 orders ahead',
         estWaitMinutes: 0,
+        estimatedCompletionTime: 'Ready now',
+        estimatedCompletionAt: new Date().toISOString(),
         message: 'Ready for Pickup',
         orderPlacedAt,
         confirmedAt,
@@ -260,7 +499,15 @@ router.get('/:id/queue', async (req, res) => {
         queuePosition: 0,
         queueNumber: 0,
         ordersAhead: 0,
+        similarOrdersAhead: 0,
+        similarItemsAhead: 0,
+        distinctCustomersAhead: 0,
+        primaryItemName: firstItemName,
+        itemSummary: singleItemSummary,
+        workloadSummary: '0 orders ahead',
         estWaitMinutes: 0,
+        estimatedCompletionTime: 'Completed',
+        estimatedCompletionAt: new Date().toISOString(),
         message: 'Picked Up',
         orderPlacedAt,
         confirmedAt,
@@ -281,7 +528,15 @@ router.get('/:id/queue', async (req, res) => {
         queuePosition: 0,
         queueNumber: 0,
         ordersAhead: 0,
+        similarOrdersAhead: 0,
+        similarItemsAhead: 0,
+        distinctCustomersAhead: 0,
+        primaryItemName: firstItemName,
+        itemSummary: singleItemSummary,
+        workloadSummary: '0 orders ahead',
         estWaitMinutes: 0,
+        estimatedCompletionTime: 'Cancelled',
+        estimatedCompletionAt: new Date().toISOString(),
         message: 'Order Cancelled',
         orderPlacedAt,
         confirmedAt,
@@ -309,31 +564,46 @@ router.get('/:id/queue', async (req, res) => {
       .select('orderId studentId canteenId status createdAt orderPlacedAt confirmedAt preparingAt readyAt completedAt estimatedPrepMinutes items')
       .lean();
 
-    // Compute dynamic, time-based queue metrics with kitchen concurrency
-    const { ordersAhead, queuePosition, queueNumber, estWaitMinutes } = calculateQueueMetrics(
+    // Compute dynamic, item-aware queue metrics with user deduplication and kitchen concurrency
+    const metrics = calculateQueueMetrics(
       targetOrder,
       activeOrders,
       defaultWait,
       2
     );
 
+    const {
+      ordersAhead,
+      similarOrdersAhead,
+      similarItemsAhead,
+      distinctCustomersAhead,
+      queuePosition,
+      queueNumber,
+      estWaitMinutes,
+      estimatedCompletionTime,
+      estimatedCompletionAt,
+      primaryItemName,
+      itemSummary,
+      workloadSummary,
+      message,
+    } = metrics;
+
     // Inspect/log detailed queue state for debugging as required
-    console.log('=== [QUEUE CALCULATION DEBUG] ===');
+    console.log('=== [ITEM-AWARE QUEUE CALCULATION DEBUG] ===');
     console.log(`Current Order ID: ${targetOrder.orderId}`);
     console.log(`Current User ID: ${targetOrder.studentId || 'N/A'}`);
     console.log(`Current Canteen ID: ${targetOrder.canteenId}`);
+    console.log(`Primary Item: ${primaryItemName}, Item Summary: ${itemSummary}`);
     console.log(`All active orders for canteen "${targetOrder.canteenId}" (${activeOrders.length}):`);
     activeOrders.forEach((o, i) => {
-      console.log(`  [#${i + 1}] Order ID: ${o.orderId}, Status: ${o.status}, Sequence/PlacedAt: ${o.orderPlacedAt || o.createdAt}`);
+      console.log(`  [#${i + 1}] Order ID: ${o.orderId}, User: ${o.studentId}, Status: ${o.status}, Items: ${o.items?.map(it => it.name).join(', ')}`);
     });
-    console.log(`Calculated queue position: #${queuePosition}`);
-    console.log(`Calculated ordersAhead: ${ordersAhead}`);
-    console.log(`Calculated estimated waiting time: ${estWaitMinutes} min`);
-    console.log('=================================');
-
-    const message = ordersAhead === 0
-      ? 'You are next in line'
-      : `You are #${queuePosition} in line (${ordersAhead} order${ordersAhead > 1 ? 's' : ''} ahead)`;
+    console.log(`Calculated item queue position: #${queuePosition}`);
+    console.log(`Calculated similar orders ahead: ${similarOrdersAhead} (${workloadSummary})`);
+    console.log(`Calculated distinct customers ahead: ${distinctCustomersAhead}`);
+    console.log(`Calculated total orders ahead: ${ordersAhead}`);
+    console.log(`Calculated estimated waiting time: ${estWaitMinutes} min (${estimatedCompletionTime})`);
+    console.log('============================================');
 
     res.json({
       orderId: targetOrder.orderId,
@@ -343,7 +613,15 @@ router.get('/:id/queue', async (req, res) => {
       queuePosition,
       queueNumber: queuePosition,
       ordersAhead,
+      similarOrdersAhead,
+      similarItemsAhead,
+      distinctCustomersAhead,
+      primaryItemName,
+      itemSummary,
+      workloadSummary,
       estWaitMinutes,
+      estimatedCompletionTime,
+      estimatedCompletionAt,
       message,
       orderPlacedAt,
       confirmedAt,

@@ -84,6 +84,8 @@ import com.example.ui.state.UserProfile
 
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import com.example.data.api.CartQueueItemRequestDto
+import com.example.data.api.CartQueueResponseDto
 import com.example.data.api.CanteenQueueDto
 import com.example.data.api.MongoRepository
 import com.example.data.api.WebSocketManager
@@ -102,15 +104,27 @@ fun CartScreen(
   val coroutineScope = rememberCoroutineScope()
 
   val selectedCanteenId = appState.selectedCanteen.id
-  var queueData by remember { mutableStateOf<CanteenQueueDto?>(null) }
+  var cartQueueData by remember { mutableStateOf<CartQueueResponseDto?>(null) }
 
-  // Load and refresh queue data
+  // Load and refresh item-specific queue data for items currently in cart
   val refreshQueue: () -> Unit = {
     coroutineScope.launch {
-      MongoRepository.getCanteenQueue(selectedCanteenId).onSuccess {
-        queueData = it
+      val itemsDto = appState.cartItems.map {
+        CartQueueItemRequestDto(
+          itemId = it.foodItem.id,
+          name = it.foodItem.name,
+          quantity = it.quantity,
+        )
+      }
+      MongoRepository.getCartQueue(selectedCanteenId, itemsDto).onSuccess {
+        cartQueueData = it
       }
     }
+  }
+
+  // Refresh when cart items change or canteen changes
+  LaunchedEffect(selectedCanteenId, appState.cartItems.size) {
+    refreshQueue()
   }
 
   // Clean subscription lifecycle for canteen queue channel
@@ -317,6 +331,9 @@ fun CartScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
               ) {
+                val firstItemName = appState.cartItems.firstOrNull()?.foodItem?.name ?: "Item"
+                val displayTitle = if (appState.cartItems.size == 1) "$firstItemName Queue" else "Item Live Queue"
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Icon(
                     imageVector = Icons.Default.AccessTime,
@@ -326,8 +343,8 @@ fun CartScreen(
                   )
                   Spacer(Modifier.width(6.dp))
                   Text(
-                    text = "Kitchen Live Queue",
-                    fontSize = 13.sp,
+                    text = displayTitle,
+                    fontSize = 13.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextDark,
                   )
@@ -362,29 +379,34 @@ fun CartScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
               ) {
-                val queueCount = queueData?.queueCount ?: 0
-                val waitTime = queueData?.avgWaitMinutes ?: 5
+                val queuePosition = cartQueueData?.queuePosition ?: 1
+                val similarOrdersAhead = cartQueueData?.similarOrdersAhead ?: 0
+                val waitTime = cartQueueData?.estWaitMinutes ?: 5
+                val readyTime = cartQueueData?.estimatedCompletionTime?.ifBlank { "~$waitTime mins" } ?: "~$waitTime mins"
+                val workloadText = cartQueueData?.workloadSummary?.ifBlank {
+                  if (similarOrdersAhead == 0) "0 similar orders ahead" else "$similarOrdersAhead similar order${if (similarOrdersAhead > 1) "s" else ""} ahead"
+                } ?: (if (similarOrdersAhead == 0) "0 similar orders ahead" else "$similarOrdersAhead similar order${if (similarOrdersAhead > 1) "s" else ""} ahead")
 
                 Column(modifier = Modifier.weight(1f)) {
                   Text(
-                    text = "Orders Ahead",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = TextMuted,
-                  )
-                  Spacer(Modifier.height(2.dp))
-                  Text(
-                    text = if (queueCount == 0) "No Queue (You're First)" else "$queueCount order${if (queueCount > 1) "s" else ""} ahead",
+                    text = "Queue: #$queuePosition",
                     fontSize = 14.5.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = TextDark,
+                  )
+                  Spacer(Modifier.height(2.dp))
+                  Text(
+                    text = if (similarOrdersAhead == 0) "No queue ahead (You're First)" else workloadText,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF4B5563),
                   )
                 }
 
                 Box(
                   modifier = Modifier
                     .width(1.dp)
-                    .height(28.dp)
+                    .height(30.dp)
                     .background(BorderGray)
                 )
 
@@ -393,24 +415,24 @@ fun CartScreen(
                   horizontalAlignment = Alignment.End,
                 ) {
                   Text(
-                    text = "Avg. Wait Time",
+                    text = "Estimated Ready",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                     color = TextMuted,
                   )
                   Spacer(Modifier.height(2.dp))
                   Text(
-                    text = "~$waitTime mins",
-                    fontSize = 14.5.sp,
+                    text = readyTime,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = TextDark,
+                    color = Color(0xFFEA580C),
                   )
                 }
               }
 
               Spacer(Modifier.height(6.dp))
               Text(
-                text = "Updates automatically when preceding orders are prepared or picked up.",
+                text = "Estimated preparation time for your items. Updates automatically in real-time.",
                 fontSize = 10.5.sp,
                 color = TextMuted,
               )

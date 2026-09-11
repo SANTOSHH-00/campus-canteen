@@ -99,6 +99,9 @@ interface QuickbiteApiService {
   @GET("orders/queue/canteen/{canteenId}")
   suspend fun getCanteenQueue(@Path("canteenId") canteenId: String): Response<CanteenQueueDto>
 
+  @POST("orders/queue/cart")
+  suspend fun getCartQueue(@Body body: CartQueueRequestDto): Response<CartQueueResponseDto>
+
   @GET("orders/{id}/queue")
   suspend fun getOrderQueuePosition(@Path("id") id: String): Response<OrderQueuePositionDto>
 

@@ -328,15 +328,15 @@ fun CustomerOrderTrackingScreen(
 
           Spacer(Modifier.height(14.dp))
 
-          // Main Headline with Queue Feedback
+          // Main Headline with Item-Aware Queue Feedback
           val headlineText = when {
             isPickedUp -> "Order Picked Up ✓"
             isReady -> "Your order is ready for pickup!"
             isLoadingQueue && queuePositionData == null -> "Checking Kitchen Queue..."
             else -> {
-              val ahead = queuePositionData?.ordersAhead ?: 0
+              val similarAhead = queuePositionData?.similarOrdersAhead ?: queuePositionData?.ordersAhead ?: 0
               val pos = queuePositionData?.queuePosition ?: 1
-              if (ahead == 0) "You are next in line"
+              if (similarAhead == 0) "You are next in line"
               else "You are #$pos in line"
             }
           }
@@ -355,10 +355,12 @@ fun CustomerOrderTrackingScreen(
             isReady -> "Please show Token $tokenDisplay at ${order.pickupCounter.ifBlank { "Counter 1" }} to collect."
             isLoadingQueue && queuePositionData == null -> "Retrieving live wait time and position from canteen..."
             else -> {
-              val ahead = queuePositionData?.ordersAhead ?: 0
-              val estMins = queuePositionData?.estWaitMinutes ?: 7
-              if (ahead == 0) "0 orders ahead of you • Estimated wait ~$estMins min"
-              else "$ahead ${if (ahead == 1) "order" else "orders"} ahead of you • Estimated wait ~$estMins min"
+              val similarAhead = queuePositionData?.similarOrdersAhead ?: queuePositionData?.ordersAhead ?: 0
+              val workload = queuePositionData?.workloadSummary?.ifBlank {
+                if (similarAhead == 0) "0 orders ahead of you" else "$similarAhead order${if (similarAhead > 1) "s" else ""} ahead of you"
+              } ?: if (similarAhead == 0) "0 orders ahead of you" else "$similarAhead order${if (similarAhead > 1) "s" else ""} ahead of you"
+              val completionText = queuePositionData?.estimatedCompletionTime?.ifBlank { "~${queuePositionData?.estWaitMinutes ?: 7} min" } ?: "~${queuePositionData?.estWaitMinutes ?: 7} min"
+              "$workload • Estimated completion: $completionText"
             }
           }
 
@@ -371,9 +373,10 @@ fun CustomerOrderTrackingScreen(
 
           // Live Anonymous Queue Statistics Bar (Active kitchen queue)
           if (isPreparing) {
-            val ahead = queuePositionData?.ordersAhead ?: 0
+            val similarAhead = queuePositionData?.similarOrdersAhead ?: queuePositionData?.ordersAhead ?: 0
             val pos = queuePositionData?.queuePosition ?: 1
             val estMins = queuePositionData?.estWaitMinutes ?: 7
+            val completionTimeStr = queuePositionData?.estimatedCompletionTime?.ifBlank { "~$estMins min" } ?: "~$estMins min"
 
             Spacer(Modifier.height(14.dp))
             Row(
@@ -388,14 +391,14 @@ fun CustomerOrderTrackingScreen(
             ) {
               Column {
                 Text(
-                  text = "Queue Status",
+                  text = "Queue Position",
                   fontSize = 11.sp,
                   color = TextMuted,
                   fontWeight = FontWeight.Medium,
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                  text = if (ahead == 0) "Next in Line" else "#$pos in Line",
+                  text = if (similarAhead == 0) "Next in Line" else "#$pos in Line",
                   fontSize = 14.sp,
                   fontWeight = FontWeight.ExtraBold,
                   color = TextDark,
@@ -411,14 +414,14 @@ fun CustomerOrderTrackingScreen(
 
               Column {
                 Text(
-                  text = "Orders Ahead",
+                  text = "Workload Ahead",
                   fontSize = 11.sp,
                   color = TextMuted,
                   fontWeight = FontWeight.Medium,
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                  text = "$ahead",
+                  text = if (similarAhead == 0) "0 orders" else "$similarAhead order${if (similarAhead > 1) "s" else ""}",
                   fontSize = 14.sp,
                   fontWeight = FontWeight.ExtraBold,
                   color = TextDark,
@@ -434,14 +437,14 @@ fun CustomerOrderTrackingScreen(
 
               Column(horizontalAlignment = Alignment.End) {
                 Text(
-                  text = "Est. Wait Time",
+                  text = "Est. Completion",
                   fontSize = 11.sp,
                   color = TextMuted,
                   fontWeight = FontWeight.Medium,
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                  text = "~$estMins min",
+                  text = completionTimeStr,
                   fontSize = 14.sp,
                   fontWeight = FontWeight.ExtraBold,
                   color = Color(0xFFEA580C),
