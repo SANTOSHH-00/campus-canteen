@@ -293,7 +293,7 @@ data class OrderDocument(
     val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
     val placedTimestamp = if (orderPlacedAt > 0) orderPlacedAt else createdAt
     val placedFormatted = if (placedTimestamp > 0) timeFormat.format(Date(placedTimestamp)) else ""
-    val confirmedFormatted = if (confirmedAt > 0) timeFormat.format(Date(confirmedAt)) else ""
+    val confirmedFormatted = if (confirmedAt > 0) timeFormat.format(Date(confirmedAt)) else placedFormatted
     val preparingFormatted = if (preparingAt > 0) timeFormat.format(Date(preparingAt)) else ""
     val readyFormatted = if (readyAt > 0) timeFormat.format(Date(readyAt)) else ""
     val completedFormatted = if (completedAt > 0) timeFormat.format(Date(completedAt)) else ""
@@ -341,6 +341,13 @@ data class OrderDocument(
         )
       }
 
+      val now = System.currentTimeMillis()
+      val placedEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.orderPlacedAt).let { if (it > 0) it else now }
+      val confirmedEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.confirmedAt).let { if (it > 0) it else placedEpoch }
+      val preparingEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.preparingAt)
+      val readyEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.readyAt)
+      val completedEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.completedAt)
+
       return OrderDocument(
         orderId = record.id,
         studentId = studentId,
@@ -358,6 +365,13 @@ data class OrderDocument(
         pickupLocation = record.pickupLocation,
         pickupCounter = pickupCounter,
         estimatedReadyTime = record.estimatedReadyTime,
+        createdAt = placedEpoch,
+        updatedAt = now,
+        orderPlacedAt = placedEpoch,
+        confirmedAt = confirmedEpoch,
+        preparingAt = preparingEpoch,
+        readyAt = readyEpoch,
+        completedAt = completedEpoch,
       )
     }
   }

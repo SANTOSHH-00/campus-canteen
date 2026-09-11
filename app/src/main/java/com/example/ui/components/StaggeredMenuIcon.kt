@@ -46,31 +46,31 @@ fun StaggeredMenuIcon(
     contentAlignment = Alignment.CenterStart,
   ) {
     Column(
-      verticalArrangement = Arrangement.spacedBy(4.dp),
+      verticalArrangement = Arrangement.spacedBy(4.5.dp),
       horizontalAlignment = Alignment.Start,
-      modifier = Modifier.size(width = 24.dp, height = 18.dp),
+      modifier = Modifier.size(width = 28.dp, height = 22.dp),
     ) {
       // Bar 1 (Medium - top)
       Box(
         modifier = Modifier
-          .width(15.dp)
-          .height(3.dp)
+          .width(18.dp)
+          .height(3.5.dp)
           .clip(CircleShape)
           .background(tint),
       )
       // Bar 2 (Long - middle)
       Box(
         modifier = Modifier
-          .width(22.dp)
-          .height(3.dp)
+          .width(26.dp)
+          .height(3.5.dp)
           .clip(CircleShape)
           .background(tint),
       )
       // Bar 3 (Short - bottom)
       Box(
         modifier = Modifier
-          .width(11.dp)
-          .height(3.dp)
+          .width(13.dp)
+          .height(3.5.dp)
           .clip(CircleShape)
           .background(tint),
       )

@@ -88,34 +88,18 @@ fun MainScreen(
       contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
       bottomBar = {
         if (appState.selectedFoodForDetail == null && appState.selectedOrderForTracking == null && !appState.isMenuFilterOpen) {
-          val slideFraction by animateFloatAsState(
-            targetValue = if (appState.isBottomBarVisible) 0f else 1f,
-            animationSpec = tween(
-              durationMillis = 300,
-              easing = FastOutSlowInEasing
-            ),
-            label = "bottomBarSlide"
+          CampusBottomNav(
+            currentTab = appState.currentTab,
+            onTabSelected = { tab ->
+              appState.currentTab = tab
+              appState.isBottomBarVisible = true
+              appState.dismissCartNotification()
+            },
+            onAiClick = {
+              showAiAssistantDialog = true
+            },
+            cartBadgeCount = appState.totalCartCount,
           )
-          Box(
-            modifier = Modifier
-              .fillMaxWidth()
-              .graphicsLayer {
-                translationY = slideFraction * size.height
-              }
-          ) {
-            CampusBottomNav(
-              currentTab = appState.currentTab,
-              onTabSelected = { tab ->
-                appState.currentTab = tab
-                appState.isBottomBarVisible = true
-                appState.dismissCartNotification()
-              },
-              onAiClick = {
-                showAiAssistantDialog = true
-              },
-              cartBadgeCount = appState.totalCartCount,
-            )
-          }
         }
       },
     ) { innerPadding ->

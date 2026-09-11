@@ -78,60 +78,71 @@ fun CustomerOrderTrackingScreen(
   modifier: Modifier = Modifier,
 ) {
   val coroutineScope = rememberCoroutineScope()
+  var currentOrder by remember(order.id) { mutableStateOf(order) }
   var queuePositionData by remember { mutableStateOf<OrderQueuePositionDto?>(null) }
   var isLoadingQueue by remember { mutableStateOf(true) }
 
   val effectiveCanteenId = queuePositionData?.canteenId?.ifBlank { null }
-    ?: order.canteenId.ifBlank { "canteen_33" }
+    ?: currentOrder.canteenId.ifBlank { "canteen_33" }
 
-  val tokenRaw = order.tokenNumber.ifBlank { "1042" }
+  val tokenRaw = currentOrder.tokenNumber.ifBlank { "1042" }
   val tokenDisplay = if (tokenRaw.startsWith("#")) tokenRaw else "#Q$tokenRaw"
 
-  val isPickedUp = order.status == OrderStatus.COMPLETED
-  val isReady = order.status == OrderStatus.READY
-  val isPreparing = order.status == OrderStatus.PREPARING || order.status == OrderStatus.NEW
+  val isPickedUp = currentOrder.status == OrderStatus.COMPLETED
+  val isReady = currentOrder.status == OrderStatus.READY
+  val isPreparing = currentOrder.status == OrderStatus.PREPARING
+  val hasStartedPreparing = isPreparing || isReady || isPickedUp
 
-  // Server-authoritative status timestamps (converted to user's local display format, never device clock)
-  val placedTimeDisplay = order.orderPlacedAt.ifBlank {
-    formatUtcToLocalTime(queuePositionData?.orderPlacedAt).ifBlank {
-      order.orderTime.removePrefix("Today, ")
-    }
+  // Server-authoritative status timestamps (exact milestone event times, never device clock)
+  val placedTimeDisplay = currentOrder.orderPlacedAt.ifBlank {
+    formatUtcToLocalTime(queuePositionData?.orderPlacedAt)
+  }.ifBlank {
+    currentOrder.orderTime.removePrefix("Today, ")
   }.ifBlank { "-" }
 
-  val confirmedTimeDisplay = order.confirmedAt.ifBlank {
-    formatUtcToLocalTime(queuePositionData?.confirmedAt).ifBlank {
-      placedTimeDisplay
-    }
-  }.ifBlank { "-" }
+  val confirmedTimeDisplay = currentOrder.confirmedAt.ifBlank {
+    formatUtcToLocalTime(queuePositionData?.confirmedAt)
+  }.ifBlank {
+    placedTimeDisplay
+  }
 
-  val preparingTimeDisplay = order.preparingAt.ifBlank {
-    formatUtcToLocalTime(queuePositionData?.preparingAt).ifBlank {
-      if (isPreparing || isReady || isPickedUp) placedTimeDisplay else "-"
-    }
-  }.ifBlank { "-" }
+  val preparingTimeDisplay = currentOrder.preparingAt.ifBlank {
+    formatUtcToLocalTime(queuePositionData?.preparingAt)
+  }.ifBlank {
+    val historyPreparing = queuePositionData?.statusHistory?.find { it.status.equals("PREPARING", ignoreCase = true) }?.timestamp
+    formatUtcToLocalTime(historyPreparing)
+  }.ifBlank {
+    if (hasStartedPreparing) placedTimeDisplay else "-"
+  }
 
-  val readyTimeDisplay = order.readyAt.ifBlank {
-    formatUtcToLocalTime(queuePositionData?.readyAt).ifBlank {
-      if (isReady || isPickedUp) preparingTimeDisplay else "-"
-    }
-  }.ifBlank { "-" }
+  val readyTimeDisplay = currentOrder.readyAt.ifBlank {
+    formatUtcToLocalTime(queuePositionData?.readyAt)
+  }.ifBlank {
+    val historyReady = queuePositionData?.statusHistory?.find { it.status.equals("READY", ignoreCase = true) }?.timestamp
+    formatUtcToLocalTime(historyReady)
+  }.ifBlank {
+    if (isReady || isPickedUp) preparingTimeDisplay else "-"
+  }
 
-  val completedTimeDisplay = order.completedAt.ifBlank {
-    formatUtcToLocalTime(queuePositionData?.completedAt).ifBlank {
-      if (isPickedUp) readyTimeDisplay else "-"
-    }
-  }.ifBlank { "-" }
+  val completedTimeDisplay = currentOrder.completedAt.ifBlank {
+    formatUtcToLocalTime(queuePositionData?.completedAt)
+  }.ifBlank {
+    val historyCompleted = queuePositionData?.statusHistory?.find { it.status.equals("COMPLETED", ignoreCase = true) }?.timestamp
+    formatUtcToLocalTime(historyCompleted)
+  }.ifBlank {
+    if (isPickedUp) readyTimeDisplay else "-"
+  }
 
   // Load and refresh real-time queue position
   val refreshQueue: () -> Unit = {
     coroutineScope.launch {
-      val queryId = order.id.ifBlank { order.tokenNumber }
+      val queryId = currentOrder.id.ifBlank { currentOrder.tokenNumber }
       MongoRepository.getOrderQueuePosition(queryId).onSuccess {
         queuePositionData = it
         isLoadingQueue = false
       }.onFailure {
         // Fallback: try by raw token number if distinct from orderId
-        val rawToken = order.tokenNumber.replace("^[^0-9]+".toRegex(), "")
+        val rawToken = currentOrder.tokenNumber.replace("^[^0-9]+".toRegex(), "")
         if (rawToken.isNotBlank() && rawToken != queryId) {
           MongoRepository.getOrderQueuePosition(rawToken).onSuccess {
             queuePositionData = it
@@ -140,9 +151,9 @@ fun CustomerOrderTrackingScreen(
             // Further fallback: fetch canteen overall active queue to estimate position
             MongoRepository.getCanteenQueue(effectiveCanteenId).onSuccess { cq ->
               queuePositionData = OrderQueuePositionDto(
-                orderId = order.id,
-                tokenNumber = order.tokenNumber,
-                status = order.status.name,
+                orderId = currentOrder.id,
+                tokenNumber = currentOrder.tokenNumber,
+                status = currentOrder.status.name,
                 canteenId = effectiveCanteenId,
                 queuePosition = cq.queueCount.coerceAtLeast(1),
                 ordersAhead = (cq.queueCount - 1).coerceAtLeast(0),
@@ -161,12 +172,12 @@ fun CustomerOrderTrackingScreen(
   }
 
   // Subscribe to both order channel and canteen queue channel for live kitchen advancement
-  DisposableEffect(order.id, effectiveCanteenId) {
+  DisposableEffect(currentOrder.id, effectiveCanteenId) {
     refreshQueue()
-    WebSocketManager.subscribe("order:${order.id}")
+    WebSocketManager.subscribe("order:${currentOrder.id}")
     WebSocketManager.subscribe("canteen:$effectiveCanteenId")
     onDispose {
-      WebSocketManager.unsubscribe("order:${order.id}")
+      WebSocketManager.unsubscribe("order:${currentOrder.id}")
       WebSocketManager.unsubscribe("canteen:$effectiveCanteenId")
     }
   }
@@ -180,17 +191,24 @@ fun CustomerOrderTrackingScreen(
     }
   }
 
-  // Live Order Status updates for this order specifically
+  // Live Order Status updates for this order specifically via WebSocket
+  LaunchedEffect(currentOrder.id) {
+    WebSocketManager.observeOrder(currentOrder.id).collect { updatedDto ->
+      currentOrder = updatedDto.toOrderRecord()
+      refreshQueue()
+    }
+  }
+
+  // Fetch initial authoritative order data from server on launch to ensure latest status & timestamps
   LaunchedEffect(order.id) {
-    WebSocketManager.orderUpdates.collect { updatedOrder ->
-      if (updatedOrder.orderId == order.id) {
-        refreshQueue()
-      }
+    val queryId = order.id.ifBlank { order.tokenNumber }
+    MongoRepository.getOrder(queryId).onSuccess { fetchedDto ->
+      currentOrder = fetchedDto.toOrderRecord()
     }
   }
 
   // Graceful API polling fallback every 8 seconds if WebSocket is interrupted
-  LaunchedEffect(order.id) {
+  LaunchedEffect(currentOrder.id) {
     while (true) {
       kotlinx.coroutines.delay(8000)
       if (!isPickedUp) {
@@ -492,13 +510,13 @@ fun CustomerOrderTrackingScreen(
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
               Text(
-                text = order.pickupCanteenName.ifBlank { "Campus Canteen" },
+                text = currentOrder.pickupCanteenName.ifBlank { "Campus Canteen" },
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextDark,
               )
               Text(
-                text = order.pickupLocation.ifBlank { "Block 26-27 Food Court" },
+                text = currentOrder.pickupLocation.ifBlank { "Block 26-27 Food Court" },
                 fontSize = 12.5.sp,
                 color = TextMuted,
               )
@@ -513,7 +531,7 @@ fun CustomerOrderTrackingScreen(
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             ) {
               Text(
-                text = order.pickupCounter.ifBlank { "Counter 1" },
+                text = currentOrder.pickupCounter.ifBlank { "Counter 1" },
                 fontSize = 12.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextDark,
@@ -553,8 +571,8 @@ fun CustomerOrderTrackingScreen(
           )
           TrackingMilestone(
             title = "Kitchen Preparing",
-            time = if (isPreparing || isReady || isPickedUp) preparingTimeDisplay else "-",
-            isCompleted = isPreparing || isReady || isPickedUp,
+            time = if (hasStartedPreparing) preparingTimeDisplay else "-",
+            isCompleted = hasStartedPreparing,
             isLast = false,
           )
           TrackingMilestone(
@@ -592,7 +610,7 @@ fun CustomerOrderTrackingScreen(
               color = TextDark,
             )
             Text(
-              text = "${order.items.size} item(s)",
+              text = "${currentOrder.items.size} item(s)",
               fontSize = 12.sp,
               color = TextMuted,
             )
@@ -600,7 +618,7 @@ fun CustomerOrderTrackingScreen(
 
           Spacer(Modifier.height(10.dp))
 
-          order.items.forEach { item ->
+          currentOrder.items.forEach { item ->
             Row(
               modifier = Modifier
                 .fillMaxWidth()
@@ -652,7 +670,7 @@ fun CustomerOrderTrackingScreen(
               color = TextDark,
             )
             Text(
-              text = "₹${order.totalPrice}",
+              text = "₹${currentOrder.totalPrice}",
               fontSize = 18.sp,
               fontWeight = FontWeight.ExtraBold,
               color = TextDark,

@@ -155,43 +155,8 @@ fun CartScreen(
 
   val cartListState = rememberLazyListState()
 
-  // Hide bottom navigation bar when scrolling down, show when scrolling up
-  LaunchedEffect(cartListState) {
-    var lastIndex = cartListState.firstVisibleItemIndex
-    var lastOffset = cartListState.firstVisibleItemScrollOffset
-    var accumulatedDown = 0
-    var accumulatedUp = 0
-
-    snapshotFlow { cartListState.firstVisibleItemIndex to cartListState.firstVisibleItemScrollOffset }.collect { (currentIndex, currentOffset) ->
-      val delta = if (currentIndex == lastIndex) {
-        currentOffset - lastOffset
-      } else {
-        (currentIndex - lastIndex) * 200 + (currentOffset - lastOffset)
-      }
-
-      if (delta > 0) {
-        accumulatedDown += delta
-        accumulatedUp = 0
-        if (accumulatedDown >= 40 && (currentIndex > 0 || currentOffset > 60)) {
-          appState.isBottomBarVisible = false
-        }
-      } else if (delta < 0) {
-        accumulatedUp += (-delta)
-        accumulatedDown = 0
-        if (accumulatedUp >= 25 || (currentIndex == 0 && currentOffset < 40)) {
-          appState.isBottomBarVisible = true
-        }
-      }
-
-      if (currentIndex == 0 && currentOffset < 20) {
-        appState.isBottomBarVisible = true
-        accumulatedDown = 0
-        accumulatedUp = 0
-      }
-
-      lastIndex = currentIndex
-      lastOffset = currentOffset
-    }
+  LaunchedEffect(Unit) {
+    appState.isBottomBarVisible = true
   }
 
   Box(

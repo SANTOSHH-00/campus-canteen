@@ -786,6 +786,8 @@ class CanteenAppState(val context: android.content.Context? = null) {
       pickupLocation = "${selectedCanteen.betweenBlocks} (${selectedCanteen.floorInfo})",
       pickupPreference = if (isPickupAsap) "Pickup ASAP" else "Pickup at $estimatedReady",
       canteenId = selectedCanteen.id,
+      orderPlacedAt = orderTime,
+      confirmedAt = orderTime,
     )
     orders.add(0, newOrder)
     cartItems.clear()

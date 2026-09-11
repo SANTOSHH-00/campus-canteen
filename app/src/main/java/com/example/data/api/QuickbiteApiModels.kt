@@ -19,30 +19,62 @@ import java.util.TimeZone
 
 fun formatUtcToLocalTime(timestampStr: String?): String {
   if (timestampStr.isNullOrBlank()) return ""
+  val trimmed = timestampStr.trim()
+  if (trimmed.matches(Regex("""\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)""", RegexOption.IGNORE_CASE))) {
+    return trimmed
+  }
   return try {
-    val epochMillis = timestampStr.toLongOrNull()
+    val epochMillis = trimmed.toLongOrNull()
     if (epochMillis != null && epochMillis > 0) {
       val localFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
       return localFormat.format(Date(epochMillis))
     }
-    val isoWithMillis = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-      timeZone = TimeZone.getTimeZone("UTC")
+    val isoPatterns = listOf(
+      "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+      "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+      "yyyy-MM-dd'T'HH:mm:ss'Z'",
+      "yyyy-MM-dd'T'HH:mm:ssXXX",
+      "yyyy-MM-dd'T'HH:mm:ss"
+    )
+    for (pattern in isoPatterns) {
+      try {
+        val sdf = SimpleDateFormat(pattern, Locale.US).apply {
+          timeZone = TimeZone.getTimeZone("UTC")
+        }
+        val parsed = sdf.parse(trimmed)
+        if (parsed != null) {
+          return SimpleDateFormat("h:mm a", Locale.getDefault()).format(parsed)
+        }
+      } catch (_: Exception) {}
     }
-    val parsed = isoWithMillis.parse(timestampStr) ?: run {
-      val isoStandard = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-      }
-      isoStandard.parse(timestampStr)
-    }
-    if (parsed != null) {
-      val localFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-      localFormat.format(parsed)
-    } else {
-      ""
-    }
+    ""
   } catch (e: Exception) {
     ""
   }
+}
+
+fun parseIsoOrMillisToEpoch(timestampStr: String?): Long {
+  if (timestampStr.isNullOrBlank()) return 0L
+  val trimmed = timestampStr.trim()
+  val asLong = trimmed.toLongOrNull()
+  if (asLong != null && asLong > 0) return asLong
+  val isoPatterns = listOf(
+    "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+    "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+    "yyyy-MM-dd'T'HH:mm:ss'Z'",
+    "yyyy-MM-dd'T'HH:mm:ssXXX",
+    "yyyy-MM-dd'T'HH:mm:ss"
+  )
+  for (pattern in isoPatterns) {
+    try {
+      val sdf = SimpleDateFormat(pattern, Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+      }
+      val parsed = sdf.parse(trimmed)
+      if (parsed != null) return parsed.time
+    } catch (_: Exception) {}
+  }
+  return 0L
 }
 
 @JsonClass(generateAdapter = true)
@@ -275,10 +307,16 @@ data class MongoOrderDto(
     }
 
     val placedLocalTime = formatUtcToLocalTime(orderPlacedAt ?: createdAt)
-    val confirmedLocalTime = formatUtcToLocalTime(confirmedAt)
-    val preparingLocalTime = formatUtcToLocalTime(preparingAt)
-    val readyLocalTime = formatUtcToLocalTime(readyAt)
-    val completedLocalTime = formatUtcToLocalTime(completedAt)
+    val confirmedLocalTime = formatUtcToLocalTime(confirmedAt).ifBlank { placedLocalTime }
+    val preparingLocalTime = formatUtcToLocalTime(preparingAt).ifBlank {
+      statusHistory.find { it.status.equals("PREPARING", ignoreCase = true) }?.timestamp?.let { formatUtcToLocalTime(it) } ?: ""
+    }
+    val readyLocalTime = formatUtcToLocalTime(readyAt).ifBlank {
+      statusHistory.find { it.status.equals("READY", ignoreCase = true) }?.timestamp?.let { formatUtcToLocalTime(it) } ?: ""
+    }
+    val completedLocalTime = formatUtcToLocalTime(completedAt).ifBlank {
+      statusHistory.find { it.status.equals("COMPLETED", ignoreCase = true) }?.timestamp?.let { formatUtcToLocalTime(it) } ?: ""
+    }
 
     val displayOrderTime = if (placedLocalTime.isNotBlank()) "Today, $placedLocalTime" else "Today, 10:42 AM"
 

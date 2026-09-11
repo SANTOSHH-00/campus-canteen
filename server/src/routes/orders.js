@@ -687,19 +687,18 @@ router.post('/', async (req, res) => {
       orderData.orderId = 'ORD-' + now.getTime() + '-' + Math.floor(1000 + Math.random() * 9000);
     }
 
-    const initialStatus = (orderData.status || 'PREPARING').toUpperCase().trim();
+    const initialStatus = (orderData.status || 'NEW').toUpperCase().trim();
     orderData.status = initialStatus;
     orderData.orderPlacedAt = now;
+    orderData.confirmedAt = now;
 
     // Server-authoritative status history and milestone timestamps
-    const statusHistory = [{ status: 'PLACED', timestamp: now }];
-    if (initialStatus === 'CONFIRMED') {
-      orderData.confirmedAt = now;
-      statusHistory.push({ status: 'CONFIRMED', timestamp: now });
-    } else if (initialStatus === 'PREPARING') {
-      orderData.confirmedAt = now;
+    const statusHistory = [
+      { status: 'PLACED', timestamp: now },
+      { status: 'CONFIRMED', timestamp: now },
+    ];
+    if (initialStatus === 'PREPARING') {
       orderData.preparingAt = now;
-      statusHistory.push({ status: 'CONFIRMED', timestamp: now });
       statusHistory.push({ status: 'PREPARING', timestamp: now });
     }
     orderData.statusHistory = statusHistory;

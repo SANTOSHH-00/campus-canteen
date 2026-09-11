@@ -46,6 +46,9 @@ class MongoRepository(
 
     suspend fun getOrderQueuePosition(orderId: String): Result<OrderQueuePositionDto> =
       defaultInstance.getOrderQueuePosition(orderId)
+
+    suspend fun getOrder(orderId: String): Result<MongoOrderDto> =
+      defaultInstance.getOrder(orderId)
   }
 
   private fun parseErrorMessage(errorBody: String?, fallback: String): String {
@@ -804,6 +807,28 @@ fun ItemDocument.toMongoDto(): MongoItemDto {
 }
 
 fun MongoOrderDto.toDocument(): OrderDocument {
+  val createdMillis = parseIsoOrMillisToEpoch(createdAt).let { if (it > 0) it else parseIsoOrMillisToEpoch(orderPlacedAt) }
+  val placedMillis = parseIsoOrMillisToEpoch(orderPlacedAt).let { if (it > 0) it else createdMillis }
+  val confirmedMillis = parseIsoOrMillisToEpoch(confirmedAt).let { if (it > 0) it else placedMillis }
+  val preparingMillis = parseIsoOrMillisToEpoch(preparingAt).let {
+    if (it > 0) it else {
+      statusHistory.find { sh -> sh.status.equals("PREPARING", ignoreCase = true) }
+        ?.timestamp?.let { ts -> parseIsoOrMillisToEpoch(ts) } ?: 0L
+    }
+  }
+  val readyMillis = parseIsoOrMillisToEpoch(readyAt).let {
+    if (it > 0) it else {
+      statusHistory.find { sh -> sh.status.equals("READY", ignoreCase = true) }
+        ?.timestamp?.let { ts -> parseIsoOrMillisToEpoch(ts) } ?: 0L
+    }
+  }
+  val completedMillis = parseIsoOrMillisToEpoch(completedAt).let {
+    if (it > 0) it else {
+      statusHistory.find { sh -> sh.status.equals("COMPLETED", ignoreCase = true) }
+        ?.timestamp?.let { ts -> parseIsoOrMillisToEpoch(ts) } ?: 0L
+    }
+  }
+
   return OrderDocument(
     orderId = orderId,
     studentId = studentId,
@@ -830,10 +855,20 @@ fun MongoOrderDto.toDocument(): OrderDocument {
     pickupLocation = pickupLocation,
     pickupCounter = pickupCounter,
     estimatedReadyTime = estimatedReadyTime,
+    createdAt = if (createdMillis > 0) createdMillis else System.currentTimeMillis(),
+    updatedAt = System.currentTimeMillis(),
+    orderPlacedAt = placedMillis,
+    confirmedAt = confirmedMillis,
+    preparingAt = preparingMillis,
+    readyAt = readyMillis,
+    completedAt = completedMillis,
   )
 }
 
 fun OrderDocument.toMongoDto(): MongoOrderDto {
+  val isoFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+    timeZone = java.util.TimeZone.getTimeZone("UTC")
+  }
   return MongoOrderDto(
     orderId = orderId,
     studentId = studentId,
@@ -861,6 +896,11 @@ fun OrderDocument.toMongoDto(): MongoOrderDto {
     pickupLocation = pickupLocation,
     pickupCounter = pickupCounter,
     estimatedReadyTime = estimatedReadyTime,
+    orderPlacedAt = if (orderPlacedAt > 0) isoFormat.format(java.util.Date(orderPlacedAt)) else null,
+    confirmedAt = if (confirmedAt > 0) isoFormat.format(java.util.Date(confirmedAt)) else null,
+    preparingAt = if (preparingAt > 0) isoFormat.format(java.util.Date(preparingAt)) else null,
+    readyAt = if (readyAt > 0) isoFormat.format(java.util.Date(readyAt)) else null,
+    completedAt = if (completedAt > 0) isoFormat.format(java.util.Date(completedAt)) else null,
   )
 }
 

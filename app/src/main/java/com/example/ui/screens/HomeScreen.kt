@@ -92,50 +92,17 @@ fun HomeScreen(
 
   val currentCanteen = appState.selectedCanteen
 
-  // Hide bottom navigation bar when scrolling down, show when scrolling up
-  LaunchedEffect(listState) {
-    var lastIndex = listState.firstVisibleItemIndex
-    var lastOffset = listState.firstVisibleItemScrollOffset
-    var accumulatedDown = 0
-    var accumulatedUp = 0
-
-    snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
-      .collect { (currentIndex, currentOffset) ->
-        val delta = if (currentIndex == lastIndex) {
-          currentOffset - lastOffset
-        } else {
-          (currentIndex - lastIndex) * 200 + (currentOffset - lastOffset)
-        }
-
-        if (delta > 0) {
-          accumulatedDown += delta
-          accumulatedUp = 0
-          if (accumulatedDown >= 40 && (currentIndex > 0 || currentOffset > 60)) {
-            appState.isBottomBarVisible = false
-          }
-        } else if (delta < 0) {
-          accumulatedUp += (-delta)
-          accumulatedDown = 0
-          if (accumulatedUp >= 25 || (currentIndex == 0 && currentOffset < 40)) {
-            appState.isBottomBarVisible = true
-          }
-        }
-        if (currentIndex == 0 && currentOffset < 20) {
-          appState.isBottomBarVisible = true
-          accumulatedDown = 0
-          accumulatedUp = 0
-        }
-        lastIndex = currentIndex
-        lastOffset = currentOffset
-      }
+  LaunchedEffect(Unit) {
+    appState.isBottomBarVisible = true
   }
 
   // Filter Quick Order items dynamically from the selected block canteen
   val quickItems = remember(currentCanteen, appState.selectedQuickFilterMinutes) {
     val maxMin = appState.selectedQuickFilterMinutes
-    val base = currentCanteen.quickOrderItems
-    val filtered = base.filter { it.prepMinutes <= maxMin }
-    if (filtered.isEmpty()) base else filtered
+    currentCanteen.quickOrderItems.filter { item ->
+      val prepMin = item.prepMinutes
+      prepMin <= maxMin
+    }
   }
   val popularItems = currentCanteen.popularItems
 
@@ -155,7 +122,7 @@ fun HomeScreen(
       modifier = Modifier
         .fillMaxWidth()
         .background(WarmCream)
-        .padding(horizontal = 14.dp, vertical = 2.dp),
+        .padding(horizontal = 16.dp, vertical = 6.dp),
     )
 
     LazyColumn(

@@ -77,15 +77,15 @@ fun HomeScreenHeader(
           onClick = onProfileClick,
           tint = BlackPrimary,
         )
+        Spacer(modifier = Modifier.width(6.dp))
+        QuickBiteLogoIcon(modifier = Modifier.size(34.dp))
         Spacer(modifier = Modifier.width(8.dp))
-        QuickBiteLogoIcon(modifier = Modifier.size(28.dp))
-        Spacer(modifier = Modifier.width(7.dp))
         Text(
           text = "QuickBite",
-          fontSize = 24.sp,
+          fontSize = 26.sp,
           fontWeight = FontWeight.Black,
           color = BlackPrimary,
-          letterSpacing = (-0.6).sp,
+          letterSpacing = (-0.5).sp,
         )
       }
 
@@ -97,18 +97,18 @@ fun HomeScreenHeader(
         // Interactive Block Canteen Location Dropdown / Pill
         Row(
           modifier = Modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(PureWhite)
-            .border(1.2.dp, BorderGray.copy(alpha = 0.7f), RoundedCornerShape(18.dp))
+            .border(1.2.dp, BorderGray.copy(alpha = 0.8f), RoundedCornerShape(20.dp))
             .clickable { showCanteenSelectorSheet = true }
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 7.dp),
           verticalAlignment = Alignment.CenterVertically,
         ) {
-          Text(appState.selectedCanteen.icon, fontSize = 13.sp)
+          Text(appState.selectedCanteen.icon, fontSize = 14.sp)
           Spacer(modifier = Modifier.width(5.dp))
           Text(
             text = appState.selectedCanteen.betweenBlocks,
-            fontSize = 12.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.ExtraBold,
             color = TextDark,
           )
@@ -117,7 +117,7 @@ fun HomeScreenHeader(
             imageVector = if (showCanteenSelectorSheet) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
             contentDescription = "Select Canteen",
             tint = TextDark,
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(18.dp),
           )
         }
 
@@ -125,13 +125,13 @@ fun HomeScreenHeader(
         Box(contentAlignment = Alignment.Center) {
           IconButton(
             onClick = onNotificationClick,
-            modifier = Modifier.size(38.dp),
+            modifier = Modifier.size(42.dp),
           ) {
             Icon(
               imageVector = Icons.Default.NotificationsNone,
               contentDescription = "Notifications",
               tint = BlackPrimary,
-              modifier = Modifier.size(24.dp),
+              modifier = Modifier.size(26.dp),
             )
           }
           val unreadCount = appState.notifications.count { it.isUnread }
@@ -157,7 +157,7 @@ fun HomeScreenHeader(
       }
     }
 
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(10.dp))
 
     val timeGreeting = remember {
       val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
@@ -218,8 +218,8 @@ fun QuickBiteLogoIcon(
 ) {
   Box(
     modifier = modifier
-      .size(28.dp)
-      .clip(RoundedCornerShape(8.dp))
+      .size(34.dp)
+      .clip(RoundedCornerShape(10.dp))
       .background(BlackPrimary),
     contentAlignment = Alignment.Center,
   ) {
@@ -227,7 +227,7 @@ fun QuickBiteLogoIcon(
       imageVector = Icons.Default.Fastfood,
       contentDescription = "QuickBite Logo",
       tint = PureWhite,
-      modifier = Modifier.size(17.dp),
+      modifier = Modifier.size(20.dp),
     )
   }
 }
