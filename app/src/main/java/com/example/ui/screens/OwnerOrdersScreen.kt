@@ -65,6 +65,7 @@ import com.example.ui.viewmodel.OwnerDashboardViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 private val OrangeAccent = Color(0xFFF97316)
 private val GreenReady = Color(0xFF16A34A)
@@ -423,7 +424,11 @@ private fun LiveOrderCard(
     else -> BadgePreparingBg
   }
 
-  val timeFormatter = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
+  val timeFormatter = remember {
+    SimpleDateFormat("h:mm a", Locale.getDefault()).apply {
+      timeZone = TimeZone.getTimeZone("Asia/Kolkata")
+    }
+  }
   val orderTime = remember(order.orderPlacedAt, order.createdAt, order.orderId) {
     val exactPlaced = order.getExactPlacedEpoch()
     if (exactPlaced > 0) timeFormatter.format(Date(exactPlaced)) else ""

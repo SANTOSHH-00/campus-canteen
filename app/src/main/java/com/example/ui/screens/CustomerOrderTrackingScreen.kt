@@ -65,6 +65,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 private val PageBackground = Color(0xFFF9FAFB)
 private val GreenReady = Color(0xFF16A34A)
@@ -94,7 +95,7 @@ fun CustomerOrderTrackingScreen(
   val hasStartedPreparing = isPreparing || isReady || isPickedUp
 
   // Server-authoritative status timestamps (exact milestone event times, never device clock)
-  val placedTimeDisplay = currentOrder.orderPlacedAt.ifBlank {
+  val placedTimeDisplay = formatUtcToLocalTime(currentOrder.orderPlacedAt).ifBlank {
     queuePositionData?.orderPlacedAtLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
       ?: queuePositionData?.orderTime?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
       ?: formatUtcToLocalTime(queuePositionData?.orderPlacedAt)
@@ -103,17 +104,22 @@ fun CustomerOrderTrackingScreen(
     if (fromOrderTime.isNotBlank() && fromOrderTime != "Today" && fromOrderTime != "-") fromOrderTime else ""
   }.ifBlank {
     val epochFromId = com.example.data.api.extractEpochFromOrderId(currentOrder.id)
-    if (epochFromId > 0) SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(epochFromId)) else ""
+    if (epochFromId > 0) {
+      val df = SimpleDateFormat("h:mm a", Locale.getDefault()).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Kolkata")
+      }
+      df.format(Date(epochFromId))
+    } else ""
   }.ifBlank { "-" }
 
-  val confirmedTimeDisplay = currentOrder.confirmedAt.ifBlank {
+  val confirmedTimeDisplay = formatUtcToLocalTime(currentOrder.confirmedAt).ifBlank {
     queuePositionData?.confirmedAtLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
       ?: formatUtcToLocalTime(queuePositionData?.confirmedAt)
   }.ifBlank {
     placedTimeDisplay
   }
 
-  val preparingTimeDisplay = currentOrder.preparingAt.ifBlank {
+  val preparingTimeDisplay = formatUtcToLocalTime(currentOrder.preparingAt).ifBlank {
     queuePositionData?.preparingAtLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
       ?: formatUtcToLocalTime(queuePositionData?.preparingAt)
   }.ifBlank {
@@ -121,10 +127,10 @@ fun CustomerOrderTrackingScreen(
     historyPreparing?.timestampLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
       ?: formatUtcToLocalTime(historyPreparing?.timestamp)
   }.ifBlank {
-    "-"
+    if (hasStartedPreparing) placedTimeDisplay else "-"
   }
 
-  val readyTimeDisplay = currentOrder.readyAt.ifBlank {
+  val readyTimeDisplay = formatUtcToLocalTime(currentOrder.readyAt).ifBlank {
     queuePositionData?.readyAtLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
       ?: formatUtcToLocalTime(queuePositionData?.readyAt)
   }.ifBlank {
@@ -135,7 +141,7 @@ fun CustomerOrderTrackingScreen(
     "-"
   }
 
-  val completedTimeDisplay = currentOrder.completedAt.ifBlank {
+  val completedTimeDisplay = formatUtcToLocalTime(currentOrder.completedAt).ifBlank {
     queuePositionData?.completedAtLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
       ?: formatUtcToLocalTime(queuePositionData?.completedAt)
   }.ifBlank {

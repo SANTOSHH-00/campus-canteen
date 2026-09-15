@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -136,7 +137,6 @@ fun CartScreen(
 
   // Clean subscription lifecycle for canteen queue channel
   DisposableEffect(selectedCanteenId) {
-    refreshQueue()
     WebSocketManager.subscribe("canteen:$selectedCanteenId")
     onDispose {
       WebSocketManager.unsubscribe("canteen:$selectedCanteenId")
@@ -398,7 +398,7 @@ fun CartScreen(
           Spacer(modifier = Modifier.height(12.dp))
         }
 
-        items(appState.cartItems, key = { "${it.foodItem.id}_${it.selectedOption}_${it.selectedAddons.map { a -> a.name }}" }) { cartItem ->
+        items(appState.cartItems, key = { "${it.foodItem.id}_${it.selectedOption}_${it.selectedAddons.map { a -> a.name }}_${it.hashCode()}" }) { cartItem ->
           Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -986,37 +986,37 @@ fun CartScreen(
  */
 @Composable
 private fun MinimalFoodEmojisPattern(modifier: Modifier = Modifier) {
-  Box(modifier = modifier.fillMaxSize()) {
-    val emojis = listOf(
-      EmojiItem("🍕", 0.08f, 0.06f, -12f, 36.sp),
-      EmojiItem("☕", 0.82f, 0.05f, 15f, 34.sp),
-      EmojiItem("🍔", 0.48f, 0.12f, 8f, 38.sp),
-      EmojiItem("🍟", 0.88f, 0.18f, -10f, 34.sp),
-      EmojiItem("🥪", 0.10f, 0.24f, 14f, 36.sp),
-      EmojiItem("🍩", 0.84f, 0.32f, -15f, 36.sp),
-      EmojiItem("🥤", 0.06f, 0.42f, 10f, 34.sp),
-      EmojiItem("🌮", 0.88f, 0.48f, -8f, 36.sp),
-      EmojiItem("🥐", 0.12f, 0.60f, -12f, 34.sp),
-      EmojiItem("🧋", 0.82f, 0.62f, 12f, 36.sp),
-      EmojiItem("🍜", 0.22f, 0.78f, -6f, 38.sp),
-      EmojiItem("🍪", 0.76f, 0.78f, 16f, 34.sp),
-      EmojiItem("🧁", 0.12f, 0.90f, 8f, 32.sp),
-      EmojiItem("🍉", 0.85f, 0.88f, -14f, 34.sp),
-    )
+  androidx.compose.foundation.layout.BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    val emojis = remember {
+      listOf(
+        EmojiItem("🍕", 0.08f, 0.06f, -12f, 34.sp),
+        EmojiItem("☕", 0.82f, 0.05f, 15f, 32.sp),
+        EmojiItem("🍔", 0.48f, 0.12f, 8f, 36.sp),
+        EmojiItem("🍟", 0.88f, 0.18f, -10f, 32.sp),
+        EmojiItem("🥪", 0.10f, 0.24f, 14f, 34.sp),
+        EmojiItem("🍩", 0.84f, 0.32f, -15f, 34.sp),
+        EmojiItem("🥤", 0.06f, 0.42f, 10f, 32.sp),
+        EmojiItem("🌮", 0.88f, 0.48f, -8f, 34.sp),
+        EmojiItem("🥐", 0.12f, 0.60f, -12f, 32.sp),
+        EmojiItem("🧋", 0.82f, 0.62f, 12f, 34.sp),
+        EmojiItem("🍜", 0.22f, 0.78f, -6f, 36.sp),
+        EmojiItem("🍪", 0.76f, 0.78f, 16f, 32.sp),
+        EmojiItem("🧁", 0.12f, 0.90f, 8f, 30.sp),
+        EmojiItem("🍉", 0.85f, 0.88f, -14f, 32.sp),
+      )
+    }
 
     emojis.forEach { item ->
       Text(
         text = item.emoji,
         fontSize = item.size,
         modifier = Modifier
-          .align { _, space, _ ->
-            IntOffset(
-              x = (space.width * item.xFraction).toInt(),
-              y = (space.height * item.yFraction).toInt(),
-            )
-          }
+          .offset(
+            x = maxWidth * item.xFraction,
+            y = maxHeight * item.yFraction,
+          )
           .rotate(item.rotation)
-          .alpha(0.20f)
+          .alpha(0.18f)
       )
     }
   }

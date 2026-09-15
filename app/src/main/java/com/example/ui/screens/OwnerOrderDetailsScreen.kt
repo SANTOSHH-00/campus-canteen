@@ -68,6 +68,7 @@ import com.example.ui.viewmodel.OwnerDashboardViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 private val OrangeAccent = Color(0xFFF97316)
 private val GreenReady = Color(0xFF16A34A)
@@ -157,8 +158,16 @@ fun OwnerOrderDetailsScreen(
     else -> BadgePreparingBg
   }
 
-  val timeFormatter = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
-  val dateFormatter = remember { SimpleDateFormat("d MMM yyyy", Locale.getDefault()) }
+  val timeFormatter = remember {
+    SimpleDateFormat("h:mm a", Locale.getDefault()).apply {
+      timeZone = TimeZone.getTimeZone("Asia/Kolkata")
+    }
+  }
+  val dateFormatter = remember {
+    SimpleDateFormat("d MMM yyyy", Locale.getDefault()).apply {
+      timeZone = TimeZone.getTimeZone("Asia/Kolkata")
+    }
+  }
   val exactPlacedEpoch = remember(order.orderPlacedAt, order.createdAt, order.orderId) {
     order.getExactPlacedEpoch()
   }
