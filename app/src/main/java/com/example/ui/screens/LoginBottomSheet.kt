@@ -35,9 +35,12 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -101,6 +104,7 @@ fun LoginContent(
   var registrationNumber by remember { mutableStateOf("") }
   var currentCourse by remember { mutableStateOf("") }
   var phoneNumber by remember { mutableStateOf("") }
+  var selectedGender by remember { mutableStateOf("Male") }
   var passwordVisible by remember { mutableStateOf(false) }
   var isLoading by remember { mutableStateOf(false) }
   var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -344,6 +348,81 @@ fun LoginContent(
               ),
               modifier = Modifier.fillMaxWidth().testTag("phone_input_field"),
             )
+          }
+
+          Spacer(modifier = Modifier.height(14.dp))
+
+          // Gender Dropdown / Selector
+          Text(
+            text = "GENDER",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp,
+            color = LabelColor,
+            modifier = Modifier.padding(start = 6.dp, bottom = 6.dp),
+          )
+          var genderDropdownExpanded by remember { mutableStateOf(false) }
+          val genderOptions = listOf("Male", "Female", "Other")
+
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(52.dp)
+              .clip(RoundedCornerShape(26.dp))
+              .background(PillBackground)
+              .clickable { genderDropdownExpanded = true }
+              .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.CenterStart,
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                  imageVector = Icons.Default.Person,
+                  contentDescription = null,
+                  tint = PlaceholderColor,
+                  modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                  text = if (selectedGender.isNotBlank()) selectedGender else "Select Gender",
+                  fontSize = 14.sp,
+                  color = if (selectedGender.isNotBlank()) TextDark else PlaceholderColor,
+                  fontWeight = if (selectedGender.isNotBlank()) FontWeight.Medium else FontWeight.Normal,
+                )
+              }
+              Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = "Select Gender",
+                tint = TextDark.copy(alpha = 0.6f),
+                modifier = Modifier.size(22.dp),
+              )
+            }
+
+            DropdownMenu(
+              expanded = genderDropdownExpanded,
+              onDismissRequest = { genderDropdownExpanded = false },
+              modifier = Modifier.background(PureWhite),
+            ) {
+              genderOptions.forEach { opt ->
+                DropdownMenuItem(
+                  text = {
+                    Text(
+                      text = opt,
+                      color = if (selectedGender == opt) AccentOrange else TextDark,
+                      fontWeight = if (selectedGender == opt) FontWeight.Bold else FontWeight.Normal,
+                    )
+                  },
+                  onClick = {
+                    selectedGender = opt
+                    genderDropdownExpanded = false
+                  },
+                )
+              }
+            }
           }
 
           Spacer(modifier = Modifier.height(14.dp))
@@ -636,6 +715,7 @@ fun LoginContent(
                     email = finalEmail,
                     phone = finalPhone,
                     course = finalCourse,
+                    gender = selectedGender,
                   )
 
                 coroutineScope.launch {
@@ -649,6 +729,7 @@ fun LoginContent(
                         department = finalCourse,
                         phone = finalPhone,
                         course = finalCourse,
+                        gender = selectedGender,
                       )
                       if (result.isSuccess) {
                         val finalProf = result.getOrNull()!!.toUserProfile()

@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Person
@@ -46,6 +47,7 @@ import com.example.data.BottomNavTab
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -91,6 +93,7 @@ fun ProfileScreen(
   var showPaymentMethodsDialog by remember { mutableStateOf(false) }
   var showNotificationsDialog by remember { mutableStateOf(false) }
   var showHelpSupportDialog by remember { mutableStateOf(false) }
+  var showBreakClockDialog by remember { mutableStateOf(false) }
 
   val isGuest = appState.isGuest
   val currentUser = appState.currentUser
@@ -135,12 +138,23 @@ fun ProfileScreen(
               verticalAlignment = Alignment.CenterVertically,
               modifier = Modifier.weight(1f)
             ) {
-              com.example.ui.components.Student3DAvatar(
-                avatarId = activeAvatarId,
-                size = 76.dp,
-                showCameraBadge = true,
-                onClick = { showAvatarPicker = true },
-              )
+              // Black and White Monochrome Profile Icon
+              Box(
+                modifier = Modifier
+                  .size(72.dp)
+                  .shadow(4.dp, CircleShape)
+                  .clip(CircleShape)
+                  .background(Color(0xFF18181B))
+                  .border(2.5.dp, Color(0xFFE4E4E7), CircleShape),
+                contentAlignment = Alignment.Center,
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Person,
+                  contentDescription = "Profile",
+                  tint = PureWhite,
+                  modifier = Modifier.size(42.dp),
+                )
+              }
 
               Spacer(modifier = Modifier.width(14.dp))
 
@@ -207,6 +221,33 @@ fun ProfileScreen(
                     color = Color(0xFF4B5563),
                   )
                 }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Compact Break Timing Chip
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFFFEF3C7))
+                    .border(1.dp, Color(0xFFFDE68A), RoundedCornerShape(12.dp))
+                    .clickable { showBreakClockDialog = true }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                  Icon(
+                    imageVector = Icons.Default.AccessTime,
+                    contentDescription = "Break Time",
+                    tint = Color(0xFFB45309),
+                    modifier = Modifier.size(13.dp),
+                  )
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text(
+                    text = "${appState.breakStartTime} – ${appState.breakEndTime}",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF92400E),
+                  )
+                }
               }
             }
 
@@ -254,92 +295,6 @@ fun ProfileScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // ── 2. Break Time Countdown Card (Matching Image 1 Dark Emerald Card) ──────
-      Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF134E4A)), // Rich deep forest/emerald teal
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-      ) {
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 16.dp),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
-          // Left: Timer numbers
-          Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Text("☕", fontSize = 14.sp)
-              Spacer(modifier = Modifier.width(6.dp))
-              Text(
-                text = "Your Break Time",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color(0xFFCCFBF1),
-              )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-              text = "${appState.breakMinutesLeft} min left",
-              fontSize = 24.sp,
-              fontWeight = FontWeight.ExtraBold,
-              color = PureWhite,
-            )
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            Text(
-              text = "${appState.breakStartTime} – ${appState.breakEndTime}",
-              fontSize = 12.sp,
-              fontWeight = FontWeight.Normal,
-              color = Color(0xFF99F6E4),
-            )
-          }
-
-          // Right: Analog Clock Illustration + Tagline
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-              text = "Order smart,\nfinish on time! ⏱️",
-              fontSize = 11.sp,
-              fontWeight = FontWeight.Medium,
-              color = Color(0xFFE6FFFA),
-              textAlign = androidx.compose.ui.text.style.TextAlign.End,
-            )
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            // Clock Dial Graphic
-            Box(
-              modifier = Modifier
-                .size(54.dp)
-                .clip(CircleShape)
-                .background(Color(0xFFF97316)) // Warm vibrant orange clock
-                .border(2.5.dp, Color(0xFFFDBA74), CircleShape),
-              contentAlignment = Alignment.Center,
-            ) {
-              Box(
-                modifier = Modifier
-                  .size(44.dp)
-                  .clip(CircleShape)
-                  .background(PureWhite),
-                contentAlignment = Alignment.Center,
-              ) {
-                Text(
-                  text = "⏰",
-                  fontSize = 22.sp,
-                )
-              }
-            }
-          }
-        }
-      }
-
-      Spacer(modifier = Modifier.height(18.dp))
-
       // ── 3. Profile Options List (Matching Image 2 Exactly) ─────────────────────
       Card(
         modifier = Modifier.fillMaxWidth(),
@@ -348,7 +303,21 @@ fun ProfileScreen(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
       ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
-          // Row 1: Order History (Orange Document Icon)
+          // Row 1: Favorites
+          ProfileFeatureRow(
+            iconBg = Color(0xFFF3F4F6),
+            iconTint = BlackPrimary,
+            iconEmoji = "♡",
+            title = "Favorites",
+            subtitle = if (appState.favoriteItemIds.isNotEmpty()) "${appState.favoriteItemIds.size} saved dishes" else "Your saved favorite dishes",
+            onClick = {
+              appState.openFavoritesScreen()
+            },
+          )
+
+          HorizontalDivider(color = Color(0xFFF3F4F6), modifier = Modifier.padding(horizontal = 4.dp))
+
+          // Row 2: Order History (Orange Document Icon)
           ProfileFeatureRow(
             iconBg = Color(0xFFFFF1EB),
             iconTint = Color(0xFFEA580C),
@@ -491,17 +460,20 @@ fun ProfileScreen(
     )
 
     // ── Dialogs ─────────────────────────────────────────────────────────────
-    // 1. Avatar Picker Dialog
-    if (showAvatarPicker) {
-      com.example.ui.components.StudentAvatarPickerDialog(
-        currentAvatarId = activeAvatarId,
-        onDismiss = { showAvatarPicker = false },
-        onSelectAvatar = { newId ->
-          appState.updateAvatar(newId)
+
+    // Break Clock Dialog
+    if (showBreakClockDialog) {
+      com.example.ui.components.MinimalBreakClockDialog(
+        initialStart = appState.breakStartTime,
+        initialEnd = appState.breakEndTime,
+        onDismiss = { showBreakClockDialog = false },
+        onConfirm = { start, end, minLeft ->
+          appState.updateBreakSchedule(start, end, minLeft)
+          showBreakClockDialog = false
           coroutineScope.launch {
-            snackbarHostState.showSnackbar("Avatar updated to ${com.example.ui.components.Student3DAvatars.getById(newId).name}!")
+            snackbarHostState.showSnackbar("Break time updated: $start – $end")
           }
-        },
+        }
       )
     }
 

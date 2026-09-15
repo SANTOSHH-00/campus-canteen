@@ -13,39 +13,61 @@ import com.example.ui.state.UserProfile
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
+fun extractEpochFromOrderId(orderId: String?): Long {
+  if (orderId.isNullOrBlank()) return 0L
+  val regex = Regex("""ORD-(\d{10,14})(?:-\d+)?""")
+  val match = regex.find(orderId.trim())
+  return match?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+}
+
 fun formatUtcToLocalTime(timestampStr: String?): String {
   if (timestampStr.isNullOrBlank()) return ""
   val trimmed = timestampStr.trim()
-  if (trimmed.matches(Regex("""\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)""", RegexOption.IGNORE_CASE))) {
-    return trimmed
-  }
-  return try {
-    val epochMillis = trimmed.toLongOrNull()
-    if (epochMillis != null && epochMillis > 0) {
-      val localFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+
+  // 1. If it is an ISO timestamp (e.g. 2026-09-12T15:00:00.000Z), parse epoch and convert to IST/device local time
+  if (trimmed.contains("T") || trimmed.endsWith("Z", ignoreCase = true)) {
+    val epochMillis = parseIsoOrMillisToEpoch(trimmed)
+    if (epochMillis > 0) {
+      val localFormat = SimpleDateFormat("h:mm a", Locale.getDefault()).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Kolkata")
+      }
       return localFormat.format(Date(epochMillis))
     }
-    val isoPatterns = listOf(
-      "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
-      "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
-      "yyyy-MM-dd'T'HH:mm:ss'Z'",
-      "yyyy-MM-dd'T'HH:mm:ssXXX",
-      "yyyy-MM-dd'T'HH:mm:ss"
-    )
-    for (pattern in isoPatterns) {
-      try {
-        val sdf = SimpleDateFormat(pattern, Locale.US).apply {
-          timeZone = TimeZone.getTimeZone("UTC")
-        }
-        val parsed = sdf.parse(trimmed)
-        if (parsed != null) {
-          return SimpleDateFormat("h:mm a", Locale.getDefault()).format(parsed)
-        }
-      } catch (_: Exception) {}
+  }
+
+  // 2. Exact 12-hour format e.g. "1:00 AM", "01:00 AM", "8:30 PM"
+  if (trimmed.matches(Regex("""^\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)$""", RegexOption.IGNORE_CASE))) {
+    return trimmed
+  }
+
+  // 3. If string contains date and 12-hour time e.g. "12 Sep 2026, 01:00:14 AM" or "01:00:14 AM"
+  val timeWithSecondsMatch = Regex("""(\d{1,2}:\d{2}):\d{2}\s*(AM|PM|am|pm)""", RegexOption.IGNORE_CASE).find(trimmed)
+  if (timeWithSecondsMatch != null) {
+    val h = timeWithSecondsMatch.groupValues[1]
+    val ampm = timeWithSecondsMatch.groupValues[2].uppercase()
+    return "$h $ampm"
+  }
+
+  // 4. Check if string contains simple "h:mm a"
+  val simpleTimeMatch = Regex("""(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))""", RegexOption.IGNORE_CASE).find(trimmed)
+  if (simpleTimeMatch != null) {
+    return simpleTimeMatch.groupValues[1]
+  }
+
+  return try {
+    val epochMillis = parseIsoOrMillisToEpoch(trimmed)
+    if (epochMillis > 0) {
+      val localFormat = SimpleDateFormat("h:mm a", Locale.getDefault()).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Kolkata")
+      }
+      return localFormat.format(Date(epochMillis))
     }
     ""
   } catch (e: Exception) {
@@ -56,14 +78,51 @@ fun formatUtcToLocalTime(timestampStr: String?): String {
 fun parseIsoOrMillisToEpoch(timestampStr: String?): Long {
   if (timestampStr.isNullOrBlank()) return 0L
   val trimmed = timestampStr.trim()
+
+  // 1. Direct Epoch Milliseconds
   val asLong = trimmed.toLongOrNull()
   if (asLong != null && asLong > 0) return asLong
+
+  // 2. Embedded in Order ID (e.g. ORD-1726065360000-1234)
+  if (trimmed.startsWith("ORD-", ignoreCase = true)) {
+    val fromId = extractEpochFromOrderId(trimmed)
+    if (fromId > 0) return fromId
+  }
+
+  // 3. 12-Hour Local Time (e.g. "8:05 PM" or "Today, 8:05 PM")
+  val timeOnly = trimmed.removePrefix("Today,").removePrefix("today,").trim()
+  if (timeOnly.matches(Regex("""\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)""", RegexOption.IGNORE_CASE))) {
+    try {
+      val parsedTime = SimpleDateFormat("h:mm a", Locale.US).parse(timeOnly)
+      if (parsedTime != null) {
+        val cal = Calendar.getInstance()
+        val timeCal = Calendar.getInstance().apply { time = parsedTime }
+        cal.set(Calendar.HOUR_OF_DAY, timeCal.get(Calendar.HOUR_OF_DAY))
+        cal.set(Calendar.MINUTE, timeCal.get(Calendar.MINUTE))
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        return cal.timeInMillis
+      }
+    } catch (_: Exception) {}
+  }
+
+  // 4. Java 8 java.time parsing (handles any ISO-8601 string)
+  try {
+    return Instant.parse(trimmed).toEpochMilli()
+  } catch (_: Exception) {}
+  try {
+    return OffsetDateTime.parse(trimmed).toInstant().toEpochMilli()
+  } catch (_: Exception) {}
+
+  // 5. Fallback SimpleDateFormat patterns
   val isoPatterns = listOf(
     "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
     "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+    "yyyy-MM-dd'T'HH:mm:ss.SSS",
     "yyyy-MM-dd'T'HH:mm:ss'Z'",
     "yyyy-MM-dd'T'HH:mm:ssXXX",
-    "yyyy-MM-dd'T'HH:mm:ss"
+    "yyyy-MM-dd'T'HH:mm:ss",
+    "yyyy-MM-dd HH:mm:ss"
   )
   for (pattern in isoPatterns) {
     try {
@@ -81,6 +140,7 @@ fun parseIsoOrMillisToEpoch(timestampStr: String?): Long {
 data class StatusHistoryDto(
   @Json(name = "status") val status: String = "",
   @Json(name = "timestamp") val timestamp: String = "",
+  @Json(name = "timestampLocal") val timestampLocal: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -95,6 +155,7 @@ data class MongoUserDto(
   @Json(name = "fcmToken") val fcmToken: String = "",
   @Json(name = "phone") val phone: String = "",
   @Json(name = "course") val course: String = "",
+  @Json(name = "gender") val gender: String = "",
 ) {
   fun toUserProfile(): UserProfile {
     return UserProfile(
@@ -105,6 +166,7 @@ data class MongoUserDto(
       avatarId = avatarId,
       phone = phone,
       course = course,
+      gender = gender,
     )
   }
 
@@ -273,6 +335,16 @@ data class MongoOrderDto(
   @Json(name = "pickupLocation") val pickupLocation: String = "",
   @Json(name = "pickupCounter") val pickupCounter: String = "Counter 1",
   @Json(name = "estimatedReadyTime") val estimatedReadyTime: String = "",
+  @Json(name = "customerPickupTime") val customerPickupTime: String? = null,
+  @Json(name = "estimatedCompletionTime") val estimatedCompletionTime: String? = null,
+  @Json(name = "orderDate") val orderDate: String? = null,
+  @Json(name = "orderTime") val orderTime: String? = null,
+  @Json(name = "orderPlacedAtLocal") val orderPlacedAtLocal: String? = null,
+  @Json(name = "confirmedAtLocal") val confirmedAtLocal: String? = null,
+  @Json(name = "preparingAtLocal") val preparingAtLocal: String? = null,
+  @Json(name = "readyAtLocal") val readyAtLocal: String? = null,
+  @Json(name = "completedAtLocal") val completedAtLocal: String? = null,
+  @Json(name = "cancelledAtLocal") val cancelledAtLocal: String? = null,
   @Json(name = "orderPlacedAt") val orderPlacedAt: String? = null,
   @Json(name = "confirmedAt") val confirmedAt: String? = null,
   @Json(name = "preparingAt") val preparingAt: String? = null,
@@ -306,19 +378,46 @@ data class MongoOrderDto(
       )
     }
 
-    val placedLocalTime = formatUtcToLocalTime(orderPlacedAt ?: createdAt)
-    val confirmedLocalTime = formatUtcToLocalTime(confirmedAt).ifBlank { placedLocalTime }
-    val preparingLocalTime = formatUtcToLocalTime(preparingAt).ifBlank {
-      statusHistory.find { it.status.equals("PREPARING", ignoreCase = true) }?.timestamp?.let { formatUtcToLocalTime(it) } ?: ""
-    }
-    val readyLocalTime = formatUtcToLocalTime(readyAt).ifBlank {
-      statusHistory.find { it.status.equals("READY", ignoreCase = true) }?.timestamp?.let { formatUtcToLocalTime(it) } ?: ""
-    }
-    val completedLocalTime = formatUtcToLocalTime(completedAt).ifBlank {
-      statusHistory.find { it.status.equals("COMPLETED", ignoreCase = true) }?.timestamp?.let { formatUtcToLocalTime(it) } ?: ""
-    }
+    val placedLocalTime = orderPlacedAtLocal?.ifBlank { null }
+      ?: orderTime?.ifBlank { null }
+      ?: formatUtcToLocalTime(orderPlacedAt ?: createdAt).ifBlank {
+        val fallbackEpoch = extractEpochFromOrderId(orderId)
+        if (fallbackEpoch > 0) SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(fallbackEpoch)) else ""
+      }
+    val confirmedLocalTime = confirmedAtLocal?.ifBlank { null }
+      ?: formatUtcToLocalTime(confirmedAt).ifBlank { placedLocalTime }
+    val preparingLocalTime = preparingAtLocal?.ifBlank { null }
+      ?: formatUtcToLocalTime(preparingAt).ifBlank {
+        statusHistory.find { it.status.equals("PREPARING", ignoreCase = true) }?.let {
+          it.timestampLocal?.ifBlank { null } ?: formatUtcToLocalTime(it.timestamp)
+        } ?: ""
+      }
+    val readyLocalTime = readyAtLocal?.ifBlank { null }
+      ?: formatUtcToLocalTime(readyAt).ifBlank {
+        statusHistory.find { it.status.equals("READY", ignoreCase = true) }?.let {
+          it.timestampLocal?.ifBlank { null } ?: formatUtcToLocalTime(it.timestamp)
+        } ?: ""
+      }
+    val completedLocalTime = completedAtLocal?.ifBlank { null }
+      ?: formatUtcToLocalTime(completedAt).ifBlank {
+        statusHistory.find { it.status.equals("COMPLETED", ignoreCase = true) }?.let {
+          it.timestampLocal?.ifBlank { null } ?: formatUtcToLocalTime(it.timestamp)
+        } ?: ""
+      }
 
-    val displayOrderTime = if (placedLocalTime.isNotBlank()) "Today, $placedLocalTime" else "Today, 10:42 AM"
+    val displayOrderTime = if (placedLocalTime.isNotBlank()) "Today, $placedLocalTime" else "Today"
+
+    val effectiveCustomerPickup = customerPickupTime?.ifBlank { null }
+      ?: if (pickupPreference.contains("at ", ignoreCase = true)) pickupPreference.substringAfter("at ").trim()
+      else if (pickupPreference.contains("ASAP", ignoreCase = true)) "ASAP" else "ASAP"
+    val effectiveCompletion = estimatedCompletionTime?.ifBlank { null }
+      ?: estimatedReadyTime.ifBlank { "Ready soon" }
+
+    val placedEpoch = parseIsoOrMillisToEpoch(orderPlacedAt ?: createdAt).let {
+      if (it > 0) it else extractEpochFromOrderId(orderId)
+    }
+    val effectiveOrderDate = orderDate?.ifBlank { null }
+      ?: if (placedEpoch > 0) SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(placedEpoch)) else ""
 
     return OrderRecord(
       id = orderId,
@@ -327,7 +426,9 @@ data class MongoOrderDto(
       totalPrice = totalAmount,
       status = parsedStatus,
       orderTime = displayOrderTime,
-      estimatedReadyTime = estimatedReadyTime.ifBlank { "Ready soon" },
+      estimatedReadyTime = effectiveCompletion,
+      customerPickupTime = effectiveCustomerPickup,
+      estimatedCompletionTime = effectiveCompletion,
       pickupCanteenName = pickupCanteenName.ifBlank { "Campus Canteen" },
       pickupLocation = pickupLocation.ifBlank { "Counter 1" },
       pickupPreference = pickupPreference,
@@ -338,6 +439,8 @@ data class MongoOrderDto(
       preparingAt = preparingLocalTime,
       readyAt = readyLocalTime,
       completedAt = completedLocalTime,
+      placedEpoch = placedEpoch,
+      orderDate = effectiveOrderDate,
     )
   }
 
@@ -376,6 +479,10 @@ data class MongoOrderDto(
         paymentStatus = "PAID",
         tokenNumber = record.tokenNumber,
         pickupPreference = record.pickupPreference,
+        customerPickupTime = record.customerPickupTime.ifBlank {
+          if (record.pickupPreference.contains("at ", ignoreCase = true)) record.pickupPreference.substringAfter("at ").trim() else "ASAP"
+        },
+        estimatedCompletionTime = record.estimatedCompletionTime.ifBlank { record.estimatedReadyTime },
         pickupCanteenName = record.pickupCanteenName,
         pickupLocation = record.pickupLocation,
         pickupCounter = pickupCounter,
@@ -420,12 +527,16 @@ data class MongoNotificationDto(
   @Json(name = "read") val read: Boolean = false,
 ) {
   fun toNotificationItem(): NotificationItem {
+    val now = System.currentTimeMillis()
+    val arrivalTime = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date(now))
     return NotificationItem(
       id = notificationId,
       title = title,
       message = message,
       timeAgo = "Just now",
       isUnread = !read,
+      timestamp = now,
+      arrivalTimeFormatted = arrivalTime,
     )
   }
 }
@@ -478,6 +589,7 @@ data class RegisterRequestDto(
   @Json(name = "avatarId") val avatarId: String = "scholar",
   @Json(name = "phone") val phone: String = "",
   @Json(name = "course") val course: String = "",
+  @Json(name = "gender") val gender: String = "",
 )
 
 @JsonClass(generateAdapter = true)
@@ -597,9 +709,12 @@ data class CartQueueResponseDto(
   @Json(name = "similarOrdersAhead") val similarOrdersAhead: Int = 0,
   @Json(name = "similarItemsAhead") val similarItemsAhead: Int = 0,
   @Json(name = "distinctCustomersAhead") val distinctCustomersAhead: Int = 0,
+  @Json(name = "totalRemainingAheadMinutes") val totalRemainingAheadMinutes: Int = 0,
+  @Json(name = "cartPrepMinutes") val cartPrepMinutes: Int = 0,
   @Json(name = "estWaitMinutes") val estWaitMinutes: Int = 5,
   @Json(name = "estimatedCompletionTime") val estimatedCompletionTime: String = "",
   @Json(name = "estimatedCompletionAt") val estimatedCompletionAt: String? = null,
+  @Json(name = "currentServerTime") val currentServerTime: String? = null,
   @Json(name = "headline") val headline: String = "",
   @Json(name = "workloadSummary") val workloadSummary: String = "",
   @Json(name = "itemsQueue") val itemsQueue: List<CartItemQueueInfoDto> = emptyList(),
@@ -617,13 +732,25 @@ data class OrderQueuePositionDto(
   @Json(name = "similarOrdersAhead") val similarOrdersAhead: Int = 0,
   @Json(name = "similarItemsAhead") val similarItemsAhead: Int = 0,
   @Json(name = "distinctCustomersAhead") val distinctCustomersAhead: Int = 0,
+  @Json(name = "totalRemainingAheadMinutes") val totalRemainingAheadMinutes: Int = 0,
+  @Json(name = "currentOrderPrepMinutes") val currentOrderPrepMinutes: Int = 0,
   @Json(name = "primaryItemName") val primaryItemName: String = "",
   @Json(name = "itemSummary") val itemSummary: String = "",
   @Json(name = "workloadSummary") val workloadSummary: String = "",
   @Json(name = "estWaitMinutes") val estWaitMinutes: Int = 5,
   @Json(name = "estimatedCompletionTime") val estimatedCompletionTime: String = "",
   @Json(name = "estimatedCompletionAt") val estimatedCompletionAt: String? = null,
+  @Json(name = "currentServerTime") val currentServerTime: String? = null,
+  @Json(name = "customerPickupTime") val customerPickupTime: String? = null,
   @Json(name = "message") val message: String = "",
+  @Json(name = "orderDate") val orderDate: String? = null,
+  @Json(name = "orderTime") val orderTime: String? = null,
+  @Json(name = "orderPlacedAtLocal") val orderPlacedAtLocal: String? = null,
+  @Json(name = "confirmedAtLocal") val confirmedAtLocal: String? = null,
+  @Json(name = "preparingAtLocal") val preparingAtLocal: String? = null,
+  @Json(name = "readyAtLocal") val readyAtLocal: String? = null,
+  @Json(name = "completedAtLocal") val completedAtLocal: String? = null,
+  @Json(name = "cancelledAtLocal") val cancelledAtLocal: String? = null,
   @Json(name = "orderPlacedAt") val orderPlacedAt: String? = null,
   @Json(name = "confirmedAt") val confirmedAt: String? = null,
   @Json(name = "preparingAt") val preparingAt: String? = null,
@@ -632,5 +759,11 @@ data class OrderQueuePositionDto(
   @Json(name = "cancelledAt") val cancelledAt: String? = null,
   @Json(name = "statusHistory") val statusHistory: List<StatusHistoryDto> = emptyList(),
 )
+
+@JsonClass(generateAdapter = true)
+data class UserFavoritesResponseDto(
+  @Json(name = "favorites") val favorites: List<String> = emptyList(),
+)
+
 
 

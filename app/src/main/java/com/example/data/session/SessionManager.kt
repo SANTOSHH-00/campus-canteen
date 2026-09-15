@@ -23,6 +23,7 @@ object SessionManager {
   private const val KEY_STUDENT_AVATAR_ID = "student_avatar_id"
   private const val KEY_STUDENT_PHONE = "student_phone"
   private const val KEY_STUDENT_COURSE = "student_course"
+  private const val KEY_STUDENT_FAVORITES = "student_favorites"
 
   // Canteen Owner Session Keys
   private const val KEY_IS_OWNER_LOGGED_IN = "is_owner_logged_in"
@@ -313,15 +314,62 @@ object SessionManager {
 
   private const val KEY_SAVED_NOTIFICATIONS_JSON = "saved_notifications_json"
 
+  private var lastSavedTitle = ""
+  private var lastSavedTime = 0L
+
   fun saveIncomingNotification(title: String, message: String) {
     try {
+      val now = System.currentTimeMillis()
+      val cleanTitle = title.trim()
+
       val existing = getSavedNotificationsJson()
       val array = if (existing != null) org.json.JSONArray(existing) else org.json.JSONArray()
+
+      // Extract token number from title if present (e.g., "Order #902: Preparing" or "Order #902 in Kitchen")
+      val tokenRegex = Regex("""#([A-Za-z0-9]+)""")
+      val extractedToken = tokenRegex.find(cleanTitle)?.groupValues?.get(1)?.lowercase()
+
+      // Identify milestone keyword
+      val milestone = when {
+        cleanTitle.contains("Preparing", ignoreCase = true) || cleanTitle.contains("Kitchen", ignoreCase = true) -> "PREPARING"
+        cleanTitle.contains("Ready", ignoreCase = true) -> "READY"
+        cleanTitle.contains("Picked Up", ignoreCase = true) || cleanTitle.contains("Completed", ignoreCase = true) -> "COMPLETED"
+        cleanTitle.contains("Cancelled", ignoreCase = true) -> "CANCELLED"
+        else -> ""
+      }
+
+      // Check for duplicates in existing notifications history
+      for (i in 0 until array.length()) {
+        val existingObj = array.getJSONObject(i)
+        val exTitle = existingObj.optString("title", "").trim()
+        val exToken = tokenRegex.find(exTitle)?.groupValues?.get(1)?.lowercase()
+
+        // 1. Exact title duplicate
+        if (exTitle.equals(cleanTitle, ignoreCase = true)) {
+          return
+        }
+
+        // 2. Same order token and milestone duplicate (e.g. "Order #902: Preparing" vs "Order #902 in Kitchen")
+        if (!extractedToken.isNullOrBlank() && extractedToken == exToken && milestone.isNotBlank()) {
+          val exMilestone = when {
+            exTitle.contains("Preparing", ignoreCase = true) || exTitle.contains("Kitchen", ignoreCase = true) -> "PREPARING"
+            exTitle.contains("Ready", ignoreCase = true) -> "READY"
+            exTitle.contains("Picked Up", ignoreCase = true) || exTitle.contains("Completed", ignoreCase = true) -> "COMPLETED"
+            exTitle.contains("Cancelled", ignoreCase = true) -> "CANCELLED"
+            else -> ""
+          }
+          if (milestone == exMilestone) {
+            // Already has this milestone recorded for this order, ignore duplicate!
+            return
+          }
+        }
+      }
+
       val obj = org.json.JSONObject().apply {
         put("id", java.util.UUID.randomUUID().toString())
-        put("title", title)
+        put("title", cleanTitle)
         put("message", message)
-        put("timestamp", System.currentTimeMillis())
+        put("timestamp", now)
         put("isUnread", true)
       }
       val newArray = org.json.JSONArray()
@@ -346,4 +394,77 @@ object SessionManager {
   fun clearNotifications() {
     prefs?.edit()?.remove(KEY_SAVED_NOTIFICATIONS_JSON)?.apply()
   }
+
+  // ── Active Order Background Tracking Persistence ────────────────────────────
+  private const val KEY_ACTIVE_ORDER_ID = "active_tracking_order_id"
+  private const val KEY_ACTIVE_ORDER_TOKEN = "active_tracking_order_token"
+  private const val KEY_ACTIVE_ORDER_CANTEEN_ID = "active_tracking_order_canteen_id"
+  private const val KEY_ACTIVE_ORDER_CANTEEN_NAME = "active_tracking_order_canteen_name"
+  private const val KEY_ACTIVE_ORDER_BLOCK = "active_tracking_order_block"
+  private const val KEY_ACTIVE_ORDER_LAST_STATUS = "active_tracking_last_status"
+  private const val KEY_ACTIVE_ORDER_COUNTER = "active_tracking_pickup_counter"
+
+  fun saveActiveOrderTracking(
+    orderId: String,
+    tokenNumber: String,
+    canteenId: String = "",
+    canteenName: String = "",
+    block: String = "",
+    lastStatus: String = "NEW",
+    counter: String = "Counter 1"
+  ) {
+    prefs?.edit()?.apply {
+      putString(KEY_ACTIVE_ORDER_ID, orderId)
+      putString(KEY_ACTIVE_ORDER_TOKEN, tokenNumber)
+      putString(KEY_ACTIVE_ORDER_CANTEEN_ID, canteenId)
+      putString(KEY_ACTIVE_ORDER_CANTEEN_NAME, canteenName)
+      putString(KEY_ACTIVE_ORDER_BLOCK, block)
+      putString(KEY_ACTIVE_ORDER_LAST_STATUS, lastStatus)
+      putString(KEY_ACTIVE_ORDER_COUNTER, counter)
+      apply()
+    }
+  }
+
+  fun updateActiveOrderStatus(status: String, counter: String = "") {
+    prefs?.edit()?.apply {
+      putString(KEY_ACTIVE_ORDER_LAST_STATUS, status)
+      if (counter.isNotBlank()) putString(KEY_ACTIVE_ORDER_COUNTER, counter)
+      apply()
+    }
+  }
+
+  fun getActiveOrderId(): String? = prefs?.getString(KEY_ACTIVE_ORDER_ID, null)?.ifBlank { null }
+  fun getActiveOrderToken(): String = prefs?.getString(KEY_ACTIVE_ORDER_TOKEN, "") ?: ""
+  fun getActiveOrderCanteenId(): String = prefs?.getString(KEY_ACTIVE_ORDER_CANTEEN_ID, "") ?: ""
+  fun getActiveOrderCanteenName(): String = prefs?.getString(KEY_ACTIVE_ORDER_CANTEEN_NAME, "Canteen Kitchen") ?: "Canteen Kitchen"
+  fun getActiveOrderBlock(): String = prefs?.getString(KEY_ACTIVE_ORDER_BLOCK, "Campus") ?: "Campus"
+  fun getActiveOrderLastStatus(): String = prefs?.getString(KEY_ACTIVE_ORDER_LAST_STATUS, "") ?: ""
+  fun getActiveOrderCounter(): String = prefs?.getString(KEY_ACTIVE_ORDER_COUNTER, "Counter 1") ?: "Counter 1"
+
+  fun clearActiveOrderTracking() {
+    prefs?.edit()?.apply {
+      remove(KEY_ACTIVE_ORDER_ID)
+      remove(KEY_ACTIVE_ORDER_TOKEN)
+      remove(KEY_ACTIVE_ORDER_CANTEEN_ID)
+      remove(KEY_ACTIVE_ORDER_CANTEEN_NAME)
+      remove(KEY_ACTIVE_ORDER_BLOCK)
+      remove(KEY_ACTIVE_ORDER_LAST_STATUS)
+      remove(KEY_ACTIVE_ORDER_COUNTER)
+      apply()
+    }
+  }
+
+  // ── Student Favorites Persistence ──────────────────────────────────────────
+
+  fun saveFavoriteItemIds(ids: Set<String>) {
+    prefs?.edit()?.apply {
+      putStringSet(KEY_STUDENT_FAVORITES, ids)
+      apply()
+    }
+  }
+
+  fun getFavoriteItemIds(): Set<String> {
+    return prefs?.getStringSet(KEY_STUDENT_FAVORITES, emptySet()) ?: emptySet()
+  }
 }
+

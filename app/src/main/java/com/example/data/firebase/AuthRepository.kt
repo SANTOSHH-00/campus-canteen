@@ -137,6 +137,7 @@ class AuthRepository(
     fcmToken: String = "",
     phone: String = "",
     course: String = "",
+    gender: String = "",
   ): Result<UserDocument> {
     val trimmed = email.trim().lowercase()
     return try {
@@ -149,6 +150,7 @@ class AuthRepository(
         avatarId = avatarId,
         phone = phone.trim(),
         course = course.trim(),
+        gender = gender.trim(),
       )
       val res = mongoRepo.registerUser(req)
       if (res.isSuccess) {
@@ -165,6 +167,7 @@ class AuthRepository(
           fcmToken = userDto.fcmToken,
           phone = userDto.phone,
           course = userDto.course,
+          gender = userDto.gender.ifBlank { gender },
         )
         _authState.value = AppUser(
           uid = doc.uid,

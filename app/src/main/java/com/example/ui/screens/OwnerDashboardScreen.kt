@@ -10,6 +10,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -304,6 +305,7 @@ fun OwnerDashboardScreen(
                                 else -> {
                                     OwnerDashboardBody(
                                         state = state,
+                                        allOrders = ownerOrders.ifEmpty { state.recentOrders },
                                         onNavigateToManageItems = onNavigateToManageItems,
                                         onNavigateToOrders = onNavigateToOrders,
                                         onToggleCanteen = {
@@ -709,6 +711,7 @@ private fun DrawerNavItem(
 @Composable
 private fun OwnerDashboardBody(
     state: DashboardUiState.Ready,
+    allOrders: List<OrderDocument> = emptyList(),
     onNavigateToManageItems: () -> Unit,
     onNavigateToOrders: () -> Unit,
     onToggleCanteen: () -> Unit,
@@ -744,12 +747,13 @@ private fun OwnerDashboardBody(
 
         Spacer(Modifier.height(18.dp))
 
-        // ── Today's Overview (orange hero card) ──────────────────────────────
+        // ── Overview & Historical Earnings (Live card with filter) ───────────
         TodayOverviewCard(
-            revenueText = "₹ ${state.metrics.todayRevenue}",
-            totalOrders = state.metrics.todayOrdersCount,
+            defaultRevenue = state.metrics.todayRevenue,
+            defaultOrdersCount = state.metrics.todayOrdersCount,
             activeOrders = state.metrics.newOrdersCount + state.metrics.preparingOrdersCount,
             readyOrders = state.metrics.readyOrdersCount,
+            allOrders = allOrders.ifEmpty { state.recentOrders },
         )
 
         Spacer(Modifier.height(24.dp))
@@ -1048,16 +1052,74 @@ private fun OwnerDashboardBody(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  TODAY'S OVERVIEW CARD
+//  TODAY'S OVERVIEW CARD WITH FILTER FOR PREVIOUS DAYS
 // ─────────────────────────────────────────────────────────────────────────────
+
+private enum class DashboardPeriodFilter(val displayName: String, val shortName: String) {
+    TODAY("Today's Overview", "Today"),
+    YESTERDAY("Yesterday's Earnings", "Yesterday"),
+    LAST_7_DAYS("Last 7 Days", "7 Days"),
+    LAST_30_DAYS("Last 30 Days", "30 Days"),
+    ALL_TIME("All-Time Earnings", "All Time"),
+}
+
+private data class FilteredPeriodStats(
+    val revenue: Int,
+    val totalOrders: Int,
+    val completedOrders: Int,
+    val label: String,
+)
 
 @Composable
 private fun TodayOverviewCard(
-    revenueText: String,
-    totalOrders: Int,
+    defaultRevenue: Int,
+    defaultOrdersCount: Int,
     activeOrders: Int,
     readyOrders: Int,
+    allOrders: List<OrderDocument> = emptyList(),
 ) {
+    var selectedPeriod by remember { mutableStateOf(DashboardPeriodFilter.TODAY) }
+
+    val stats = remember(selectedPeriod, allOrders, defaultRevenue, defaultOrdersCount) {
+        val now = System.currentTimeMillis()
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        val startOfToday = cal.timeInMillis
+
+        cal.add(Calendar.DAY_OF_YEAR, -1)
+        val startOfYesterday = cal.timeInMillis
+        val endOfYesterday = startOfToday - 1
+
+        val matching = when (selectedPeriod) {
+            DashboardPeriodFilter.TODAY -> allOrders.filter { it.createdAt >= startOfToday }
+            DashboardPeriodFilter.YESTERDAY -> allOrders.filter { it.createdAt in startOfYesterday..endOfYesterday }
+            DashboardPeriodFilter.LAST_7_DAYS -> allOrders.filter { it.createdAt >= now - (7L * 24 * 60 * 60 * 1000) }
+            DashboardPeriodFilter.LAST_30_DAYS -> allOrders.filter { it.createdAt >= now - (30L * 24 * 60 * 60 * 1000) }
+            DashboardPeriodFilter.ALL_TIME -> allOrders
+        }
+
+        val rev = if (selectedPeriod == DashboardPeriodFilter.TODAY && matching.isEmpty()) {
+            defaultRevenue
+        } else {
+            matching.sumOf { it.totalAmount }
+        }
+        val count = if (selectedPeriod == DashboardPeriodFilter.TODAY && matching.isEmpty()) {
+            defaultOrdersCount
+        } else {
+            matching.size
+        }
+        val completed = matching.count {
+            it.status.equals("COMPLETED", ignoreCase = true) ||
+            it.status.equals("PICKED_UP", ignoreCase = true) ||
+            it.status.equals("DELIVERED", ignoreCase = true)
+        }
+        val label = selectedPeriod.displayName
+        FilteredPeriodStats(rev, count, completed, label)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1073,33 +1135,79 @@ private fun TodayOverviewCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Today's Overview",
+                    text = stats.label,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PureWhite.copy(alpha = 0.88f),
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(PureWhite.copy(alpha = 0.22f))
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                ) {
-                    Box(
+                if (selectedPeriod == DashboardPeriodFilter.TODAY) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(PureWhite),
-                    )
-                    Spacer(Modifier.width(5.dp))
-                    Text(text = "Live", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PureWhite)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(PureWhite.copy(alpha = 0.22f))
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(PureWhite),
+                        )
+                        Spacer(Modifier.width(5.dp))
+                        Text(text = "Live", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PureWhite)
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(PureWhite.copy(alpha = 0.22f))
+                            .clickable { selectedPeriod = DashboardPeriodFilter.TODAY }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    ) {
+                        Text(text = "Back to Live ●", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = PureWhite)
+                    }
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
 
-            Text(text = revenueText, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, color = PureWhite)
-            Text(text = "Total Sales", fontSize = 12.sp, color = PureWhite.copy(alpha = 0.75f))
+            // Filter chips selector directly on the Live Card
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                DashboardPeriodFilter.values().forEach { filter ->
+                    val isSelected = selectedPeriod == filter
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (isSelected) PureWhite else PureWhite.copy(alpha = 0.18f))
+                            .clickable { selectedPeriod = filter }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = filter.shortName,
+                            fontSize = 11.5.sp,
+                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                            color = if (isSelected) OrangeAccent else PureWhite,
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            Text(text = "₹ ${stats.revenue}", fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, color = PureWhite)
+            Text(
+                text = if (selectedPeriod == DashboardPeriodFilter.TODAY) "Total Sales (Today)" else "${selectedPeriod.shortName} Total Sales",
+                fontSize = 12.sp,
+                color = PureWhite.copy(alpha = 0.75f)
+            )
 
             Spacer(Modifier.height(18.dp))
 
@@ -1107,9 +1215,15 @@ private fun TodayOverviewCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                OverviewStat(label = "Orders", value = "$totalOrders")
-                OverviewStat(label = "Active Orders", value = "$activeOrders")
-                OverviewStat(label = "Ready to Pickup", value = "$readyOrders")
+                OverviewStat(label = "Orders", value = "${stats.totalOrders}")
+                if (selectedPeriod == DashboardPeriodFilter.TODAY) {
+                    OverviewStat(label = "Active Orders", value = "$activeOrders")
+                    OverviewStat(label = "Ready to Pickup", value = "$readyOrders")
+                } else {
+                    OverviewStat(label = "Delivered", value = "${stats.completedOrders}")
+                    val avg = if (stats.totalOrders > 0) stats.revenue / stats.totalOrders else 0
+                    OverviewStat(label = "Avg / Order", value = "₹ $avg")
+                }
             }
         }
     }

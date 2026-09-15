@@ -49,6 +49,15 @@ class MongoRepository(
 
     suspend fun getOrder(orderId: String): Result<MongoOrderDto> =
       defaultInstance.getOrder(orderId)
+
+    suspend fun getUserFavorites(uid: String): Result<List<String>> =
+      defaultInstance.getUserFavorites(uid)
+
+    suspend fun addFavorite(uid: String, itemId: String): Result<List<String>> =
+      defaultInstance.addFavorite(uid, itemId)
+
+    suspend fun removeFavorite(uid: String, itemId: String): Result<List<String>> =
+      defaultInstance.removeFavorite(uid, itemId)
   }
 
   private fun parseErrorMessage(errorBody: String?, fallback: String): String {
@@ -262,9 +271,10 @@ class MongoRepository(
   }
 
   // ── Orders ────────────────────────────────────────────────────────────────
-  suspend fun createOrder(order: MongoOrderDto): Result<MongoOrderDto> {
+  suspend fun createOrder(order: MongoOrderDto, idempotencyKey: String? = null): Result<MongoOrderDto> {
     return runCatching {
-      val res = apiService.createOrder(order)
+      val key = idempotencyKey?.ifBlank { null } ?: order.orderId
+      val res = apiService.createOrder(order, idempotencyKey = key)
       if (res.isSuccessful && res.body() != null) {
         res.body()!!
       } else {
@@ -273,9 +283,21 @@ class MongoRepository(
     }.onFailure { Log.e(TAG, "createOrder error: ${it.message}") }
   }
 
-  suspend fun getStudentOrders(studentId: String): Result<List<MongoOrderDto>> {
+  suspend fun getStudentOrders(
+    studentId: String,
+    canteenId: String? = null,
+    dateOption: String? = null,
+    startDate: String? = null,
+    endDate: String? = null,
+  ): Result<List<MongoOrderDto>> {
     return runCatching {
-      val res = apiService.getStudentOrders(studentId)
+      val res = apiService.getStudentOrders(
+        studentId = studentId,
+        canteenId = canteenId,
+        dateOption = dateOption,
+        startDate = startDate,
+        endDate = endDate,
+      )
       if (res.isSuccessful && res.body() != null) {
         res.body()!!
       } else {
@@ -317,14 +339,24 @@ class MongoRepository(
       }
       Log.i(TAG, "updateOrderStatus success: $orderId -> $normalized")
 
-      // Update in-memory caches immediately so any screen re-opening has the new status
-      cachedOrderDetails[orderId]?.let { old ->
-        val updated = old.copy(status = normalized, updatedAt = System.currentTimeMillis())
-        cachedOrderDetails[orderId] = updated
+      // Update in-memory caches immediately so any screen re-opening has the new status and milestone timestamps
+      val serverDoc = res.body()?.toDocument()
+      val now = System.currentTimeMillis()
+      val updated = serverDoc ?: cachedOrderDetails[orderId]?.let { old ->
+        old.copy(
+          status = normalized,
+          updatedAt = now,
+          preparingAt = if (normalized == "PREPARING") now else old.preparingAt,
+          readyAt = if (normalized == "READY") now else old.readyAt,
+          completedAt = if (normalized == "COMPLETED") now else old.completedAt,
+        )
       }
-      cachedCanteenOrders.forEach { (canteen, list) ->
-        cachedCanteenOrders[canteen] = list.map {
-          if (it.orderId == orderId) it.copy(status = normalized, updatedAt = System.currentTimeMillis()) else it
+      if (updated != null) {
+        cachedOrderDetails[orderId] = updated
+        cachedCanteenOrders.forEach { (canteen, list) ->
+          cachedCanteenOrders[canteen] = list.map {
+            if (it.orderId == orderId) updated else it
+          }
         }
       }
     }.onFailure { Log.e(TAG, "updateOrderStatus error: ${it.message}") }
@@ -490,6 +522,40 @@ class MongoRepository(
       val res = apiService.markNotificationRead(notificationId)
       if (!res.isSuccessful) throw Exception("Failed to mark notification read: ${res.code()}")
     }.onFailure { Log.e(TAG, "markNotificationRead error: ${it.message}") }
+  }
+
+  // ── Favorites ─────────────────────────────────────────────────────────────
+  suspend fun getUserFavorites(uid: String): Result<List<String>> {
+    return runCatching {
+      val res = apiService.getUserFavorites(uid)
+      if (res.isSuccessful && res.body() != null) {
+        res.body()!!.favorites
+      } else {
+        emptyList()
+      }
+    }.onFailure { Log.e(TAG, "getUserFavorites error: ${it.message}") }
+  }
+
+  suspend fun addFavorite(uid: String, itemId: String): Result<List<String>> {
+    return runCatching {
+      val res = apiService.addFavorite(uid, itemId)
+      if (res.isSuccessful && res.body() != null) {
+        res.body()!!.favorites
+      } else {
+        emptyList()
+      }
+    }.onFailure { Log.e(TAG, "addFavorite error: ${it.message}") }
+  }
+
+  suspend fun removeFavorite(uid: String, itemId: String): Result<List<String>> {
+    return runCatching {
+      val res = apiService.removeFavorite(uid, itemId)
+      if (res.isSuccessful && res.body() != null) {
+        res.body()!!.favorites
+      } else {
+        emptyList()
+      }
+    }.onFailure { Log.e(TAG, "removeFavorite error: ${it.message}") }
   }
 
   // ── Real-Time Reactive Flows ──────────────────────────────────────────────
@@ -807,8 +873,15 @@ fun ItemDocument.toMongoDto(): MongoItemDto {
 }
 
 fun MongoOrderDto.toDocument(): OrderDocument {
-  val createdMillis = parseIsoOrMillisToEpoch(createdAt).let { if (it > 0) it else parseIsoOrMillisToEpoch(orderPlacedAt) }
-  val placedMillis = parseIsoOrMillisToEpoch(orderPlacedAt).let { if (it > 0) it else createdMillis }
+  val fallbackOrderIdEpoch = extractEpochFromOrderId(orderId)
+  val createdMillis = parseIsoOrMillisToEpoch(createdAt).let {
+    if (it > 0) it else parseIsoOrMillisToEpoch(orderPlacedAt).let { p ->
+      if (p > 0) p else fallbackOrderIdEpoch
+    }
+  }
+  val placedMillis = parseIsoOrMillisToEpoch(orderPlacedAt).let {
+    if (it > 0) it else if (createdMillis > 0) createdMillis else fallbackOrderIdEpoch
+  }
   val confirmedMillis = parseIsoOrMillisToEpoch(confirmedAt).let { if (it > 0) it else placedMillis }
   val preparingMillis = parseIsoOrMillisToEpoch(preparingAt).let {
     if (it > 0) it else {
@@ -828,6 +901,8 @@ fun MongoOrderDto.toDocument(): OrderDocument {
         ?.timestamp?.let { ts -> parseIsoOrMillisToEpoch(ts) } ?: 0L
     }
   }
+
+  val finalCreated = if (createdMillis > 0) createdMillis else if (placedMillis > 0) placedMillis else fallbackOrderIdEpoch
 
   return OrderDocument(
     orderId = orderId,
@@ -855,8 +930,8 @@ fun MongoOrderDto.toDocument(): OrderDocument {
     pickupLocation = pickupLocation,
     pickupCounter = pickupCounter,
     estimatedReadyTime = estimatedReadyTime,
-    createdAt = if (createdMillis > 0) createdMillis else System.currentTimeMillis(),
-    updatedAt = System.currentTimeMillis(),
+    createdAt = finalCreated,
+    updatedAt = finalCreated,
     orderPlacedAt = placedMillis,
     confirmedAt = confirmedMillis,
     preparingAt = preparingMillis,
@@ -892,6 +967,10 @@ fun OrderDocument.toMongoDto(): MongoOrderDto {
     paymentStatus = paymentStatus,
     tokenNumber = tokenNumber,
     pickupPreference = pickupPreference,
+    customerPickupTime = customerPickupTime.ifBlank {
+      if (pickupPreference.contains("at ", ignoreCase = true)) pickupPreference.substringAfter("at ").trim() else "ASAP"
+    },
+    estimatedCompletionTime = estimatedCompletionTime.ifBlank { estimatedReadyTime },
     pickupCanteenName = pickupCanteenName,
     pickupLocation = pickupLocation,
     pickupCounter = pickupCounter,

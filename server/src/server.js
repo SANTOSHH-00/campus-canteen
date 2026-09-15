@@ -44,14 +44,22 @@ const isLocalOrPrivateIp = (ip) => {
   );
 };
 
-// Option 3A: Rate Limiting
-// 1. General API Rate Limiter (Campus-friendly & Proxy-aware: 10,000 requests / 15 mins per IP)
+// Option 3A: Campus-friendly & Proxy-aware Rate Limiting
+// 1. General API Rate Limiter (15,000 requests / 15 mins, keyed per student/token when present)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10000,
+  max: 15000,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many requests from this IP, please try again in 15 minutes.' },
+  keyGenerator: (req) => {
+    // Prioritize user authorization token or student ID so campus Wi-Fi NAT doesn't throttle all students
+    const authHeader = req.headers['authorization'];
+    if (authHeader) return `auth_${authHeader.slice(-24)}`;
+    const studentId = req.headers['x-student-id'] || req.body?.studentId;
+    if (studentId) return `student_${studentId}`;
+    return req.ip || req.connection?.remoteAddress || 'unknown';
+  },
+  message: { error: 'Too many requests, please try again in a few minutes.' },
   skip: (req) => {
     if (req.path === '/health' || req.path === '/api/health' || req.path === '/') return true;
     const ip = req.ip || req.connection?.remoteAddress || '';
@@ -61,12 +69,17 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
-// 2. Sensitive Authentication & OTP Rate Limiter (100 attempts / 15 mins per real IP)
+// 2. Sensitive Authentication & OTP Rate Limiter (Keyed by target email/account + IP fallback)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    const email = (req.body?.email || '').trim().toLowerCase();
+    if (email) return `auth_email_${email}`;
+    return req.ip || req.connection?.remoteAddress || 'unknown';
+  },
   message: { error: 'Too many login or OTP attempts. Please wait 10 minutes before trying again.' },
   skip: (req) => {
     const ip = req.ip || req.connection?.remoteAddress || '';
@@ -147,7 +160,7 @@ const http = require('http');
 const { initWebSocket } = require('./services/socketService');
 
 const server = http.createServer(app);
-initWebSocket(server);
+initWebSocket(server).catch((err) => console.error('WebSocket Init Error:', err.message));
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', () => {

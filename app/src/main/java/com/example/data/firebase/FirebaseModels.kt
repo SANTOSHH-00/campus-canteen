@@ -30,6 +30,7 @@ data class UserDocument(
   val fcmToken: String = "",
   val phone: String = "",
   val course: String = "",
+  val gender: String = "",
   val createdAt: Long = System.currentTimeMillis(),
 ) {
   fun toUserProfile(): UserProfile {
@@ -41,6 +42,7 @@ data class UserDocument(
       avatarId = avatarId,
       phone = phone,
       course = course,
+      gender = gender,
     )
   }
 
@@ -57,6 +59,7 @@ data class UserDocument(
         fcmToken = fcmToken,
         phone = profile.phone,
         course = profile.course,
+        gender = profile.gender,
       )
     }
   }
@@ -254,18 +257,28 @@ data class OrderDocument(
   val paymentStatus: String = "PAID",
   val tokenNumber: String = "",
   val pickupPreference: String = "Pickup ASAP",
+  val customerPickupTime: String = "",
+  val estimatedCompletionTime: String = "",
   val pickupCanteenName: String = "",
   val pickupLocation: String = "",
   val pickupCounter: String = "Counter 1", // Counter 1, Counter 2
   val estimatedReadyTime: String = "",
-  val createdAt: Long = System.currentTimeMillis(),
-  val updatedAt: Long = System.currentTimeMillis(),
+  val createdAt: Long = 0L,
+  val updatedAt: Long = 0L,
   val orderPlacedAt: Long = 0L,
   val confirmedAt: Long = 0L,
   val preparingAt: Long = 0L,
   val readyAt: Long = 0L,
   val completedAt: Long = 0L,
 ) {
+  fun getExactPlacedEpoch(): Long {
+    if (orderPlacedAt > 0) return orderPlacedAt
+    if (createdAt > 0) return createdAt
+    val fromId = com.example.data.api.extractEpochFromOrderId(orderId)
+    if (fromId > 0) return fromId
+    return 0L
+  }
+
   fun toOrderRecord(): OrderRecord {
     val parsedStatus = when (status.uppercase()) {
       "NEW" -> OrderStatus.NEW
@@ -291,12 +304,15 @@ data class OrderDocument(
     }
 
     val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-    val placedTimestamp = if (orderPlacedAt > 0) orderPlacedAt else createdAt
+    val placedTimestamp = getExactPlacedEpoch()
     val placedFormatted = if (placedTimestamp > 0) timeFormat.format(Date(placedTimestamp)) else ""
     val confirmedFormatted = if (confirmedAt > 0) timeFormat.format(Date(confirmedAt)) else placedFormatted
     val preparingFormatted = if (preparingAt > 0) timeFormat.format(Date(preparingAt)) else ""
     val readyFormatted = if (readyAt > 0) timeFormat.format(Date(readyAt)) else ""
     val completedFormatted = if (completedAt > 0) timeFormat.format(Date(completedAt)) else ""
+
+    val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+    val orderDateStr = if (placedTimestamp > 0) dateFormat.format(Date(placedTimestamp)) else ""
 
     return OrderRecord(
       id = orderId,
@@ -304,8 +320,13 @@ data class OrderDocument(
       items = cartItems,
       totalPrice = totalAmount,
       status = parsedStatus,
-      orderTime = if (placedFormatted.isNotBlank()) "Today, $placedFormatted" else "Today, 10:42 AM",
-      estimatedReadyTime = estimatedReadyTime.ifBlank { "Ready soon" },
+      orderTime = if (placedFormatted.isNotBlank()) "Today, $placedFormatted" else "Today",
+      estimatedReadyTime = estimatedCompletionTime.ifBlank { estimatedReadyTime.ifBlank { "Ready soon" } },
+      customerPickupTime = customerPickupTime.ifBlank {
+        if (pickupPreference.contains("at ", ignoreCase = true)) pickupPreference.substringAfter("at ").trim()
+        else if (pickupPreference.contains("ASAP", ignoreCase = true)) "ASAP" else "ASAP"
+      },
+      estimatedCompletionTime = estimatedCompletionTime.ifBlank { estimatedReadyTime.ifBlank { "Ready soon" } },
       pickupCanteenName = pickupCanteenName.ifBlank { "Campus Canteen" },
       pickupLocation = pickupLocation.ifBlank { "Counter 1" },
       pickupPreference = pickupPreference,
@@ -316,6 +337,8 @@ data class OrderDocument(
       preparingAt = preparingFormatted,
       readyAt = readyFormatted,
       completedAt = completedFormatted,
+      placedEpoch = placedTimestamp,
+      orderDate = orderDateStr,
     )
   }
 
@@ -342,7 +365,13 @@ data class OrderDocument(
       }
 
       val now = System.currentTimeMillis()
-      val placedEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.orderPlacedAt).let { if (it > 0) it else now }
+      val placedEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.orderPlacedAt).let {
+        if (it > 0) it
+        else {
+          val fromId = com.example.data.api.extractEpochFromOrderId(record.id)
+          if (fromId > 0) fromId else now
+        }
+      }
       val confirmedEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.confirmedAt).let { if (it > 0) it else placedEpoch }
       val preparingEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.preparingAt)
       val readyEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.readyAt)
@@ -361,6 +390,10 @@ data class OrderDocument(
         paymentStatus = "PAID",
         tokenNumber = record.tokenNumber,
         pickupPreference = record.pickupPreference,
+        customerPickupTime = record.customerPickupTime.ifBlank {
+          if (record.pickupPreference.contains("at ", ignoreCase = true)) record.pickupPreference.substringAfter("at ").trim() else "ASAP"
+        },
+        estimatedCompletionTime = record.estimatedCompletionTime.ifBlank { record.estimatedReadyTime },
         pickupCanteenName = record.pickupCanteenName,
         pickupLocation = record.pickupLocation,
         pickupCounter = pickupCounter,
@@ -391,18 +424,24 @@ data class NotificationDocument(
   @get:PropertyName("read") @set:PropertyName("read") var read: Boolean = false,
 ) {
   fun toNotificationItem(): NotificationItem {
-    val diffMinutes = ((System.currentTimeMillis() - createdAt) / 60000).coerceAtLeast(1)
+    val diffMinutes = ((System.currentTimeMillis() - createdAt) / 60000).coerceAtLeast(0)
     val timeAgo = when {
+      diffMinutes < 1 -> "Just now"
       diffMinutes < 60 -> "${diffMinutes}m ago"
       diffMinutes < 1440 -> "${diffMinutes / 60}h ago"
       else -> "${diffMinutes / 1440}d ago"
     }
+    val arrivalTime = if (createdAt > 0) {
+      java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date(createdAt))
+    } else ""
     return NotificationItem(
       id = notificationId,
       title = title,
       message = message,
       timeAgo = timeAgo,
       isUnread = !read,
+      timestamp = createdAt,
+      arrivalTimeFormatted = arrivalTime,
     )
   }
 }

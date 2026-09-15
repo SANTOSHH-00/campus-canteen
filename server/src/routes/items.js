@@ -3,10 +3,40 @@ const router = express.Router();
 const Item = require('../models/Item');
 const { cloudinary, upload } = require('../config/cloudinary');
 
-// GET /api/items/canteen/:canteenId - List items for a canteen
+// High-performance in-memory cache for canteen item menus during peak rush hours (60s TTL)
+const itemMenuCache = new Map();
+const ITEM_CACHE_TTL_MS = 60 * 1000;
+
+function invalidateCanteenCache(canteenId) {
+  if (canteenId) {
+    itemMenuCache.delete(canteenId);
+  } else {
+    itemMenuCache.clear();
+  }
+}
+
+// GET /api/items/canteen/:canteenId - List items for a canteen (Cached)
 router.get('/canteen/:canteenId', async (req, res) => {
   try {
-    const items = await Item.find({ canteenId: req.params.canteenId }).lean();
+    const { canteenId } = req.params;
+    const now = Date.now();
+
+    // Check in-memory cache
+    if (itemMenuCache.has(canteenId)) {
+      const cached = itemMenuCache.get(canteenId);
+      if (cached.expiresAt > now) {
+        return res.json(cached.data);
+      }
+    }
+
+    const items = await Item.find({ canteenId }).lean();
+
+    // Store in cache
+    itemMenuCache.set(canteenId, {
+      data: items,
+      expiresAt: now + ITEM_CACHE_TTL_MS,
+    });
+
     res.json(items);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -55,6 +85,7 @@ router.post('/', async (req, res) => {
       itemData,
       { upsert: true, new: true }
     );
+    if (item && item.canteenId) invalidateCanteenCache(item.canteenId);
     res.status(201).json(item);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -71,6 +102,7 @@ router.patch('/:id/stock', async (req, res) => {
       { new: true }
     );
     if (!updated) return res.status(404).json({ error: 'Item not found' });
+    if (updated.canteenId) invalidateCanteenCache(updated.canteenId);
     res.json(updated);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -93,6 +125,7 @@ router.delete('/:id', async (req, res) => {
       }
     }
 
+    if (item.canteenId) invalidateCanteenCache(item.canteenId);
     await Item.deleteOne({ id: req.params.id });
     res.json({ success: true, message: 'Item and associated image deleted successfully' });
   } catch (err) {

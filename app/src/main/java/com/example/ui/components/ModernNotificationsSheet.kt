@@ -151,13 +151,13 @@ fun ModernNotificationsSheet(
                   modifier = Modifier
                     .size(38.dp)
                     .clip(CircleShape)
-                    .background(DeliveryOrangeLight),
+                    .background(Color(0xFFF1F5F9)),
                   contentAlignment = Alignment.Center,
                 ) {
                   Icon(
-                    imageVector = Icons.Default.Notifications,
+                    imageVector = Icons.Default.NotificationsNone,
                     contentDescription = null,
-                    tint = DeliveryOrange,
+                    tint = BlackPrimary,
                     modifier = Modifier.size(20.dp),
                   )
                 }
@@ -364,34 +364,34 @@ private fun NotificationCardItem(item: NotificationItem) {
   val isPreparing = item.title.contains("Kitchen", ignoreCase = true) || item.title.contains("Preparing", ignoreCase = true)
   val isOrder = item.title.contains("Order", ignoreCase = true) || item.title.contains("Token", ignoreCase = true)
 
-  val iconColor = when {
-    isReady -> OpenGreen
-    isPreparing -> DeliveryOrange
-    isOrder -> BlackPrimary
-    else -> Color(0xFF64748B)
-  }
-
-  val iconBg = when {
-    isReady -> Color(0xFFE8F5E9)
-    isPreparing -> DeliveryOrangeLight
-    else -> SoftGray
-  }
+  // Clean monochrome icon styling: sleek neutral slate with crisp background
+  val iconColor = BlackPrimary
+  val iconBg = Color(0xFFF1F5F9)
 
   val iconVector = when {
     isReady -> Icons.Default.CheckCircle
     isPreparing -> Icons.Default.Fastfood
     isOrder -> Icons.AutoMirrored.Filled.ReceiptLong
-    else -> Icons.Default.Notifications
+    else -> Icons.Default.NotificationsNone
+  }
+
+  val arrivalTimeDisplay = when {
+    item.arrivalTimeFormatted.isNotBlank() -> "${item.arrivalTimeFormatted} · ${item.timeAgo}"
+    item.timestamp > 0 -> {
+      val formatted = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date(item.timestamp))
+      "$formatted · ${item.timeAgo}"
+    }
+    else -> item.timeAgo
   }
 
   Box(
     modifier = Modifier
       .fillMaxWidth()
       .clip(RoundedCornerShape(16.dp))
-      .background(if (item.isUnread) Color(0xFFFFFBF8) else PureWhite)
+      .background(if (item.isUnread) Color(0xFFF8FAFC) else PureWhite)
       .border(
         width = if (item.isUnread) 1.2.dp else 1.dp,
-        color = if (item.isUnread) DeliveryOrange.copy(alpha = 0.35f) else BorderGray.copy(alpha = 0.7f),
+        color = if (item.isUnread) BlackPrimary.copy(alpha = 0.35f) else BorderGray.copy(alpha = 0.7f),
         shape = RoundedCornerShape(16.dp),
       )
       .padding(14.dp),
@@ -400,7 +400,7 @@ private fun NotificationCardItem(item: NotificationItem) {
       modifier = Modifier.fillMaxWidth(),
       verticalAlignment = Alignment.Top,
     ) {
-      // Type Icon Badge
+      // Sleek Monochrome Icon Badge
       Box(
         modifier = Modifier
           .size(38.dp)
@@ -433,7 +433,7 @@ private fun NotificationCardItem(item: NotificationItem) {
 
           Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-              text = item.timeAgo,
+              text = arrivalTimeDisplay,
               fontSize = 11.sp,
               fontWeight = FontWeight.Medium,
               color = TextMuted,
@@ -444,7 +444,7 @@ private fun NotificationCardItem(item: NotificationItem) {
                 modifier = Modifier
                   .size(7.dp)
                   .clip(CircleShape)
-                  .background(DeliveryOrange),
+                  .background(BlackPrimary),
               )
             }
           }

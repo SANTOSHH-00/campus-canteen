@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -120,43 +122,50 @@ fun CampusBottomNav(
               .padding(vertical = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
           ) {
-            // Soft rounded container matching the circular AI button geometry when active
+            // Container with active indicator and unclipped cart count badge
             Box(
-              modifier = Modifier
-                .clip(RoundedCornerShape(14.dp))
-                .background(if (isSelected) Color(0xFFE8E2D9) else Color.Transparent)
-                .padding(horizontal = 12.dp, vertical = 3.dp),
               contentAlignment = Alignment.Center,
             ) {
-              if (item.tab == BottomNavTab.CART && cartBadgeCount > 0) {
-                BadgedBox(
-                  badge = {
-                    Badge(
-                      containerColor = BlackPrimary,
-                      contentColor = PureWhite,
-                    ) {
-                      Text(
-                        text = if (cartBadgeCount > 99) "99+" else cartBadgeCount.toString(),
-                        fontSize = 9.5.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                      )
-                    }
-                  }
-                ) {
-                  Icon(
-                    imageVector = if (isSelected) item.activeIcon else item.inactiveIcon,
-                    contentDescription = item.tab.label,
-                    tint = iconColor,
-                    modifier = Modifier.size(23.dp),
-                  )
-                }
-              } else {
+              if (isSelected) {
+                Box(
+                  modifier = Modifier
+                    .matchParentSize()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFFE8E2D9))
+                )
+              }
+
+              Box(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                contentAlignment = Alignment.Center,
+              ) {
                 Icon(
                   imageVector = if (isSelected) item.activeIcon else item.inactiveIcon,
                   contentDescription = item.tab.label,
                   tint = iconColor,
                   modifier = Modifier.size(23.dp),
                 )
+
+                if (item.tab == BottomNavTab.CART && cartBadgeCount > 0) {
+                  Box(
+                    modifier = Modifier
+                      .align(Alignment.TopEnd)
+                      .offset(x = 10.dp, y = (-7).dp)
+                      .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
+                      .clip(CircleShape)
+                      .background(DeliveryOrange)
+                      .padding(horizontal = 4.dp, vertical = 1.dp),
+                    contentAlignment = Alignment.Center,
+                  ) {
+                    Text(
+                      text = if (cartBadgeCount > 99) "99+" else cartBadgeCount.toString(),
+                      fontSize = 10.sp,
+                      fontWeight = FontWeight.ExtraBold,
+                      color = PureWhite,
+                      textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                  }
+                }
               }
             }
 

@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Clean, balanced monochrome person vector silhouette matching Material Storefront / Business proportion and stroke weights -->
+    <path
+        android:fillColor="#FF111111"
+        android:pathData="M12,12c2.21,0 4,-1.79 4,-4s-1.79,-4 -4,-4 -4,1.79 -4,4 1.79,4 4,4zM12,14.2c-2.8,0 -8.2,1.41 -8.2,4.2V20h16.4v-1.6c0,-2.79 -5.4,-4.2 -8.2,-4.2z" />
+</vector>

@@ -1,14 +1,43 @@
 const { WebSocketServer, WebSocket } = require('ws');
+const { Server: SocketIOServer } = require('socket.io');
+const { createClient } = require('redis');
+const { createAdapter } = require('@socket.io/redis-adapter');
 
 let wss = null;
+let io = null;
 // Map: ws -> Set of subscription keys (e.g. "order:ORD-123", "canteen:canteen_33", "student:student_1")
 const clientSubscriptions = new Map();
 
+// Redis clients for multi-instance sync
+let redisPubClient = null;
+let redisSubClient = null;
+let rawWsSubClient = null;
+const RAW_WS_REDIS_CHANNEL = 'QUICKBITE_RAW_WS_SYNC';
+
 /**
- * Initialize the WebSocket Server on top of the existing Node.js HTTP server.
+ * Dispatch message strictly to local WebSocket clients connected to this instance.
+ */
+function dispatchLocalRawWs(channel, payload) {
+  if (!wss) return;
+  const messageStr = JSON.stringify(payload);
+  for (const [ws, subs] of clientSubscriptions.entries()) {
+    if (ws.readyState === WebSocket.OPEN && subs.has(channel)) {
+      try {
+        ws.send(messageStr);
+      } catch (err) {
+        console.warn(`[SocketService] Failed sending to local ws channel ${channel}:`, err.message);
+      }
+    }
+  }
+}
+
+/**
+ * Initialize WebSocket and Socket.IO servers on top of the existing Node.js HTTP server.
+ * Supports single instance standalone or multi-instance Redis cluster.
  * @param {import('http').Server} server 
  */
-function initWebSocket(server) {
+async function initWebSocket(server) {
+  // 1. Raw WebSocket Server for Android OkHttp WebSocket
   wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', (ws, req) => {
@@ -78,26 +107,115 @@ function initWebSocket(server) {
     clearInterval(interval);
   });
 
+  // 2. Socket.IO Gateway
+  try {
+    io = new SocketIOServer(server, {
+      cors: { origin: '*', methods: ['GET', 'POST', 'PATCH'] },
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+    });
+
+    io.on('connection', (socket) => {
+      socket.on('join', (channel) => {
+        if (channel) socket.join(channel);
+      });
+      socket.on('leave', (channel) => {
+        if (channel) socket.leave(channel);
+      });
+      socket.on('subscribe', (channel) => {
+        if (channel) socket.join(channel);
+      });
+      socket.on('unsubscribe', (channel) => {
+        if (channel) socket.leave(channel);
+      });
+    });
+    console.log('⚡ Quick Bite Socket.IO Gateway initialized on /socket.io');
+  } catch (err) {
+    console.warn('[SocketService] Socket.IO initialization warning:', err.message);
+  }
+
+  // 3. Multi-Instance Redis Adapter Setup (Render Multi-Instance Horizontal Scaling)
+  const redisUrl = process.env.REDIS_URL;
+  if (redisUrl) {
+    try {
+      console.log('🔄 Connecting to Redis Pub/Sub for multi-instance scaling...');
+      redisPubClient = createClient({ url: redisUrl });
+      redisSubClient = redisPubClient.duplicate();
+      rawWsSubClient = redisPubClient.duplicate();
+
+      redisPubClient.on('error', (err) => console.warn('⚠️ Redis Pub Error:', err.message));
+      redisSubClient.on('error', (err) => console.warn('⚠️ Redis Sub Error:', err.message));
+      rawWsSubClient.on('error', (err) => console.warn('⚠️ Redis Raw WS Sub Error:', err.message));
+
+      await Promise.all([
+        redisPubClient.connect(),
+        redisSubClient.connect(),
+        rawWsSubClient.connect(),
+      ]);
+
+      // Connect Socket.IO Redis Adapter
+      if (io) {
+        io.adapter(createAdapter(redisPubClient, redisSubClient));
+      }
+
+      // Subscribe to cross-instance raw WebSocket broadcasts
+      await rawWsSubClient.subscribe(RAW_WS_REDIS_CHANNEL, (message) => {
+        try {
+          const parsed = JSON.parse(message);
+          if (parsed.channel && parsed.payload) {
+            dispatchLocalRawWs(parsed.channel, parsed.payload);
+          }
+        } catch (err) {
+          console.warn('[SocketService] Error parsing cross-instance raw ws message:', err.message);
+        }
+      });
+
+      console.log('✅ Quick Bite Multi-Instance Redis Adapter Active (WebSockets & Socket.IO synced across all Render instances)');
+    } catch (redisErr) {
+      console.warn('⚠️ Redis setup failed. Falling back to single-instance standalone mode:', redisErr.message);
+      redisPubClient = null;
+      redisSubClient = null;
+      rawWsSubClient = null;
+    }
+  } else {
+    console.log('ℹ️ REDIS_URL not specified. Operating in high-performance single-instance standalone mode.');
+  }
+
   console.log('⚡ Quick Bite WebSocket Gateway initialized on path /ws');
-  return wss;
+  return { wss, io };
 }
 
 /**
- * Broadcast an event to all connected sockets subscribed to a specific channel.
+ * Broadcast an event to all connected sockets (WebSocket and Socket.IO) subscribed to a channel.
+ * Automatically synchronizes across all running backend instances if Redis is connected.
  * @param {string} channel 
  * @param {object} payload 
  */
 function broadcastToChannel(channel, payload) {
-  if (!wss) return;
-  const messageStr = JSON.stringify(payload);
+  // 1. Dispatch to local raw WebSocket clients
+  dispatchLocalRawWs(channel, payload);
 
-  for (const [ws, subs] of clientSubscriptions.entries()) {
-    if (ws.readyState === WebSocket.OPEN && subs.has(channel)) {
-      try {
-        ws.send(messageStr);
-      } catch (err) {
-        console.warn(`[SocketService] Failed sending to channel ${channel}:`, err.message);
-      }
+  // 2. Publish to Redis so other Render instances dispatch to their local WebSocket clients
+  if (redisPubClient && redisPubClient.isOpen) {
+    try {
+      redisPubClient.publish(
+        RAW_WS_REDIS_CHANNEL,
+        JSON.stringify({ channel, payload })
+      ).catch((err) => {
+        console.warn('[SocketService] Redis publish error:', err.message);
+      });
+    } catch (err) {
+      console.warn('[SocketService] Redis publish failed:', err.message);
+    }
+  }
+
+  // 3. Broadcast via Socket.IO (automatically synced across instances by Socket.IO Redis Adapter)
+  if (io) {
+    try {
+      io.to(channel).emit(payload.type, payload);
+      io.emit(channel, payload);
+    } catch (err) {
+      console.warn(`[SocketService] Failed sending to Socket.IO channel ${channel}:`, err.message);
     }
   }
 }

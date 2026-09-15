@@ -51,6 +51,21 @@ class MainActivity : ComponentActivity() {
     // Connect to Quick Bite real-time WebSockets
     com.example.data.api.WebSocketManager.connect()
 
+    // Resume background order tracking if an active order exists
+    val activeOrderId = SessionManager.getActiveOrderId()
+    if (!activeOrderId.isNullOrBlank()) {
+      val token = SessionManager.getActiveOrderToken()
+      val canteenId = SessionManager.getActiveOrderCanteenId()
+      val studentId = SessionManager.getStudentSession()?.registrationNumber ?: ""
+      com.example.data.service.OrderStatusNotificationService.start(
+        context = applicationContext,
+        orderId = activeOrderId,
+        tokenNumber = token,
+        canteenId = canteenId,
+        studentId = studentId
+      )
+    }
+
     // Sync FCM Token to Backend if available
     FirebaseConfig.messaging?.token?.addOnCompleteListener { task ->
       if (task.isSuccessful && !task.result.isNullOrBlank()) {

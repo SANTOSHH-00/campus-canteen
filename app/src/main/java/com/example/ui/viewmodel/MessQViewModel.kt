@@ -151,6 +151,14 @@ class MessQViewModel(
   }
 
   fun placeOrder(orderRecord: OrderRecord, studentId: String = "student_guest", canteenId: String = "canteen_33") {
+    val isGuest = studentId.isBlank() ||
+        studentId == "student_guest" ||
+        studentId.contains("guest", ignoreCase = true) ||
+        (_currentUser.value?.name ?: "").contains("guest", ignoreCase = true)
+    if (isGuest) {
+      // Do NOT persist guest orders to database or show on owner dashboard
+      return
+    }
     viewModelScope.launch {
       val doc = OrderDocument.fromOrderRecord(
         record = orderRecord,

@@ -85,7 +85,13 @@ interface QuickbiteApiService {
 
   // ── Orders ────────────────────────────────────────────────────────────────
   @GET("orders/student/{studentId}")
-  suspend fun getStudentOrders(@Path("studentId") studentId: String): Response<List<MongoOrderDto>>
+  suspend fun getStudentOrders(
+    @Path("studentId") studentId: String,
+    @retrofit2.http.Query("canteenId") canteenId: String? = null,
+    @retrofit2.http.Query("dateOption") dateOption: String? = null,
+    @retrofit2.http.Query("startDate") startDate: String? = null,
+    @retrofit2.http.Query("endDate") endDate: String? = null,
+  ): Response<List<MongoOrderDto>>
 
   @GET("orders/canteen/{canteenId}")
   suspend fun getCanteenOrders(@Path("canteenId") canteenId: String): Response<List<MongoOrderDto>>
@@ -94,7 +100,10 @@ interface QuickbiteApiService {
   suspend fun getOrder(@Path("id") id: String): Response<MongoOrderDto>
 
   @POST("orders")
-  suspend fun createOrder(@Body order: MongoOrderDto): Response<MongoOrderDto>
+  suspend fun createOrder(
+    @Body order: MongoOrderDto,
+    @retrofit2.http.Header("Idempotency-Key") idempotencyKey: String? = null,
+  ): Response<MongoOrderDto>
 
   @GET("orders/queue/canteen/{canteenId}")
   suspend fun getCanteenQueue(@Path("canteenId") canteenId: String): Response<CanteenQueueDto>
@@ -159,4 +168,21 @@ interface QuickbiteApiService {
 
   @PATCH("notifications/{id}/read")
   suspend fun markNotificationRead(@Path("id") id: String): Response<MongoNotificationDto>
+
+  // ── Favorites ─────────────────────────────────────────────────────────────
+  @GET("users/{uid}/favorites")
+  suspend fun getUserFavorites(@Path("uid") uid: String): Response<UserFavoritesResponseDto>
+
+  @POST("users/{uid}/favorites/{itemId}")
+  suspend fun addFavorite(
+    @Path("uid") uid: String,
+    @Path("itemId") itemId: String,
+  ): Response<UserFavoritesResponseDto>
+
+  @DELETE("users/{uid}/favorites/{itemId}")
+  suspend fun removeFavorite(
+    @Path("uid") uid: String,
+    @Path("itemId") itemId: String,
+  ): Response<UserFavoritesResponseDto>
 }
+

@@ -18,6 +18,14 @@ router.get('/user/:userId', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const notifData = req.body;
+    const userId = (notifData.userId || '').toLowerCase().trim();
+    if (userId === 'student_guest' || userId.includes('guest')) {
+      return res.status(201).json({
+        ...notifData,
+        message: 'Guest notification not saved to database.'
+      });
+    }
+
     if (!notifData.notificationId) {
       notifData.notificationId = 'NOTIF-' + Date.now();
     }

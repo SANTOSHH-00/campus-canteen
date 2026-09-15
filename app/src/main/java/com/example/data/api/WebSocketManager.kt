@@ -222,10 +222,10 @@ object WebSocketManager {
   }
 
   /**
-   * Observe live incoming new orders for a canteen.
+   * Observe live incoming new orders and status changes for a canteen.
    */
   fun observeCanteenOrders(canteenId: String): Flow<MongoOrderDto> {
     subscribe("canteen:$canteenId")
-    return newOrders.filter { it.canteenId == canteenId }
+    return kotlinx.coroutines.flow.merge(newOrders, orderUpdates).filter { it.canteenId == canteenId }
   }
 }

@@ -37,14 +37,29 @@ class MessQFirebaseMessagingService : FirebaseMessagingService() {
 
   override fun onMessageReceived(remoteMessage: RemoteMessage) {
     super.onMessageReceived(remoteMessage)
-    Log.d(TAG, "From: ${remoteMessage.from}")
+    Log.d(TAG, "From: ${remoteMessage.from}, data: ${remoteMessage.data}")
 
-    val title = remoteMessage.notification?.title ?: remoteMessage.data["title"] ?: "MessQ Campus Canteen"
-    val body = remoteMessage.notification?.body ?: remoteMessage.data["message"] ?: "New notification for your order."
+    val type = remoteMessage.data["type"] ?: ""
+    val status = remoteMessage.data["status"] ?: ""
+    val orderId = remoteMessage.data["orderId"] ?: ""
+    val token = remoteMessage.data["tokenNumber"] ?: orderId
 
-    com.example.data.session.SessionManager.saveIncomingNotification(title, body)
-
-    showNotification(title, body)
+    if (type == "ORDER_STATUS" || status.isNotBlank()) {
+      // Delegate to OrderNotificationHelper which guarantees deduplication & single delivery
+      com.example.util.OrderNotificationHelper.showOrderStatusNotification(
+        context = this,
+        tokenNumber = token.ifBlank { orderId },
+        status = status,
+        counter = remoteMessage.data["counter"] ?: "Counter 1"
+      )
+    } else {
+      val title = remoteMessage.notification?.title ?: remoteMessage.data["title"] ?: "QuickBite Campus Canteen"
+      val body = remoteMessage.notification?.body ?: remoteMessage.data["message"] ?: remoteMessage.data["body"] ?: ""
+      if (title.isNotBlank() && body.isNotBlank()) {
+        com.example.data.session.SessionManager.saveIncomingNotification(title, body)
+        showNotification(title, body)
+      }
+    }
   }
 
   private fun showNotification(title: String, body: String) {

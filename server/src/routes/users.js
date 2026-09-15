@@ -44,4 +44,48 @@ router.patch('/:uid/fcm', async (req, res) => {
   }
 });
 
+// GET /api/users/:uid/favorites - Get user favorite item IDs
+router.get('/:uid/favorites', async (req, res) => {
+  try {
+    const user = await User.findOne({ uid: req.params.uid }).lean();
+    const favorites = (user && Array.isArray(user.favorites)) ? user.favorites : [];
+    res.json({ favorites });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/users/:uid/favorites/:itemId - Add item to favorites
+router.post('/:uid/favorites/:itemId', async (req, res) => {
+  try {
+    const { uid, itemId } = req.params;
+    if (!itemId) return res.status(400).json({ error: 'Item ID required' });
+    const user = await User.findOneAndUpdate(
+      { uid },
+      { $addToSet: { favorites: itemId } },
+      { upsert: true, new: true }
+    ).lean();
+    res.json({ favorites: user ? user.favorites : [itemId] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/users/:uid/favorites/:itemId - Remove item from favorites
+router.delete('/:uid/favorites/:itemId', async (req, res) => {
+  try {
+    const { uid, itemId } = req.params;
+    const user = await User.findOneAndUpdate(
+      { uid },
+      { $pull: { favorites: itemId } },
+      { new: true }
+    ).lean();
+    const favorites = (user && Array.isArray(user.favorites)) ? user.favorites : [];
+    res.json({ favorites });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
+

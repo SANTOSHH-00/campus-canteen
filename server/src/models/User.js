@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema(
     fcmToken: { type: String, default: '' },
     phone: { type: String, default: '' },
     course: { type: String, default: '' },
+    favorites: { type: [String], default: [] },
   },
   { timestamps: true }
 );

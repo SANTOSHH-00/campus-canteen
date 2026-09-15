@@ -166,7 +166,7 @@ fun PickupTimePickerSheet(
         ) {
           Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-              text = "ESTIMATED READY TIME",
+              text = "CUSTOMER PICKUP TIME",
               fontSize = 10.5.sp,
               fontWeight = FontWeight.ExtraBold,
               color = TextMuted,
@@ -181,7 +181,7 @@ fun PickupTimePickerSheet(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-              text = "Ready in ~$selectedSlotMinutes minutes from now",
+              text = "Pickup in ~$selectedSlotMinutes mins from now",
               fontSize = 12.5.sp,
               fontWeight = FontWeight.SemiBold,
               color = DeliveryOrange,

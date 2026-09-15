@@ -126,6 +126,33 @@ data class CampusBlockCanteen(
     get() = if (rawItems.isNotEmpty()) rawItems else (quickOrderItems + popularItems + readyIn10Items).distinctBy { it.id }
 }
 
+enum class OrdersDateFilterOption(val displayName: String) {
+  ALL("All Dates"),
+  TODAY("Today"),
+  YESTERDAY("Yesterday"),
+  LAST_7_DAYS("Last 7 Days"),
+  LAST_30_DAYS("Last 30 Days"),
+  CUSTOM("Custom Date Range"),
+}
+
+data class OrdersFilterState(
+  val dateOption: OrdersDateFilterOption = OrdersDateFilterOption.ALL,
+  val customStartDateEpoch: Long? = null,
+  val customEndDateEpoch: Long? = null,
+  val selectedCanteenIds: Set<String> = emptySet(),
+) {
+  val isActive: Boolean
+    get() = dateOption != OrdersDateFilterOption.ALL || selectedCanteenIds.isNotEmpty()
+
+  val activeFilterCount: Int
+    get() {
+      var count = 0
+      if (dateOption != OrdersDateFilterOption.ALL) count++
+      if (selectedCanteenIds.isNotEmpty()) count += selectedCanteenIds.size
+      return count
+    }
+}
+
 data class OrderRecord(
   val id: String,
   val tokenNumber: String,
@@ -134,6 +161,8 @@ data class OrderRecord(
   val status: OrderStatus,
   val orderTime: String,
   val estimatedReadyTime: String,
+  val customerPickupTime: String = "",
+  val estimatedCompletionTime: String = "",
   val pickupCanteenName: String = "Govinda's Kitchen",
   val pickupLocation: String = "Block 33 · 6th Floor",
   val pickupPreference: String = "Pickup ASAP",
@@ -144,6 +173,8 @@ data class OrderRecord(
   val preparingAt: String = "",
   val readyAt: String = "",
   val completedAt: String = "",
+  val placedEpoch: Long = 0L,
+  val orderDate: String = "",
 )
 
 data class NotificationItem(
@@ -152,6 +183,8 @@ data class NotificationItem(
   val message: String,
   val timeAgo: String,
   val isUnread: Boolean = true,
+  val timestamp: Long = System.currentTimeMillis(),
+  val arrivalTimeFormatted: String = "",
 )
 
 enum class BottomNavTab(val label: String) {

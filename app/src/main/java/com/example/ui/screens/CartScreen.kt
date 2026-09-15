@@ -89,6 +89,7 @@ import com.example.data.api.CartQueueResponseDto
 import com.example.data.api.CanteenQueueDto
 import com.example.data.api.MongoRepository
 import com.example.data.api.WebSocketManager
+import com.example.data.api.formatUtcToLocalTime
 
 @Composable
 fun CartScreen(
@@ -118,6 +119,12 @@ fun CartScreen(
       }
       MongoRepository.getCartQueue(selectedCanteenId, itemsDto).onSuccess {
         cartQueueData = it
+        appState.activeQueueWaitMinutes = it.estWaitMinutes
+        val serverReadyTime = it.estimatedCompletionAt?.let { at -> formatUtcToLocalTime(at) }?.ifBlank { null }
+          ?: it.estimatedCompletionTime.ifBlank { null }
+        if (!serverReadyTime.isNullOrBlank()) {
+          appState.serverEstimatedCompletionTime = serverReadyTime
+        }
       }
     }
   }
@@ -230,7 +237,7 @@ fun CartScreen(
         modifier = Modifier
           .fillMaxSize()
           .padding(horizontal = 20.dp)
-          .padding(bottom = 80.dp), // space for docked bottom summary bar
+          .padding(bottom = 96.dp), // space for docked checkout bar flush with bottom nav
         verticalArrangement = Arrangement.spacedBy(14.dp),
       ) {
         item {
@@ -258,77 +265,59 @@ fun CartScreen(
           Row(
             modifier = Modifier
               .fillMaxWidth()
-              .clip(RoundedCornerShape(12.dp))
-              .background(Color(0xFFF7F3EC))
-              .border(1.dp, BorderGray.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
-              .padding(horizontal = 14.dp, vertical = 9.dp),
+              .clip(RoundedCornerShape(8.dp))
+              .background(WarmCream)
+              .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
           ) {
-            Text(appState.selectedCanteen.icon, fontSize = 16.sp)
-            Spacer(modifier = Modifier.width(10.dp))
-            Column {
-              Text(
-                text = "Pickup: ${appState.selectedCanteen.name}",
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = BlackPrimary,
-              )
-              Text(
-                text = "${appState.selectedCanteen.betweenBlocks} • ${appState.selectedCanteen.floorInfo}",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextMuted,
-              )
-            }
+            Text(
+              text = "📍",
+              fontSize = 12.sp,
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = "${appState.selectedCanteen.name} · ${appState.selectedCanteen.betweenBlocks}",
+              fontSize = 12.sp,
+              fontWeight = FontWeight.SemiBold,
+              color = TextDark,
+            )
           }
-          Spacer(modifier = Modifier.height(10.dp))
+          Spacer(modifier = Modifier.height(14.dp))
 
           // ── Kitchen Live Queue & Avg Wait Time Card (Normal neutral icons, clean layout) ──
-          Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = CardSurface),
-            border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray),
+          val firstItemName = appState.cartItems.firstOrNull()?.foodItem?.name ?: "Item"
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(14.dp))
+              .background(Color.White)
+              .border(1.dp, BorderGray, RoundedCornerShape(14.dp))
+              .padding(14.dp),
           ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column {
               Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
               ) {
-                val firstItemName = appState.cartItems.firstOrNull()?.foodItem?.name ?: "Item"
                 val displayTitle = if (appState.cartItems.size == 1) "$firstItemName Queue" else "Item Live Queue"
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                  Icon(
-                    imageVector = Icons.Default.AccessTime,
-                    contentDescription = null,
-                    tint = TextDark,
-                    modifier = Modifier.size(16.dp),
-                  )
-                  Spacer(Modifier.width(6.dp))
+                Text(
+                  text = displayTitle,
+                  fontSize = 14.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = TextDark,
+                )
+                Box(
+                  modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFFF3F4F6))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
                   Text(
-                    text = displayTitle,
-                    fontSize = 13.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextDark,
-                  )
-                }
-
-                // Live status dot
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                  Box(
-                    modifier = Modifier
-                      .size(7.dp)
-                      .clip(CircleShape)
-                      .background(Color(0xFF16A34A))
-                  )
-                  Spacer(Modifier.width(5.dp))
-                  Text(
-                    text = "Live",
+                    text = "Live Sync",
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF16A34A),
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF4B5563),
                   )
                 }
               }
@@ -347,7 +336,9 @@ fun CartScreen(
                 val queuePosition = cartQueueData?.queuePosition ?: 1
                 val similarOrdersAhead = cartQueueData?.similarOrdersAhead ?: 0
                 val waitTime = cartQueueData?.estWaitMinutes ?: 5
-                val readyTime = cartQueueData?.estimatedCompletionTime?.ifBlank { "~$waitTime mins" } ?: "~$waitTime mins"
+                val readyTime = cartQueueData?.estimatedCompletionAt?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
+                  ?: cartQueueData?.estimatedCompletionTime?.ifBlank { null }
+                  ?: appState.estimatedReadyTimeFormatted
                 val workloadText = cartQueueData?.workloadSummary?.ifBlank {
                   if (similarOrdersAhead == 0) "0 similar orders ahead" else "$similarOrdersAhead similar order${if (similarOrdersAhead > 1) "s" else ""} ahead"
                 } ?: (if (similarOrdersAhead == 0) "0 similar orders ahead" else "$similarOrdersAhead similar order${if (similarOrdersAhead > 1) "s" else ""} ahead")
@@ -564,69 +555,51 @@ fun CartScreen(
             color = TextDark,
           )
 
-          Spacer(modifier = Modifier.height(10.dp))
-
-          // Radio option 1: Pickup
+          // Option 1: Pickup ASAP
           Row(
             modifier = Modifier
               .fillMaxWidth()
-              .clickable { appState.pickupPreferenceType = "Pickup" }
-              .padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            Icon(
-              imageVector = Icons.Default.RadioButtonChecked,
-              contentDescription = "Pickup",
-              tint = BlackPrimary,
-              modifier = Modifier.size(22.dp),
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-              text = "Pickup",
-              fontSize = 15.sp,
-              fontWeight = FontWeight.Bold,
-              color = TextDark,
-            )
-          }
-
-          Spacer(modifier = Modifier.height(6.dp))
-
-          // Radio option 2: ASAP
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
+              .clip(RoundedCornerShape(12.dp))
               .clickable {
                 appState.isPickupAsap = true
               }
-              .padding(vertical = 4.dp),
+              .padding(vertical = 6.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
           ) {
             Icon(
               imageVector = if (appState.isPickupAsap) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
-              contentDescription = "ASAP",
+              contentDescription = "Pickup ASAP",
               tint = if (appState.isPickupAsap) BlackPrimary else BorderGray,
               modifier = Modifier.size(22.dp),
             )
             Spacer(modifier = Modifier.width(10.dp))
-            Text(
-              text = "ASAP",
-              fontSize = 15.sp,
-              fontWeight = if (appState.isPickupAsap) FontWeight.Bold else FontWeight.Medium,
-              color = TextDark,
-            )
+            Column {
+              Text(
+                text = "Pickup ASAP",
+                fontSize = 15.sp,
+                fontWeight = if (appState.isPickupAsap) FontWeight.Bold else FontWeight.Medium,
+                color = TextDark,
+              )
+              Text(
+                text = "Order prepared as soon as possible in the queue",
+                fontSize = 12.sp,
+                color = TextMuted,
+              )
+            }
           }
 
-          Spacer(modifier = Modifier.height(6.dp))
+          Spacer(modifier = Modifier.height(8.dp))
 
-          // Radio option 3: Choose pickup time
+          // Option 2: Choose Customer Pickup Time
           Row(
             modifier = Modifier
               .fillMaxWidth()
+              .clip(RoundedCornerShape(12.dp))
               .clickable {
                 appState.isPickupAsap = false
                 showTimePickerDialog = true
               }
-              .padding(vertical = 4.dp),
+              .padding(vertical = 6.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
           ) {
             Icon(
@@ -636,45 +609,39 @@ fun CartScreen(
               modifier = Modifier.size(22.dp),
             )
             Spacer(modifier = Modifier.width(10.dp))
-            Text(
-              text = if (!appState.isPickupAsap && appState.customPickupTime != null) "Choose pickup time (${appState.customPickupTime})" else "Choose pickup time",
-              fontSize = 15.sp,
-              fontWeight = if (!appState.isPickupAsap) FontWeight.Bold else FontWeight.Medium,
-              color = TextDark,
-            )
-          }
-
-          Spacer(modifier = Modifier.height(14.dp))
-
-          // ── Amber Estimated Ready Banner (Dashboard Theme Matching) ───────
-          Box(
-            modifier = Modifier
-              .fillMaxWidth()
-              .clip(RoundedCornerShape(16.dp))
-              .background(Color(0xFFF7F3EC))
-              .border(1.dp, BorderGray.copy(alpha = 0.7f), RoundedCornerShape(16.dp))
-              .padding(horizontal = 14.dp, vertical = 12.dp),
-          ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Icon(
-                imageVector = Icons.Default.AccessTime,
-                contentDescription = null,
-                tint = DrawerAmber,
-                modifier = Modifier.size(18.dp),
-              )
-              Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
               Text(
-                text = "Estimated ready: ",
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.Bold,
+                text = "Choose pickup time",
+                fontSize = 15.sp,
+                fontWeight = if (!appState.isPickupAsap) FontWeight.Bold else FontWeight.Medium,
                 color = TextDark,
               )
               Text(
-                text = appState.estimatedReadyTimeFormatted,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = DrawerAmber,
+                text = if (!appState.isPickupAsap && appState.customPickupTime != null)
+                  "Selected arrival: ${appState.customPickupTime}"
+                else
+                  "Set your expected arrival time at the counter",
+                fontSize = 12.sp,
+                color = if (!appState.isPickupAsap && appState.customPickupTime != null) Color(0xFFEA580C) else TextMuted,
+                fontWeight = if (!appState.isPickupAsap && appState.customPickupTime != null) FontWeight.Bold else FontWeight.Normal,
               )
+            }
+
+            if (!appState.isPickupAsap && appState.customPickupTime != null) {
+              Box(
+                modifier = Modifier
+                  .clip(RoundedCornerShape(8.dp))
+                  .background(Color(0xFFF3F4F6))
+                  .clickable { showTimePickerDialog = true }
+                  .padding(horizontal = 8.dp, vertical = 4.dp),
+              ) {
+                Text(
+                  text = "Change",
+                  fontSize = 12.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = BlackPrimary,
+                )
+              }
             }
           }
 
@@ -690,9 +657,10 @@ fun CartScreen(
         modifier = Modifier
           .align(Alignment.BottomCenter)
           .fillMaxWidth()
+          .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
           .background(PureWhite)
-          .border(1.dp, BorderGray, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-          .padding(horizontal = 20.dp, vertical = 12.dp)
+          .border(1.dp, BorderGray.copy(alpha = 0.8f), RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+          .padding(horizontal = 18.dp, vertical = 12.dp)
       ) {
         Column(modifier = Modifier.fillMaxWidth()) {
           if (!isCanteenOpen) {
@@ -726,14 +694,14 @@ fun CartScreen(
             Column {
               Text(
                 text = "₹${appState.grandTotal}",
-                fontSize = 22.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = TextDark,
               )
               Text(
-                text = "${appState.totalCartCount} items",
+                text = "${appState.totalCartCount} item${if (appState.totalCartCount > 1) "s" else ""}",
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 color = TextMuted,
               )
             }
@@ -759,7 +727,7 @@ fun CartScreen(
                     }
                   }
                 }
-                .padding(horizontal = 28.dp, vertical = 13.dp),
+                .padding(horizontal = 24.dp, vertical = 12.dp),
               contentAlignment = Alignment.Center,
             ) {
               if (appState.isPlacingOrder) {
@@ -779,8 +747,8 @@ fun CartScreen(
                 }
               } else {
                 Text(
-                  text = if (isCanteenOpen) "Place Order →" else "Canteen Closed",
-                  fontSize = 14.5.sp,
+                  text = if (isCanteenOpen) "Place Order ➔" else "Canteen Closed",
+                  fontSize = 14.sp,
                   fontWeight = FontWeight.ExtraBold,
                   color = if (isCanteenOpen) PureWhite else TextMuted,
                 )

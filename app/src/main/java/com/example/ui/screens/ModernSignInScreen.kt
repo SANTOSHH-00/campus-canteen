@@ -38,9 +38,12 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -109,6 +112,7 @@ fun ModernSignInScreen(
   var department by rememberSaveable { mutableStateOf("") }
   var phoneNumber by rememberSaveable { mutableStateOf("") }
   var currentCourse by rememberSaveable { mutableStateOf("") }
+  var selectedGender by rememberSaveable { mutableStateOf("Male") }
   var passwordVisible by rememberSaveable { mutableStateOf(false) }
   var isLoading by remember { mutableStateOf(false) }
   var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -436,6 +440,81 @@ fun ModernSignInScreen(
               }
 
               Spacer(modifier = Modifier.height(14.dp))
+
+              // Gender Dropdown / Selector
+              Text(
+                text = "GENDER",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                color = Color(0xFF6B7280),
+                modifier = Modifier.padding(start = 6.dp, bottom = 6.dp),
+              )
+              var genderDropdownExpanded by remember { mutableStateOf(false) }
+              val genderOptions = listOf("Male", "Female", "Other")
+
+              Box(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .height(52.dp)
+                  .clip(RoundedCornerShape(26.dp))
+                  .background(PillBackground)
+                  .clickable { genderDropdownExpanded = true }
+                  .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.CenterStart,
+              ) {
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                      imageVector = Icons.Default.Person,
+                      contentDescription = null,
+                      tint = Color(0xFF9CA3AF),
+                      modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                      text = if (selectedGender.isNotBlank()) selectedGender else "Select Gender",
+                      fontSize = 14.sp,
+                      color = if (selectedGender.isNotBlank()) TextDark else Color(0xFF9CA3AF),
+                      fontWeight = if (selectedGender.isNotBlank()) FontWeight.Medium else FontWeight.Normal,
+                    )
+                  }
+                  Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = "Select Gender",
+                    tint = Color(0xFF6B7280),
+                    modifier = Modifier.size(22.dp),
+                  )
+                }
+
+                DropdownMenu(
+                  expanded = genderDropdownExpanded,
+                  onDismissRequest = { genderDropdownExpanded = false },
+                  modifier = Modifier.background(PureWhite),
+                ) {
+                  genderOptions.forEach { opt ->
+                    DropdownMenuItem(
+                      text = {
+                        Text(
+                          text = opt,
+                          color = if (selectedGender == opt) AmberBrand else TextDark,
+                          fontWeight = if (selectedGender == opt) FontWeight.Bold else FontWeight.Normal,
+                        )
+                      },
+                      onClick = {
+                        selectedGender = opt
+                        genderDropdownExpanded = false
+                      },
+                    )
+                  }
+                }
+              }
+
+              Spacer(modifier = Modifier.height(14.dp))
             }
           }
 
@@ -671,6 +750,7 @@ fun ModernSignInScreen(
                           department = finalDept,
                           phone = finalPhone,
                           course = finalCourse,
+                          gender = selectedGender,
                         )
                         if (result.isSuccess) {
                           val userDoc = result.getOrNull()!!

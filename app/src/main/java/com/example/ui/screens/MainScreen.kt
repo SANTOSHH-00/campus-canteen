@@ -89,6 +89,9 @@ fun MainScreen(
       appState.selectedFoodForDetail != null -> {
         appState.closeFoodDetail()
       }
+      appState.isFavoritesScreenOpen -> {
+        appState.closeFavoritesScreen()
+      }
       appState.isMenuFilterOpen -> {
         appState.isMenuFilterOpen = false
       }
@@ -112,8 +115,10 @@ fun MainScreen(
     }
   }
 
-  val isDetailOrTracking = appState.selectedFoodForDetail != null || appState.selectedOrderForTracking != null || appState.isMenuFilterOpen
+  val isDetailOrTracking = appState.selectedFoodForDetail != null || appState.selectedOrderForTracking != null || appState.isMenuFilterOpen || appState.isFavoritesScreenOpen
   val isHomeTab = appState.currentTab == BottomNavTab.HOME && !isDetailOrTracking
+  val isMenuTab = appState.currentTab == BottomNavTab.MENU && !isDetailOrTracking
+  val isScrollHideTab = isHomeTab || isMenuTab
 
   Box(
     modifier = modifier
@@ -126,7 +131,7 @@ fun MainScreen(
         .fillMaxSize()
         .statusBarsPadding()
         .padding(
-          bottom = if (!isDetailOrTracking && !isHomeTab) 78.dp else 0.dp
+          bottom = if (!isDetailOrTracking && !isScrollHideTab) 78.dp else 0.dp
         )
     ) {
       if (appState.selectedOrderForTracking != null) {
@@ -154,6 +159,11 @@ fun MainScreen(
               selectedAddons = addons,
             )
           },
+        )
+      } else if (appState.isFavoritesScreenOpen) {
+        FavoritesScreen(
+          appState = appState,
+          onBack = { appState.closeFavoritesScreen() },
         )
       } else {
         // ── Tab Screen Content ──────────────────────────────────────────────
@@ -201,10 +211,10 @@ fun MainScreen(
       }
     }
 
-    // ── Bottom Navigation Bar (Animated slide down on Home tab only) ─────────
+    // ── Bottom Navigation Bar (Animated slide down on Home & Menu tabs) ───────
     if (!isDetailOrTracking) {
       val slideFraction by animateFloatAsState(
-        targetValue = if (isHomeTab && !appState.isBottomBarVisible) 1f else 0f,
+        targetValue = if (isScrollHideTab && !appState.isBottomBarVisible) 1f else 0f,
         animationSpec = tween(
           durationMillis = 280,
           easing = FastOutSlowInEasing
@@ -245,7 +255,7 @@ fun MainScreen(
         .padding(
           start = 16.dp,
           end = 16.dp,
-          bottom = if (isHomeTab && !appState.isBottomBarVisible) 16.dp else 88.dp
+          bottom = if (isScrollHideTab && !appState.isBottomBarVisible) 16.dp else 88.dp
         ),
     ) {
       Box(

@@ -4,8 +4,10 @@ const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Canteen = require('../models/Canteen');
 const Item = require('../models/Item');
+const IdempotencyKey = require('../models/IdempotencyKey');
 const { broadcastOrderStatus, broadcastNewOrder, broadcastQueueUpdate } = require('../services/socketService');
 const { sendPushToUser } = require('../services/fcmService');
+const { getIstDate, formatIstDateTime, formatIstTime, formatIstDate } = require('../utils/timeHelper');
 
 // Active kitchen preparation statuses (case-insensitive fallback coverage)
 const ACTIVE_QUEUE_STATUSES = ['NEW', 'WAITING', 'CONFIRMED', 'PREPARING', 'new', 'waiting', 'confirmed', 'preparing'];
@@ -84,23 +86,26 @@ function formatTime12Hour(date) {
 }
 
 /**
- * Accurately calculate item-aware queue position, orders ahead, and estimated wait time
- * based on order placement time (orderPlacedAt/createdAt), specific item prep times,
- * elapsed preparation time, kitchen concurrency, and intelligent customer deduplication.
+ * Accurately calculate authoritative queue position, orders ahead, and estimated completion time
+ * dynamically from:
+ *   CURRENT SERVER TIME
+ *   +
+ *   TOTAL REMAINING PREPARATION TIME OF ACTIVE QUEUE ITEMS AHEAD
+ *   +
+ *   CURRENT ORDER'S REQUIRED PREPARATION TIME
  *
- * Scoped strictly to: same canteen + relevant food item(s) + active orders.
+ * Scoped strictly to: canteenId + active orders in queue.
  */
-function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, kitchenCapacity = 2) {
+function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, serverDate = new Date()) {
+  const serverNow = serverDate instanceof Date ? serverDate : new Date(serverDate);
+  const nowMs = serverNow.getTime();
+
+  // Find target order's position among active orders
   const targetIndex = activeOrders.findIndex(o => o.orderId === targetOrder.orderId);
-  const now = Date.now();
-
-  const ownTotalPrep = getOrderPrepTime(targetOrder, defaultWait);
   const targetPlacedAt = targetOrder.orderPlacedAt || targetOrder.createdAt;
-  const targetCreatedAt = targetPlacedAt ? new Date(targetPlacedAt).getTime() : now;
-  const targetElapsedMin = Math.max(0, (now - targetCreatedAt) / 60000);
-  const ownRemaining = Math.max(1, Math.round(ownTotalPrep - targetElapsedMin));
+  const targetCreatedAtMs = targetPlacedAt ? new Date(targetPlacedAt).getTime() : nowMs;
 
-  // Determine ahead orders in FIFO order
+  // Determine ahead orders in FIFO sequence (scoped strictly to this canteen)
   let aheadOrders = [];
   if (targetIndex === -1) {
     if (targetOrder.orderId === 'CART_PREVIEW' || targetOrder.orderId === 'CART_ITEM_PREVIEW') {
@@ -109,150 +114,118 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, kitch
       aheadOrders = activeOrders.filter(o => {
         const oPlacedAt = o.orderPlacedAt || o.createdAt;
         const oTime = oPlacedAt ? new Date(oPlacedAt).getTime() : 0;
-        return oTime < targetCreatedAt;
+        return oTime < targetCreatedAtMs;
       });
     }
   } else {
     aheadOrders = activeOrders.slice(0, targetIndex);
   }
 
-  // Extract target items for item-specific matching
-  const targetItems = targetOrder.items && Array.isArray(targetOrder.items) ? targetOrder.items : [];
-  const hasSpecificItems = targetItems.length > 0;
-  const targetItemIds = new Set(targetItems.map(it => it.itemId).filter(Boolean));
-  const targetItemNames = new Set(targetItems.map(it => (it.name || '').toLowerCase().trim()).filter(Boolean));
+  // Count active orders ahead in canteen
+  const ordersAhead = aheadOrders.length;
+  const queuePosition = ordersAhead + 1;
 
-  const primaryItemName = hasSpecificItems ? (targetItems[0].name || 'Item') : 'Item';
-  const itemSummary = hasSpecificItems
+  // Distinct customers ahead (do not count multiple orders from the same student as multiple customers)
+  const distinctCustomerSet = new Set(
+    aheadOrders.map(o => (o.studentId || '').trim().toLowerCase()).filter(id => id && id !== 'student_guest' && !id.includes('guest'))
+  );
+  const distinctCustomersAhead = distinctCustomerSet.size;
+
+  // Item summaries
+  const targetItems = targetOrder.items && Array.isArray(targetOrder.items) ? targetOrder.items : [];
+  const primaryItemName = targetItems.length > 0 ? (targetItems[0].name || 'Item') : 'Item';
+  const itemSummary = targetItems.length > 0
     ? (targetItems.length === 1
         ? `${targetItems[0].name} × ${targetItems[0].quantity || 1}`
         : `${targetItems[0].name} + ${targetItems.length - 1} other${targetItems.length > 2 ? 's' : ''}`)
     : 'Order Items';
 
-  function orderMatchesTarget(order) {
-    if (!hasSpecificItems) return true;
-    if (!order.items || !Array.isArray(order.items) || order.items.length === 0) return true;
-    return order.items.some(it => {
-      if (it.itemId && targetItemIds.has(it.itemId)) return true;
-      const n = (it.name || '').toLowerCase().trim();
-      return n && targetItemNames.has(n);
-    });
-  }
+  // Calculate similar items and orders ahead matching this specific food item
+  const targetItemIds = new Set(targetItems.map(it => it.itemId).filter(Boolean));
+  const targetItemNames = new Set(targetItems.map(it => (it.name || '').toLowerCase().trim()).filter(Boolean));
 
-  // Filter ahead orders that match the target item(s)
-  const matchingAheadOrders = aheadOrders.filter(orderMatchesTarget);
-  const similarOrdersAhead = matchingAheadOrders.length;
-  const ordersAhead = targetIndex === -1 ? aheadOrders.length : targetIndex;
-
-  // Calculate total item quantity ahead
   let similarItemsAhead = 0;
-  for (const o of matchingAheadOrders) {
-    if (o.items && Array.isArray(o.items) && o.items.length > 0) {
-      for (const it of o.items) {
-        if (!hasSpecificItems ||
-            (it.itemId && targetItemIds.has(it.itemId)) ||
-            targetItemNames.has((it.name || '').toLowerCase().trim())) {
-          similarItemsAhead += (it.quantity || 1);
+  let similarOrdersAhead = 0;
+
+  for (const ahead of aheadOrders) {
+    let hasSimilarInOrder = false;
+    if (Array.isArray(ahead.items)) {
+      for (const aItem of ahead.items) {
+        const aId = aItem.itemId;
+        const aName = (aItem.name || '').toLowerCase().trim();
+        const isMatch = (aId && targetItemIds.has(aId)) || (aName && targetItemNames.has(aName));
+        if (isMatch) {
+          similarItemsAhead += (aItem.quantity || 1);
+          hasSimilarInOrder = true;
         }
       }
-    } else {
-      similarItemsAhead += 1;
+    }
+    if (hasSimilarInOrder) {
+      similarOrdersAhead++;
     }
   }
 
-  // Group by studentId to prevent counting multiple orders from the same customer as separate people
-  const distinctItemCustomersSet = new Set();
-  for (const o of matchingAheadOrders) {
-    if (o.studentId) distinctItemCustomersSet.add(o.studentId);
-  }
-  const distinctCustomersAhead = distinctItemCustomersSet.size;
-
-  const totalCustomersSet = new Set();
-  for (const o of aheadOrders) {
-    if (o.studentId) totalCustomersSet.add(o.studentId);
-  }
-  const totalCustomersAhead = totalCustomersSet.size;
-
-  // Realistic queue position:
-  // For cart preview: scoped to the item queue (first for item = #1, or ahead item customers + 1)
-  // For placed order: customer's position among active customers ahead in the canteen (User A with 4 orders is 1 customer ahead -> User B is #2)
-  let queuePosition = 1;
-  if (targetOrder.orderId === 'CART_PREVIEW' || targetOrder.orderId === 'CART_ITEM_PREVIEW') {
-    queuePosition = similarOrdersAhead > 0 ? (distinctCustomersAhead > 0 ? distinctCustomersAhead + 1 : similarOrdersAhead + 1) : 1;
-  } else {
-    queuePosition = totalCustomersAhead > 0 ? totalCustomersAhead + 1 : (ordersAhead > 0 ? ordersAhead + 1 : 1);
-  }
-
-  // Calculate remaining preparation workload ahead for matching items
-  let sumRemainingAhead = 0;
-  for (let i = 0; i < matchingAheadOrders.length; i++) {
-    const ahead = matchingAheadOrders[i];
-    let aheadPrep = defaultWait;
-    if (ahead.items && Array.isArray(ahead.items) && ahead.items.length > 0) {
-      const matchingItemPreps = ahead.items
-        .filter(it => {
-          if (!hasSpecificItems) return true;
-          if (it.itemId && targetItemIds.has(it.itemId)) return true;
-          const n = (it.name || '').toLowerCase().trim();
-          return n && targetItemNames.has(n);
-        })
-        .map(it => it.prepMinutes || defaultWait);
-      if (matchingItemPreps.length > 0) {
-        aheadPrep = Math.max(...matchingItemPreps);
-      }
-    } else {
-      aheadPrep = getOrderPrepTime(ahead, defaultWait);
-    }
-
+  // Calculate sum of remaining preparation time of active queue items ahead
+  let totalRemainingAheadMinutes = 0;
+  for (const ahead of aheadOrders) {
+    const aheadPrep = getOrderPrepTime(ahead, defaultWait);
     const aheadPlacedAt = ahead.orderPlacedAt || ahead.createdAt;
-    const aheadCreated = aheadPlacedAt ? new Date(aheadPlacedAt).getTime() : now;
-    const aheadElapsedMin = Math.max(0, (now - aheadCreated) / 60000);
-    const aheadRemaining = Math.max(1, aheadPrep - aheadElapsedMin);
-    sumRemainingAhead += aheadRemaining;
+    const aheadStartMs = aheadPlacedAt ? new Date(aheadPlacedAt).getTime() : nowMs;
+    const elapsedMin = Math.max(0, (nowMs - aheadStartMs) / 60000);
+    const remainingMin = Math.max(0, Math.round(aheadPrep - elapsedMin));
+    totalRemainingAheadMinutes += remainingMin;
   }
 
-  const capacity = kitchenCapacity || Math.min(4, Math.max(2, Math.floor(similarOrdersAhead / 6) + 2));
-  let totalWait;
-  if (similarOrdersAhead === 0) {
-    totalWait = ownRemaining;
-  } else if (similarOrdersAhead === 1) {
-    totalWait = Math.round(sumRemainingAhead + ownTotalPrep);
-  } else {
-    const queueWaitAhead = Math.ceil(sumRemainingAhead / capacity);
-    totalWait = Math.round(queueWaitAhead + ownTotalPrep);
+  // Current order's required preparation time
+  let currentOrderPrepMinutes = getOrderPrepTime(targetOrder, defaultWait);
+  if (targetOrder.orderId !== 'CART_PREVIEW' && targetOrder.orderId !== 'CART_ITEM_PREVIEW') {
+    if (targetOrder.status === 'PREPARING') {
+      const targetStartMs = targetPlacedAt ? new Date(targetPlacedAt).getTime() : nowMs;
+      const targetElapsedMin = Math.max(0, (nowMs - targetStartMs) / 60000);
+      currentOrderPrepMinutes = Math.max(1, Math.round(currentOrderPrepMinutes - targetElapsedMin));
+    }
   }
 
-  const estWaitMinutes = Math.min(120, Math.max(1, totalWait));
-  const completionDate = new Date(now + estWaitMinutes * 60000);
-  const estimatedCompletionTime = formatTime12Hour(completionDate);
+  // Authoritative total wait time = remaining prep time of orders ahead + current order prep time
+  const totalWaitMinutes = Math.max(1, totalRemainingAheadMinutes + currentOrderPrepMinutes);
+
+  // Authoritative estimated completion time based on server time
+  const completionDate = new Date(nowMs + totalWaitMinutes * 60000);
+  const estimatedCompletionTime = formatIstTime(completionDate);
   const estimatedCompletionAt = completionDate.toISOString();
+  const currentServerTime = formatIstTime(serverNow);
 
-  let workloadSummary = '';
-  if (similarOrdersAhead === 0) {
-    workloadSummary = `0 ${hasSpecificItems ? primaryItemName + ' ' : ''}orders ahead`;
-  } else if (similarOrdersAhead === 1) {
-    workloadSummary = `1 ${hasSpecificItems ? primaryItemName + ' ' : ''}order ahead`;
-  } else {
-    workloadSummary = `${similarOrdersAhead} ${hasSpecificItems ? primaryItemName + ' ' : ''}orders ahead`;
-  }
+  const workloadSummary = ordersAhead === 0
+    ? '0 orders ahead'
+    : (similarItemsAhead > 0
+        ? `${similarItemsAhead} similar item${similarItemsAhead > 1 ? 's' : ''} ahead (${ordersAhead} order${ordersAhead > 1 ? 's' : ''})`
+        : `${ordersAhead} order${ordersAhead > 1 ? 's' : ''} ahead (${distinctCustomersAhead} customer${distinctCustomersAhead > 1 ? 's' : ''})`);
 
-  const message = similarOrdersAhead === 0
+  const headline = ordersAhead === 0
+    ? "No queue ahead (You're First)"
+    : `Queue #${queuePosition} (${workloadSummary})`;
+
+  const message = ordersAhead === 0
     ? 'You are next in line'
     : `You are #${queuePosition} in line (${workloadSummary})`;
 
   return {
     ordersAhead,
-    similarOrdersAhead,
-    similarItemsAhead,
-    distinctCustomersAhead,
     queuePosition,
     queueNumber: queuePosition,
-    estWaitMinutes,
+    distinctCustomersAhead,
+    similarItemsAhead,
+    similarOrdersAhead,
+    totalRemainingAheadMinutes,
+    currentOrderPrepMinutes,
+    estWaitMinutes: totalWaitMinutes,
     estimatedCompletionTime,
     estimatedCompletionAt,
+    currentServerTime,
     primaryItemName,
     itemSummary,
     workloadSummary,
+    headline,
     message,
   };
 }
@@ -265,9 +238,10 @@ router.post('/queue/cart', async (req, res) => {
       return res.status(400).json({ error: 'canteenId is required' });
     }
 
+    const serverNow = new Date();
     const canteen = await Canteen.findOne({ id: canteenId }).select('avgWaitMinutes').lean();
     const defaultWait = (canteen && canteen.avgWaitMinutes) ? canteen.avgWaitMinutes : 7;
-    const activeCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const activeCutoff = new Date(serverNow.getTime() - 24 * 60 * 60 * 1000);
 
     const activeOrders = await Order.find({
       canteenId,
@@ -301,11 +275,11 @@ router.post('/queue/cart', async (req, res) => {
       orderId: 'CART_PREVIEW',
       canteenId,
       items: enrichedItems,
-      orderPlacedAt: new Date(),
-      createdAt: new Date(),
+      orderPlacedAt: serverNow,
+      createdAt: serverNow,
     };
 
-    const metrics = calculateQueueMetrics(mockCartOrder, activeOrders, defaultWait, 2);
+    const metrics = calculateQueueMetrics(mockCartOrder, activeOrders, defaultWait, serverNow);
 
     // Compute per-item breakdown
     const itemsQueue = (enrichedItems || []).map(cartItem => {
@@ -313,10 +287,10 @@ router.post('/queue/cart', async (req, res) => {
         orderId: 'CART_ITEM_PREVIEW',
         canteenId,
         items: [cartItem],
-        orderPlacedAt: new Date(),
-        createdAt: new Date(),
+        orderPlacedAt: serverNow,
+        createdAt: serverNow,
       };
-      const singleMetrics = calculateQueueMetrics(singleItemMock, activeOrders, defaultWait, 2);
+      const singleMetrics = calculateQueueMetrics(singleItemMock, activeOrders, defaultWait, serverNow);
       return {
         itemId: cartItem.itemId || '',
         name: cartItem.name || '',
@@ -324,6 +298,7 @@ router.post('/queue/cart', async (req, res) => {
         queuePosition: singleMetrics.queuePosition,
         similarOrdersAhead: singleMetrics.similarOrdersAhead,
         similarItemsAhead: singleMetrics.similarItemsAhead,
+        distinctCustomersAhead: singleMetrics.distinctCustomersAhead,
         estWaitMinutes: singleMetrics.estWaitMinutes,
         estimatedReadyTime: singleMetrics.estimatedCompletionTime,
       };
@@ -341,8 +316,11 @@ router.post('/queue/cart', async (req, res) => {
       estWaitMinutes: metrics.estWaitMinutes,
       estimatedCompletionTime: metrics.estimatedCompletionTime,
       estimatedCompletionAt: metrics.estimatedCompletionAt,
-      headline: metrics.similarOrdersAhead === 0 ? "No Queue (You're First)" : `Queue #${metrics.queuePosition}`,
-      workloadSummary: metrics.similarOrdersAhead === 0 ? '0 similar orders ahead' : `${metrics.similarOrdersAhead} similar order${metrics.similarOrdersAhead > 1 ? 's' : ''} ahead`,
+      currentServerTime: metrics.currentServerTime,
+      totalRemainingAheadMinutes: metrics.totalRemainingAheadMinutes,
+      cartPrepMinutes: metrics.currentOrderPrepMinutes,
+      headline: metrics.headline,
+      workloadSummary: metrics.workloadSummary,
       itemsQueue,
     });
   } catch (err) {
@@ -379,7 +357,7 @@ router.get('/queue/item/:itemId', async (req, res) => {
       .select('orderId studentId canteenId status createdAt orderPlacedAt confirmedAt preparingAt readyAt completedAt estimatedPrepMinutes items')
       .lean();
 
-    const metrics = calculateQueueMetrics(mockCartOrder, activeOrders, prepMinutes, 2);
+    const metrics = calculateQueueMetrics(mockCartOrder, activeOrders, prepMinutes, new Date());
     res.json(metrics);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -461,6 +439,16 @@ router.get('/:id/queue', async (req, res) => {
       ? `${targetOrder.items[0].name} × ${targetOrder.items[0].quantity || 1}`
       : `${firstItemName}`;
 
+    // Derive local human-readable time strings for frontend consumption
+    const orderDate = targetOrder.orderDate || (orderPlacedAt ? formatIstDate(orderPlacedAt) : '');
+    const orderTime = targetOrder.orderTime || (orderPlacedAt ? formatIstTime(orderPlacedAt) : '');
+    const orderPlacedAtLocal = targetOrder.orderPlacedAtLocal || (orderPlacedAt ? formatIstDateTime(orderPlacedAt) : '');
+    const confirmedAtLocal = targetOrder.confirmedAtLocal || (confirmedAt ? formatIstDateTime(confirmedAt) : '');
+    const preparingAtLocal = targetOrder.preparingAtLocal || (preparingAt ? formatIstDateTime(preparingAt) : '');
+    const readyAtLocal = targetOrder.readyAtLocal || (readyAt ? formatIstDateTime(readyAt) : '');
+    const completedAtLocal = targetOrder.completedAtLocal || (completedAt ? formatIstDateTime(completedAt) : '');
+    const cancelledAtLocal = targetOrder.cancelledAtLocal || (cancelledAt ? formatIstDateTime(cancelledAt) : '');
+
     if (targetOrder.status === 'READY') {
       return res.json({
         orderId: targetOrder.orderId,
@@ -480,6 +468,14 @@ router.get('/:id/queue', async (req, res) => {
         estimatedCompletionTime: 'Ready now',
         estimatedCompletionAt: new Date().toISOString(),
         message: 'Ready for Pickup',
+        orderDate,
+        orderTime,
+        orderPlacedAtLocal,
+        confirmedAtLocal,
+        preparingAtLocal,
+        readyAtLocal,
+        completedAtLocal,
+        cancelledAtLocal,
         orderPlacedAt,
         confirmedAt,
         preparingAt,
@@ -509,6 +505,14 @@ router.get('/:id/queue', async (req, res) => {
         estimatedCompletionTime: 'Completed',
         estimatedCompletionAt: new Date().toISOString(),
         message: 'Picked Up',
+        orderDate,
+        orderTime,
+        orderPlacedAtLocal,
+        confirmedAtLocal,
+        preparingAtLocal,
+        readyAtLocal,
+        completedAtLocal,
+        cancelledAtLocal,
         orderPlacedAt,
         confirmedAt,
         preparingAt,
@@ -538,6 +542,14 @@ router.get('/:id/queue', async (req, res) => {
         estimatedCompletionTime: 'Cancelled',
         estimatedCompletionAt: new Date().toISOString(),
         message: 'Order Cancelled',
+        orderDate,
+        orderTime,
+        orderPlacedAtLocal,
+        confirmedAtLocal,
+        preparingAtLocal,
+        readyAtLocal,
+        completedAtLocal,
+        cancelledAtLocal,
         orderPlacedAt,
         confirmedAt,
         preparingAt,
@@ -564,12 +576,13 @@ router.get('/:id/queue', async (req, res) => {
       .select('orderId studentId canteenId status createdAt orderPlacedAt confirmedAt preparingAt readyAt completedAt estimatedPrepMinutes items')
       .lean();
 
-    // Compute dynamic, item-aware queue metrics with user deduplication and kitchen concurrency
+    const serverNow = new Date();
+    // Compute dynamic, server-authoritative queue metrics
     const metrics = calculateQueueMetrics(
       targetOrder,
       activeOrders,
       defaultWait,
-      2
+      serverNow
     );
 
     const {
@@ -579,31 +592,17 @@ router.get('/:id/queue', async (req, res) => {
       distinctCustomersAhead,
       queuePosition,
       queueNumber,
+      totalRemainingAheadMinutes,
+      currentOrderPrepMinutes,
       estWaitMinutes,
       estimatedCompletionTime,
       estimatedCompletionAt,
+      currentServerTime,
       primaryItemName,
       itemSummary,
       workloadSummary,
       message,
     } = metrics;
-
-    // Inspect/log detailed queue state for debugging as required
-    console.log('=== [ITEM-AWARE QUEUE CALCULATION DEBUG] ===');
-    console.log(`Current Order ID: ${targetOrder.orderId}`);
-    console.log(`Current User ID: ${targetOrder.studentId || 'N/A'}`);
-    console.log(`Current Canteen ID: ${targetOrder.canteenId}`);
-    console.log(`Primary Item: ${primaryItemName}, Item Summary: ${itemSummary}`);
-    console.log(`All active orders for canteen "${targetOrder.canteenId}" (${activeOrders.length}):`);
-    activeOrders.forEach((o, i) => {
-      console.log(`  [#${i + 1}] Order ID: ${o.orderId}, User: ${o.studentId}, Status: ${o.status}, Items: ${o.items?.map(it => it.name).join(', ')}`);
-    });
-    console.log(`Calculated item queue position: #${queuePosition}`);
-    console.log(`Calculated similar orders ahead: ${similarOrdersAhead} (${workloadSummary})`);
-    console.log(`Calculated distinct customers ahead: ${distinctCustomersAhead}`);
-    console.log(`Calculated total orders ahead: ${ordersAhead}`);
-    console.log(`Calculated estimated waiting time: ${estWaitMinutes} min (${estimatedCompletionTime})`);
-    console.log('============================================');
 
     res.json({
       orderId: targetOrder.orderId,
@@ -616,13 +615,26 @@ router.get('/:id/queue', async (req, res) => {
       similarOrdersAhead,
       similarItemsAhead,
       distinctCustomersAhead,
+      totalRemainingAheadMinutes,
+      currentOrderPrepMinutes,
       primaryItemName,
       itemSummary,
       workloadSummary,
       estWaitMinutes,
       estimatedCompletionTime,
       estimatedCompletionAt,
+      currentServerTime,
+      customerPickupTime: targetOrder.customerPickupTime || '',
+      pickupPreference: targetOrder.pickupPreference || '',
       message,
+      orderDate,
+      orderTime,
+      orderPlacedAtLocal,
+      confirmedAtLocal,
+      preparingAtLocal,
+      readyAtLocal,
+      completedAtLocal,
+      cancelledAtLocal,
       orderPlacedAt,
       confirmedAt,
       preparingAt,
@@ -637,10 +649,75 @@ router.get('/:id/queue', async (req, res) => {
   }
 });
 
-// GET /api/orders/student/:studentId - List orders for student
+// GET /api/orders/student/:studentId - List orders for student with optional filters
 router.get('/student/:studentId', async (req, res) => {
   try {
-    const orders = await Order.find({ studentId: req.params.studentId })
+    const { canteenId, dateOption, startDate, endDate } = req.query;
+    const filter = { studentId: req.params.studentId };
+
+    if (canteenId) {
+      if (canteenId.includes(',')) {
+        filter.canteenId = { $in: canteenId.split(',').map(c => c.trim()).filter(Boolean) };
+      } else {
+        filter.canteenId = canteenId.trim();
+      }
+    }
+
+    // Date filtering (aligned with Indian Standard Time / local campus midnight boundaries)
+    const now = new Date();
+    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(now.getTime() + IST_OFFSET_MS);
+
+    const istTodayStart = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()));
+    const todayStartUtc = new Date(istTodayStart.getTime() - IST_OFFSET_MS);
+    const todayEndUtc = new Date(todayStartUtc.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+    if (dateOption) {
+      const opt = dateOption.toUpperCase().trim();
+      if (opt === 'TODAY') {
+        filter.$or = [
+          { orderPlacedAt: { $gte: todayStartUtc, $lte: todayEndUtc } },
+          { orderPlacedAt: null, createdAt: { $gte: todayStartUtc, $lte: todayEndUtc } }
+        ];
+      } else if (opt === 'YESTERDAY') {
+        const yesterdayStartUtc = new Date(todayStartUtc.getTime() - 24 * 60 * 60 * 1000);
+        const yesterdayEndUtc = new Date(todayStartUtc.getTime() - 1);
+        filter.$or = [
+          { orderPlacedAt: { $gte: yesterdayStartUtc, $lte: yesterdayEndUtc } },
+          { orderPlacedAt: null, createdAt: { $gte: yesterdayStartUtc, $lte: yesterdayEndUtc } }
+        ];
+      } else if (opt === 'LAST_7_DAYS' || opt === '7DAYS') {
+        const sevenDaysAgoStart = new Date(todayStartUtc.getTime() - 6 * 24 * 60 * 60 * 1000);
+        filter.$or = [
+          { orderPlacedAt: { $gte: sevenDaysAgoStart, $lte: todayEndUtc } },
+          { orderPlacedAt: null, createdAt: { $gte: sevenDaysAgoStart, $lte: todayEndUtc } }
+        ];
+      } else if (opt === 'LAST_30_DAYS' || opt === '30DAYS') {
+        const thirtyDaysAgoStart = new Date(todayStartUtc.getTime() - 29 * 24 * 60 * 60 * 1000);
+        filter.$or = [
+          { orderPlacedAt: { $gte: thirtyDaysAgoStart, $lte: todayEndUtc } },
+          { orderPlacedAt: null, createdAt: { $gte: thirtyDaysAgoStart, $lte: todayEndUtc } }
+        ];
+      }
+    } else if (startDate || endDate) {
+      const dateCondition = {};
+      if (startDate) {
+        const s = new Date(startDate);
+        if (!isNaN(s.getTime())) dateCondition.$gte = s;
+      }
+      if (endDate) {
+        const e = new Date(endDate);
+        if (!isNaN(e.getTime())) dateCondition.$lte = e;
+      }
+      if (Object.keys(dateCondition).length > 0) {
+        filter.$or = [
+          { orderPlacedAt: dateCondition },
+          { orderPlacedAt: null, createdAt: dateCondition }
+        ];
+      }
+    }
+
+    const orders = await Order.find(filter)
       .sort({ createdAt: -1 })
       .lean();
     res.json(orders);
@@ -649,10 +726,14 @@ router.get('/student/:studentId', async (req, res) => {
   }
 });
 
-// GET /api/orders/canteen/:canteenId - List orders for canteen
+// GET /api/orders/canteen/:canteenId - List orders for canteen (excluding guest orders)
 router.get('/canteen/:canteenId', async (req, res) => {
   try {
-    const orders = await Order.find({ canteenId: req.params.canteenId })
+    const orders = await Order.find({
+      canteenId: req.params.canteenId,
+      studentId: { $ne: 'student_guest', $not: /guest/i },
+      studentName: { $not: /guest/i },
+    })
       .sort({ createdAt: -1 })
       .lean();
     res.json(orders);
@@ -672,8 +753,39 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/orders - Place a new order with authoritative server timestamps
+// POST /api/orders - Place a new order with authoritative server timestamps and idempotency
 router.post('/', async (req, res) => {
+  const idempotencyKey = req.headers['idempotency-key'] || req.body?.idempotencyKey;
+  const rawStudentId = (req.body?.studentId || '').toLowerCase().trim();
+
+  // 1. Check & reserve Idempotency Key atomically if provided
+  if (idempotencyKey) {
+    try {
+      const existingKey = await IdempotencyKey.findOneAndUpdate(
+        { key: idempotencyKey },
+        { $setOnInsert: { key: idempotencyKey, studentId: rawStudentId || 'unknown', inProgress: true } },
+        { upsert: true, new: false }
+      );
+
+      if (existingKey) {
+        if (existingKey.inProgress) {
+          return res.status(409).json({
+            error: 'Order is currently being processed. Please wait.',
+            status: 'PROCESSING',
+          });
+        }
+        return res.status(existingKey.statusCode || 200).json(existingKey.responseBody);
+      }
+    } catch (err) {
+      // Catch unique index race condition
+      const stored = await IdempotencyKey.findOne({ key: idempotencyKey }).lean();
+      if (stored && !stored.inProgress) {
+        return res.status(stored.statusCode || 200).json(stored.responseBody);
+      }
+      return res.status(409).json({ error: 'Order request in flight. Please wait.' });
+    }
+  }
+
   try {
     const orderData = req.body;
     const now = new Date();
@@ -687,21 +799,74 @@ router.post('/', async (req, res) => {
       orderData.orderId = 'ORD-' + now.getTime() + '-' + Math.floor(1000 + Math.random() * 9000);
     }
 
+    // Determine exact orderPlacedAt: prioritize client placed timestamp or embedded orderId timestamp
+    let placedDate = now;
+    if (orderData.orderPlacedAt) {
+      const parsed = new Date(orderData.orderPlacedAt);
+      if (!isNaN(parsed.getTime())) placedDate = parsed;
+    } else if (orderData.orderId) {
+      const match = orderData.orderId.match(/ORD-(\d{10,14})(?:-\d+)?/);
+      if (match && match[1]) {
+        const parsed = new Date(parseInt(match[1], 10));
+        if (!isNaN(parsed.getTime())) placedDate = parsed;
+      }
+    }
+
+    const studentId = (orderData.studentId || '').toLowerCase().trim();
+    const studentName = (orderData.studentName || '').toLowerCase().trim();
+    const isGuest = studentId === 'student_guest' || studentId.includes('guest') || studentName.includes('guest');
+
+    // DO NOT save guest orders to the database or show them on the owner's section
+    if (isGuest) {
+      console.log(`[Orders] Skipping DB persistence for guest order (${orderData.orderId}, studentId: ${studentId})`);
+      return res.status(201).json({
+        ...orderData,
+        orderId: orderData.orderId,
+        status: (orderData.status || 'NEW').toUpperCase().trim(),
+        orderPlacedAt: placedDate,
+        isGuest: true,
+        message: 'Guest order processed locally, not saved to database.'
+      });
+    }
+
     const initialStatus = (orderData.status || 'NEW').toUpperCase().trim();
     orderData.status = initialStatus;
+
+    // The backend/server is the sole authority of time: generate true UTC Date
     orderData.orderPlacedAt = now;
+    orderData.orderDate = formatIstDate(now);
+    orderData.orderTime = formatIstTime(now);
+    orderData.orderPlacedAtLocal = formatIstDateTime(now);
+
+    // ConfirmedAt
     orderData.confirmedAt = now;
+    orderData.confirmedAtLocal = formatIstDateTime(now);
 
     // Server-authoritative status history and milestone timestamps
     const statusHistory = [
-      { status: 'PLACED', timestamp: now },
-      { status: 'CONFIRMED', timestamp: now },
+      { status: 'PLACED', timestamp: now, timestampLocal: formatIstDateTime(now) },
+      { status: 'CONFIRMED', timestamp: now, timestampLocal: formatIstDateTime(now) },
     ];
     if (initialStatus === 'PREPARING') {
       orderData.preparingAt = now;
-      statusHistory.push({ status: 'PREPARING', timestamp: now });
+      orderData.preparingAtLocal = formatIstDateTime(now);
+      statusHistory.push({ status: 'PREPARING', timestamp: now, timestampLocal: formatIstDateTime(now) });
     }
     orderData.statusHistory = statusHistory;
+
+    // Customer Pickup Time: preserve user's explicit selection
+    let customerPickup = (orderData.customerPickupTime || '').trim();
+    if (!customerPickup && orderData.pickupPreference) {
+      if (/pickup\s+at\s+/i.test(orderData.pickupPreference)) {
+        customerPickup = orderData.pickupPreference.replace(/^pickup\s+at\s+/i, '').trim();
+      } else if (/pickup\s+asap/i.test(orderData.pickupPreference)) {
+        customerPickup = 'ASAP';
+      }
+    }
+    if (!customerPickup) {
+      customerPickup = orderData.isPickupAsap === false ? '' : 'ASAP';
+    }
+    orderData.customerPickupTime = customerPickup;
 
     // Auto-populate item prepMinutes from Item collection if missing or default
     if (orderData.items && Array.isArray(orderData.items) && orderData.items.length > 0) {
@@ -728,11 +893,26 @@ router.post('/', async (req, res) => {
       }
     }
 
+    const canteen = await Canteen.findOne({ id: orderData.canteenId }).select('avgWaitMinutes').lean();
+    const defaultWait = (canteen && canteen.avgWaitMinutes) ? canteen.avgWaitMinutes : 7;
     if (!orderData.estimatedPrepMinutes || orderData.estimatedPrepMinutes <= 0) {
-      const canteen = await Canteen.findOne({ id: orderData.canteenId }).select('avgWaitMinutes').lean();
-      const defaultWait = (canteen && canteen.avgWaitMinutes) ? canteen.avgWaitMinutes : 7;
       orderData.estimatedPrepMinutes = getOrderPrepTime(orderData, defaultWait);
     }
+
+    // Authoritative Queue Calculation for this new order
+    const activeCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const activeOrders = await Order.find({
+      canteenId: orderData.canteenId,
+      status: { $in: ACTIVE_QUEUE_STATUSES },
+      createdAt: { $gte: activeCutoff },
+    })
+      .sort({ orderPlacedAt: 1, createdAt: 1, orderId: 1 })
+      .select('orderId studentId canteenId status createdAt orderPlacedAt confirmedAt preparingAt readyAt completedAt estimatedPrepMinutes items')
+      .lean();
+
+    const metrics = calculateQueueMetrics(orderData, activeOrders, defaultWait, now);
+    orderData.estimatedCompletionTime = metrics.estimatedCompletionTime;
+    orderData.estimatedReadyTime = metrics.estimatedCompletionTime;
 
     const order = await Order.create(orderData);
 
@@ -751,8 +931,19 @@ router.post('/', async (req, res) => {
       console.warn('[Orders] Realtime dispatch warning:', e.message);
     }
 
+    // Save final response in Idempotency store
+    if (idempotencyKey) {
+      await IdempotencyKey.updateOne(
+        { key: idempotencyKey },
+        { $set: { inProgress: false, statusCode: 201, responseBody: order } }
+      ).catch(() => {});
+    }
+
     res.status(201).json(order);
   } catch (err) {
+    if (idempotencyKey) {
+      await IdempotencyKey.deleteOne({ key: idempotencyKey }).catch(() => {});
+    }
     res.status(400).json({ error: err.message });
   }
 });
@@ -772,19 +963,52 @@ router.patch('/:id/status', async (req, res) => {
     }
 
     const now = new Date();
-    const updateFields = { status: normalizedStatus };
+    const nowLocal = formatIstDateTime(now);
 
-    if (normalizedStatus === 'CONFIRMED') updateFields.confirmedAt = now;
-    if (normalizedStatus === 'PREPARING') updateFields.preparingAt = now;
-    if (normalizedStatus === 'READY') updateFields.readyAt = now;
-    if (normalizedStatus === 'COMPLETED') updateFields.completedAt = now;
-    if (normalizedStatus === 'CANCELLED') updateFields.cancelledAt = now;
+    const updateFields = {};
+    if (normalizedStatus) {
+      updateFields.status = normalizedStatus;
+    }
+    if (req.body.estimatedPrepMinutes) {
+      updateFields.estimatedPrepMinutes = Number(req.body.estimatedPrepMinutes);
+    }
+
+    if (normalizedStatus === 'CONFIRMED') {
+      updateFields.confirmedAt = now;
+      updateFields.confirmedAtLocal = nowLocal;
+    }
+    if (normalizedStatus === 'PREPARING') {
+      updateFields.preparingAt = now;
+      updateFields.preparingAtLocal = nowLocal;
+    }
+    if (normalizedStatus === 'READY') {
+      updateFields.readyAt = now;
+      updateFields.readyAtLocal = nowLocal;
+      updateFields.estimatedCompletionTime = 'Ready now';
+      updateFields.estimatedReadyTime = 'Ready now';
+    }
+    if (normalizedStatus === 'COMPLETED') {
+      updateFields.completedAt = now;
+      updateFields.completedAtLocal = nowLocal;
+      updateFields.estimatedCompletionTime = 'Completed';
+      updateFields.estimatedReadyTime = 'Completed';
+    }
+    if (normalizedStatus === 'CANCELLED') {
+      updateFields.cancelledAt = now;
+      updateFields.cancelledAtLocal = nowLocal;
+      updateFields.estimatedCompletionTime = 'Cancelled';
+      updateFields.estimatedReadyTime = 'Cancelled';
+    }
+
+    const pushUpdate = normalizedStatus
+      ? { $push: { statusHistory: { status: normalizedStatus, timestamp: now, timestampLocal: nowLocal } } }
+      : {};
 
     const updated = await Order.findOneAndUpdate(
       { _id: targetOrder._id },
       {
         $set: updateFields,
-        $push: { statusHistory: { status: normalizedStatus, timestamp: now } },
+        ...pushUpdate,
       },
       { new: true }
     );
@@ -796,19 +1020,55 @@ router.patch('/:id/status', async (req, res) => {
         broadcastQueueUpdate(updated.canteenId);
       }
 
-      const statusTitle = normalizedStatus === 'PREPARING'
-        ? `Order #${updated.tokenNumber || updated.orderId} is being Prepared 🍳`
-        : normalizedStatus === 'READY'
-        ? `Order #${updated.tokenNumber || updated.orderId} is Ready for Pickup! 🔔`
-        : normalizedStatus === 'COMPLETED'
-        ? `Order #${updated.tokenNumber || updated.orderId} Completed 🎉`
-        : `Order #${updated.tokenNumber || updated.orderId} Status: ${normalizedStatus}`;
+      // Only send push notifications for PREPARING, READY, COMPLETED, CANCELLED
+      const shouldNotify = ['PREPARING', 'READY', 'COMPLETED', 'CANCELLED'].includes(normalizedStatus);
+      const isGuest = (updated.studentId || '').toLowerCase().includes('guest') || (updated.studentName || '').toLowerCase().includes('guest');
+      if (!isGuest && shouldNotify && updated.studentId) {
+        // Fetch canteen details for kitchen name and block number
+        const canteen = await Canteen.findOne({ id: updated.canteenId }).lean();
+        const canteenName = (canteen && canteen.name) || updated.pickupCanteenName || 'Canteen Kitchen';
+        const rawBlock = (canteen && (canteen.block || canteen.location)) || updated.pickupLocation || '';
+        const blockNumber = rawBlock.replace(/block\s*/i, '').trim();
+        const blockDisplay = blockNumber ? `Block ${blockNumber}` : (rawBlock || 'Campus');
+        const counter = updated.pickupCounter || 'Counter 1';
+        const cleanToken = (updated.tokenNumber || updated.orderId.slice(-4)).replace(/^#+/, '');
 
-      const statusBody = normalizedStatus === 'READY'
-        ? `Your meal is hot and ready at Counter ${updated.pickupCounter || '1'}. Please collect your order!`
-        : `Current status updated to ${normalizedStatus}.`;
+        const statusTitle = normalizedStatus === 'PREPARING'
+          ? `Order #${cleanToken}: Preparing`
+          : normalizedStatus === 'READY'
+          ? `Order #${cleanToken}: Ready for Pickup`
+          : normalizedStatus === 'COMPLETED'
+          ? `Order #${cleanToken}: Picked Up`
+          : `Order #${cleanToken}: Cancelled`;
 
-      if (updated.studentId) {
+        const statusBody = normalizedStatus === 'PREPARING'
+          ? `Your meal is being prepared by ${canteenName} at ${blockDisplay}, ${counter}.`
+          : normalizedStatus === 'READY'
+          ? `Your order is ready! Please collect your food at ${counter} from ${canteenName} at ${blockDisplay}.`
+          : normalizedStatus === 'COMPLETED'
+          ? 'Your order has been picked up. Enjoy your food!'
+          : 'Your order has been cancelled by the canteen kitchen.';
+
+        // Authoritative Database Sync: Save notification in MongoDB at this exact moment
+        const Notification = require('../models/Notification');
+        await Notification.findOneAndUpdate(
+          { notificationId: `NOTIF-${updated.orderId}-${normalizedStatus}` },
+          {
+            $set: {
+              notificationId: `NOTIF-${updated.orderId}-${normalizedStatus}`,
+              userId: updated.studentId,
+              title: statusTitle,
+              message: statusBody,
+              type: 'ORDER_STATUS',
+              orderId: updated.orderId,
+              canteenId: updated.canteenId,
+              read: false,
+              createdAt: istNow,
+            }
+          },
+          { upsert: true, new: true }
+        ).catch(err => console.warn('[Orders] Notification persist warning:', err.message));
+
         sendPushToUser(updated.studentId, {
           title: statusTitle,
           body: statusBody,

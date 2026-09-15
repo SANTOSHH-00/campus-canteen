@@ -116,8 +116,11 @@ open class OwnerDashboardViewModel(
   }
 
   fun isGuestOrder(order: OrderDocument): Boolean {
-    // All orders belonging to this canteen participate in kitchen preparation
-    return false
+    val sId = order.studentId.trim().lowercase()
+    val sName = order.studentName.trim().lowercase()
+    return sId == "student_guest" ||
+        sId.contains("guest") ||
+        sName.contains("guest")
   }
 
   private fun setupDashboard(owner: OwnerDocument) {
@@ -286,21 +289,32 @@ open class OwnerDashboardViewModel(
   }
 
   fun updateOrderStatus(orderId: String, newStatus: String) {
+    val pressTime = System.currentTimeMillis()
     viewModelScope.launch {
       firestoreRepo.updateOrderStatus(orderId, newStatus)
-      // Optimistic local update
+      // Optimistic local update with exact button-press timestamps
       _orders.value = _orders.value.map {
-        if (it.orderId == orderId) it.copy(status = newStatus, updatedAt = System.currentTimeMillis()) else it
+        if (it.orderId == orderId) {
+          it.copy(
+            status = newStatus,
+            updatedAt = pressTime,
+            preparingAt = if (newStatus.equals("PREPARING", ignoreCase = true)) pressTime else it.preparingAt,
+            readyAt = if (newStatus.equals("READY", ignoreCase = true)) pressTime else it.readyAt,
+            completedAt = if (newStatus.equals("COMPLETED", ignoreCase = true) || newStatus.equals("PICKED_UP", ignoreCase = true)) pressTime else it.completedAt,
+          )
+        } else it
       }
       recomputeUiState()
 
-      // Send status notification to student with decent, professional wording
+      // Send status notification to student strictly for PREPARING, READY, COMPLETED, CANCELLED
       try {
         val targetOrder = _orders.value.find { it.orderId == orderId }
-        if (targetOrder != null && targetOrder.studentId.isNotBlank()) {
+        val rawStatus = newStatus.uppercase().trim()
+        val shouldNotify = rawStatus in listOf("PREPARING", "READY", "COMPLETED", "PICKED_UP", "DELIVERED", "CANCELLED")
+        if (targetOrder != null && targetOrder.studentId.isNotBlank() && shouldNotify) {
           val tokenFormatted = if (targetOrder.tokenNumber.startsWith("#")) targetOrder.tokenNumber else "#${targetOrder.tokenNumber}"
           val counter = targetOrder.pickupCounter.ifBlank { "Counter 1" }
-          val (notifTitle, notifMsg) = when (newStatus.uppercase()) {
+          val (notifTitle, notifMsg) = when (rawStatus) {
             "PREPARING" -> Pair(
               "Order $tokenFormatted: Preparing",
               "Your order is being prepared by the canteen kitchen."
@@ -309,7 +323,7 @@ open class OwnerDashboardViewModel(
               "Order $tokenFormatted: Ready for Pickup",
               "Your order is ready. Please collect your food at $counter."
             )
-            "COMPLETED", "PICKED_UP" -> Pair(
+            "COMPLETED", "PICKED_UP", "DELIVERED" -> Pair(
               "Order $tokenFormatted: Completed",
               "Your order has been completed. Thank you for dining with QuickBite."
             )
@@ -317,24 +331,23 @@ open class OwnerDashboardViewModel(
               "Order $tokenFormatted: Cancelled",
               "Your order has been cancelled by the canteen kitchen."
             )
-            else -> Pair(
-              "Order $tokenFormatted Update",
-              "Your order status has been updated to $newStatus."
-            )
+            else -> Pair("", "")
           }
 
-          firestoreRepo.sendNotification(
-            NotificationDocument(
-              userId = targetOrder.studentId,
-              title = notifTitle,
-              message = notifMsg,
-              type = "ORDER_STATUS",
-              orderId = orderId,
-              canteenId = targetOrder.canteenId,
-              createdAt = System.currentTimeMillis(),
-              read = false,
+          if (notifTitle.isNotBlank()) {
+            firestoreRepo.sendNotification(
+              NotificationDocument(
+                userId = targetOrder.studentId,
+                title = notifTitle,
+                message = notifMsg,
+                type = "ORDER_STATUS",
+                orderId = orderId,
+                canteenId = targetOrder.canteenId,
+                createdAt = pressTime,
+                read = false,
+              )
             )
-          )
+          }
         }
       } catch (e: Exception) {
         android.util.Log.e("OwnerDashboardVM", "Error sending status notification: ${e.message}", e)

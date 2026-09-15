@@ -32,4 +32,7 @@ const itemSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// High-speed menu lookup index
+itemSchema.index({ canteenId: 1, available: 1 });
+
 module.exports = mongoose.model('Item', itemSchema);

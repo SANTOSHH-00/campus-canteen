@@ -31,6 +31,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -423,7 +424,10 @@ private fun LiveOrderCard(
   }
 
   val timeFormatter = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
-  val orderTime = remember(order.createdAt) { timeFormatter.format(Date(order.createdAt)) }
+  val orderTime = remember(order.orderPlacedAt, order.createdAt, order.orderId) {
+    val exactPlaced = order.getExactPlacedEpoch()
+    if (exactPlaced > 0) timeFormatter.format(Date(exactPlaced)) else ""
+  }
 
   val tokenDisplay = if (order.tokenNumber.startsWith("#")) order.tokenNumber else "#Q${order.tokenNumber.ifBlank { "1042" }}"
 
@@ -527,18 +531,59 @@ private fun LiveOrderCard(
         )
       }
 
-      Spacer(modifier = Modifier.height(12.dp))
+      Spacer(modifier = Modifier.height(10.dp))
+      HorizontalDivider(thickness = 0.8.dp, color = CardBorderColor)
+      Spacer(modifier = Modifier.height(8.dp))
 
-      // Bottom info: Prep time (if preparing) OR Counter 1 / Counter 2 (if ready)
-      Row(verticalAlignment = Alignment.CenterVertically) {
+      val customerPickupDisplay = order.customerPickupTime.ifBlank {
+        order.pickupPreference.ifBlank { "ASAP" }
+      }
+      val completionDisplay = order.estimatedCompletionTime.ifBlank {
+        order.estimatedReadyTime.ifBlank { "In queue" }
+      }
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(
+            text = "Pickup: ",
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.Medium,
+            color = TextMuted,
+          )
+          Text(
+            text = customerPickupDisplay,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark,
+          )
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(
+            text = "Est. Ready: ",
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.Medium,
+            color = TextMuted,
+          )
+          Text(
+            text = completionDisplay,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = OrangeAccent,
+          )
+        }
+
         if (isReady) {
-          // Counter pill: only Counter 1 or Counter 2
           val counter = if (order.pickupCounter.isNotBlank()) order.pickupCounter else "Counter 1"
           Box(
             modifier = Modifier
-              .clip(RoundedCornerShape(8.dp))
+              .clip(RoundedCornerShape(6.dp))
               .background(Color(0xFFFFF7ED))
-              .padding(horizontal = 8.dp, vertical = 3.dp),
+              .padding(horizontal = 7.dp, vertical = 2.5.dp),
           ) {
             Text(
               text = counter,
@@ -547,12 +592,6 @@ private fun LiveOrderCard(
               color = OrangeAccent,
             )
           }
-        } else {
-          Text(
-            text = "Prep. time: 5-7 min",
-            fontSize = 12.sp,
-            color = Color(0xFF9CA3AF),
-          )
         }
       }
     }

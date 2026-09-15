@@ -38,6 +38,7 @@ import com.example.ui.screens.LoginContent
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Info
@@ -195,23 +196,21 @@ fun StudentProfileDrawer(
               modifier = Modifier.fillMaxWidth(),
               verticalAlignment = Alignment.CenterVertically,
             ) {
-              // Decent boy student profile image inside white circular frame
+              // Black and white monochrome student profile icon
               Box(
                 modifier = Modifier
                   .size(64.dp)
                   .shadow(6.dp, CircleShape)
                   .clip(CircleShape)
-                  .background(PureWhite)
+                  .background(Color(0xFF18181B))
                   .border(2.5.dp, PureWhite, CircleShape),
                 contentAlignment = Alignment.Center,
               ) {
-                Image(
-                  painter = painterResource(id = R.drawable.avatar_alex),
+                Icon(
+                  imageVector = Icons.Default.Person,
                   contentDescription = "Profile Picture",
-                  contentScale = ContentScale.Crop,
-                  modifier = Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape),
+                  tint = PureWhite,
+                  modifier = Modifier.size(36.dp),
                 )
               }
 
@@ -244,101 +243,30 @@ fun StudentProfileDrawer(
                   fontWeight = FontWeight.SemiBold,
                   color = BlackPrimary.copy(alpha = 0.7f),
                 )
-              }
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // ── 3. Upgraded Break Schedule Card (Modern Food App Style) ──────
-            Box(
-              modifier = Modifier
-                .fillMaxWidth()
-                .shadow(8.dp, RoundedCornerShape(20.dp))
-                .clip(RoundedCornerShape(20.dp))
-                .background(DarkPillBackground)
-                .clickable { showTimeDialog = true }
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            ) {
-              Column(modifier = Modifier.fillMaxWidth()) {
-                // Header Row: Badge + Status Dot + Edit Pill
-                Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.SpaceBetween,
-                  verticalAlignment = Alignment.CenterVertically,
-                ) {
-                  Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                      .clip(RoundedCornerShape(8.dp))
-                      .background(Color(0xFF2C2C30))
-                      .padding(horizontal = 8.dp, vertical = 4.dp),
-                  ) {
-                    Box(
-                      modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(MintFresh),
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                      text = "CAMPUS BREAK",
-                      fontSize = 10.sp,
-                      fontWeight = FontWeight.ExtraBold,
-                      color = DrawerAmber,
-                      letterSpacing = 0.5.sp,
-                    )
-                  }
-
-                  Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                      .clip(RoundedCornerShape(10.dp))
-                      .background(DrawerAmber.copy(alpha = 0.2f))
-                      .padding(horizontal = 8.dp, vertical = 4.dp),
-                  ) {
-                    Text(
-                      text = "Edit ⏱️",
-                      fontSize = 11.sp,
-                      fontWeight = FontWeight.Bold,
-                      color = PureWhite,
-                    )
-                  }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Middle Row: Big clean schedule timings
-                Text(
-                  text = "${appState.breakStartTime} – ${appState.breakEndTime}",
-                  fontSize = 17.sp,
-                  fontWeight = FontWeight.Black,
-                  color = PureWhite,
-                  letterSpacing = (-0.3).sp,
-                )
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Bottom Row: Sleek countdown badge with icon
+                // Compact Break Timing Chip
                 Row(
                   verticalAlignment = Alignment.CenterVertically,
                   modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF28282C))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xFF2C2C30))
+                    .clickable { showTimeDialog = true }
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
                 ) {
                   Icon(
                     imageVector = Icons.Default.AccessTime,
-                    contentDescription = null,
+                    contentDescription = "Break Time",
                     tint = DrawerAmber,
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(13.dp),
                   )
-                  Spacer(modifier = Modifier.width(6.dp))
+                  Spacer(modifier = Modifier.width(5.dp))
                   Text(
-                    text = "${appState.breakMinutesLeft} mins remaining in break",
+                    text = "${appState.breakStartTime} – ${appState.breakEndTime}",
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold,
-                    color = PureWhite.copy(alpha = 0.9f),
+                    color = PureWhite,
                   )
                 }
               }
@@ -358,8 +286,8 @@ fun StudentProfileDrawer(
                 icon = Icons.Outlined.FavoriteBorder,
                 title = "Favorites",
                 onClick = {
-                  activeDialogTitle = "Favorites"
-                  activeDialogContent = "You have ${appState.favoriteItemIds.size} favorite items saved in QuickBite."
+                  onClose()
+                  appState.openFavoritesScreen()
                 },
               )
 

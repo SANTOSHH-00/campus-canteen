@@ -95,42 +95,55 @@ fun CustomerOrderTrackingScreen(
 
   // Server-authoritative status timestamps (exact milestone event times, never device clock)
   val placedTimeDisplay = currentOrder.orderPlacedAt.ifBlank {
-    formatUtcToLocalTime(queuePositionData?.orderPlacedAt)
+    queuePositionData?.orderPlacedAtLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
+      ?: queuePositionData?.orderTime?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
+      ?: formatUtcToLocalTime(queuePositionData?.orderPlacedAt)
   }.ifBlank {
-    currentOrder.orderTime.removePrefix("Today, ")
+    val fromOrderTime = currentOrder.orderTime.removePrefix("Today,").removePrefix("today,").trim()
+    if (fromOrderTime.isNotBlank() && fromOrderTime != "Today" && fromOrderTime != "-") fromOrderTime else ""
+  }.ifBlank {
+    val epochFromId = com.example.data.api.extractEpochFromOrderId(currentOrder.id)
+    if (epochFromId > 0) SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(epochFromId)) else ""
   }.ifBlank { "-" }
 
   val confirmedTimeDisplay = currentOrder.confirmedAt.ifBlank {
-    formatUtcToLocalTime(queuePositionData?.confirmedAt)
+    queuePositionData?.confirmedAtLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
+      ?: formatUtcToLocalTime(queuePositionData?.confirmedAt)
   }.ifBlank {
     placedTimeDisplay
   }
 
   val preparingTimeDisplay = currentOrder.preparingAt.ifBlank {
-    formatUtcToLocalTime(queuePositionData?.preparingAt)
+    queuePositionData?.preparingAtLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
+      ?: formatUtcToLocalTime(queuePositionData?.preparingAt)
   }.ifBlank {
-    val historyPreparing = queuePositionData?.statusHistory?.find { it.status.equals("PREPARING", ignoreCase = true) }?.timestamp
-    formatUtcToLocalTime(historyPreparing)
+    val historyPreparing = queuePositionData?.statusHistory?.find { it.status.equals("PREPARING", ignoreCase = true) }
+    historyPreparing?.timestampLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
+      ?: formatUtcToLocalTime(historyPreparing?.timestamp)
   }.ifBlank {
-    if (hasStartedPreparing) placedTimeDisplay else "-"
+    "-"
   }
 
   val readyTimeDisplay = currentOrder.readyAt.ifBlank {
-    formatUtcToLocalTime(queuePositionData?.readyAt)
+    queuePositionData?.readyAtLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
+      ?: formatUtcToLocalTime(queuePositionData?.readyAt)
   }.ifBlank {
-    val historyReady = queuePositionData?.statusHistory?.find { it.status.equals("READY", ignoreCase = true) }?.timestamp
-    formatUtcToLocalTime(historyReady)
+    val historyReady = queuePositionData?.statusHistory?.find { it.status.equals("READY", ignoreCase = true) }
+    historyReady?.timestampLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
+      ?: formatUtcToLocalTime(historyReady?.timestamp)
   }.ifBlank {
-    if (isReady || isPickedUp) preparingTimeDisplay else "-"
+    "-"
   }
 
   val completedTimeDisplay = currentOrder.completedAt.ifBlank {
-    formatUtcToLocalTime(queuePositionData?.completedAt)
+    queuePositionData?.completedAtLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
+      ?: formatUtcToLocalTime(queuePositionData?.completedAt)
   }.ifBlank {
-    val historyCompleted = queuePositionData?.statusHistory?.find { it.status.equals("COMPLETED", ignoreCase = true) }?.timestamp
-    formatUtcToLocalTime(historyCompleted)
+    val historyCompleted = queuePositionData?.statusHistory?.find { it.status.equals("COMPLETED", ignoreCase = true) }
+    historyCompleted?.timestampLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
+      ?: formatUtcToLocalTime(historyCompleted?.timestamp)
   }.ifBlank {
-    if (isPickedUp) readyTimeDisplay else "-"
+    "-"
   }
 
   // Load and refresh real-time queue position
@@ -377,8 +390,12 @@ fun CustomerOrderTrackingScreen(
               val workload = queuePositionData?.workloadSummary?.ifBlank {
                 if (similarAhead == 0) "0 orders ahead of you" else "$similarAhead order${if (similarAhead > 1) "s" else ""} ahead of you"
               } ?: if (similarAhead == 0) "0 orders ahead of you" else "$similarAhead order${if (similarAhead > 1) "s" else ""} ahead of you"
-              val completionText = queuePositionData?.estimatedCompletionTime?.ifBlank { "~${queuePositionData?.estWaitMinutes ?: 7} min" } ?: "~${queuePositionData?.estWaitMinutes ?: 7} min"
-              "$workload • Estimated completion: $completionText"
+              val waitMins = queuePositionData?.estWaitMinutes ?: 7
+              val serverCompletion = queuePositionData?.estimatedCompletionTime?.ifBlank { null }
+                ?: currentOrder.estimatedCompletionTime.ifBlank { null }
+                ?: currentOrder.estimatedReadyTime.ifBlank { null }
+                ?: "~$waitMins min"
+              "$workload • Estimated ready: $serverCompletion (~$waitMins min)"
             }
           }
 
@@ -394,7 +411,10 @@ fun CustomerOrderTrackingScreen(
             val similarAhead = queuePositionData?.similarOrdersAhead ?: queuePositionData?.ordersAhead ?: 0
             val pos = queuePositionData?.queuePosition ?: 1
             val estMins = queuePositionData?.estWaitMinutes ?: 7
-            val completionTimeStr = queuePositionData?.estimatedCompletionTime?.ifBlank { "~$estMins min" } ?: "~$estMins min"
+            val completionTimeStr = queuePositionData?.estimatedCompletionTime?.ifBlank { null }
+              ?: currentOrder.estimatedCompletionTime.ifBlank { null }
+              ?: currentOrder.estimatedReadyTime.ifBlank { null }
+              ?: "~$estMins min"
 
             Spacer(Modifier.height(14.dp))
             Row(
@@ -538,6 +558,59 @@ fun CustomerOrderTrackingScreen(
               )
             }
           }
+
+          HorizontalDivider(
+            modifier = Modifier.padding(vertical = 12.dp),
+            thickness = 1.dp,
+            color = Color(0xFFF3F4F6)
+          )
+
+          val customerPickupDisplay = queuePositionData?.customerPickupTime?.ifBlank { null }
+            ?: currentOrder.customerPickupTime.ifBlank {
+              currentOrder.pickupPreference.ifBlank { "ASAP" }
+            }
+          val estCompletionDisplay = queuePositionData?.estimatedCompletionTime?.ifBlank { null }
+            ?: currentOrder.estimatedCompletionTime.ifBlank { null }
+            ?: currentOrder.estimatedReadyTime.ifBlank { null }
+            ?: "In kitchen queue"
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column {
+              Text(
+                text = "Customer Pickup",
+                fontSize = 11.5.sp,
+                color = TextMuted,
+                fontWeight = FontWeight.Medium,
+              )
+              Spacer(Modifier.height(2.dp))
+              Text(
+                text = customerPickupDisplay,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark,
+              )
+            }
+
+            Column(horizontalAlignment = Alignment.End) {
+              Text(
+                text = "Est. Completion",
+                fontSize = 11.5.sp,
+                color = TextMuted,
+                fontWeight = FontWeight.Medium,
+              )
+              Spacer(Modifier.height(2.dp))
+              Text(
+                text = estCompletionDisplay,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFEA580C),
+              )
+            }
+          }
         }
       }
 
@@ -558,7 +631,7 @@ fun CustomerOrderTrackingScreen(
           Spacer(Modifier.height(14.dp))
 
           TrackingMilestone(
-            title = "Order Placed",
+            title = "Order Received",
             time = placedTimeDisplay,
             isCompleted = true,
             isLast = false,

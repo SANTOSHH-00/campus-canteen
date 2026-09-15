@@ -159,22 +159,41 @@ fun OwnerOrderDetailsScreen(
 
   val timeFormatter = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
   val dateFormatter = remember { SimpleDateFormat("d MMM yyyy", Locale.getDefault()) }
-  val orderTime = remember(order.orderPlacedAt, order.createdAt) {
-    if (order.orderPlacedAt > 0) timeFormatter.format(Date(order.orderPlacedAt))
-    else timeFormatter.format(Date(order.createdAt))
+  val exactPlacedEpoch = remember(order.orderPlacedAt, order.createdAt, order.orderId) {
+    order.getExactPlacedEpoch()
   }
-  val orderDate = remember(order.orderPlacedAt, order.createdAt) {
-    if (order.orderPlacedAt > 0) dateFormatter.format(Date(order.orderPlacedAt))
-    else dateFormatter.format(Date(order.createdAt))
+  val orderTime = remember(exactPlacedEpoch) {
+    if (exactPlacedEpoch > 0) timeFormatter.format(Date(exactPlacedEpoch)) else "-"
   }
-  val preparingTime = remember(order.preparingAt, orderTime) {
-    if (order.preparingAt > 0) timeFormatter.format(Date(order.preparingAt)) else orderTime
+  val orderDate = remember(exactPlacedEpoch) {
+    if (exactPlacedEpoch > 0) dateFormatter.format(Date(exactPlacedEpoch)) else ""
   }
-  val readyTime = remember(order.readyAt) {
-    if (order.readyAt > 0) timeFormatter.format(Date(order.readyAt)) else "-"
+  val preparingTime = remember(order.preparingAt, order.updatedAt, isPreparing, isReady, isPickedUp) {
+    when {
+      order.preparingAt > 0 -> timeFormatter.format(Date(order.preparingAt))
+      isPreparing || isReady || isPickedUp -> {
+        if (order.updatedAt > 0) timeFormatter.format(Date(order.updatedAt)) else orderTime
+      }
+      else -> "-"
+    }
   }
-  val completedTime = remember(order.completedAt) {
-    if (order.completedAt > 0) timeFormatter.format(Date(order.completedAt)) else "-"
+  val readyTime = remember(order.readyAt, order.updatedAt, isReady, isPickedUp) {
+    when {
+      order.readyAt > 0 -> timeFormatter.format(Date(order.readyAt))
+      isReady || isPickedUp -> {
+        if (order.updatedAt > 0 && !isPreparing) timeFormatter.format(Date(order.updatedAt)) else "-"
+      }
+      else -> "-"
+    }
+  }
+  val completedTime = remember(order.completedAt, order.updatedAt, isPickedUp) {
+    when {
+      order.completedAt > 0 -> timeFormatter.format(Date(order.completedAt))
+      isPickedUp -> {
+        if (order.updatedAt > 0) timeFormatter.format(Date(order.updatedAt)) else "-"
+      }
+      else -> "-"
+    }
   }
 
   // Phone calling & copying action
@@ -294,6 +313,66 @@ fun OwnerOrderDetailsScreen(
             fontSize = 13.sp,
             color = TextMuted,
           )
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          // ── Timing Separation: Customer Pickup vs Kitchen Estimated Completion ──
+          val customerPickupDisplay = order.customerPickupTime.ifBlank {
+            order.pickupPreference.ifBlank { "ASAP" }
+          }
+          val estimatedCompletionDisplay = order.estimatedCompletionTime.ifBlank {
+            order.estimatedReadyTime.ifBlank { "In queue" }
+          }
+
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(12.dp))
+              .background(Color(0xFFF9FAFB))
+              .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(12.dp))
+              .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column {
+              Text(
+                text = "Customer Pickup Time",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextMuted,
+              )
+              Spacer(modifier = Modifier.height(2.dp))
+              Text(
+                text = customerPickupDisplay,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark,
+              )
+            }
+
+            Box(
+              modifier = Modifier
+                .width(1.dp)
+                .height(26.dp)
+                .background(Color(0xFFE5E7EB))
+            )
+
+            Column(horizontalAlignment = Alignment.End) {
+              Text(
+                text = "Estimated Completion",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextMuted,
+              )
+              Spacer(modifier = Modifier.height(2.dp))
+              Text(
+                text = estimatedCompletionDisplay,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = OrangeAccent,
+              )
+            }
+          }
 
           Spacer(modifier = Modifier.height(14.dp))
           HorizontalDivider(thickness = 0.8.dp, color = DividerColor)

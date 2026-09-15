@@ -33,6 +33,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessTime
@@ -41,6 +44,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CurrencyRupee
 import androidx.compose.material.icons.filled.Fastfood
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Star
@@ -53,6 +58,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -158,9 +164,59 @@ fun MenuScreen(
 
   val listState = rememberLazyListState()
 
-  LaunchedEffect(Unit) {
+  DisposableEffect(Unit) {
     appState.isBottomBarVisible = true
+    onDispose {
+      appState.isBottomBarVisible = true
+    }
   }
+
+  // Hide bottom bar when scrolling down on Menu, reveal when scrolling up or at top
+  LaunchedEffect(listState) {
+    var lastIndex = listState.firstVisibleItemIndex
+    var lastOffset = listState.firstVisibleItemScrollOffset
+    var accumulatedDown = 0
+    var accumulatedUp = 0
+
+    snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+      .collect { (currentIndex, currentOffset) ->
+        val delta = if (currentIndex == lastIndex) {
+          currentOffset - lastOffset
+        } else {
+          (currentIndex - lastIndex) * 200 + (currentOffset - lastOffset)
+        }
+
+        if (delta > 0) {
+          accumulatedDown += delta
+          accumulatedUp = 0
+          if (accumulatedDown >= 35 && (currentIndex > 0 || currentOffset > 50)) {
+            appState.isBottomBarVisible = false
+          }
+        } else if (delta < 0) {
+          accumulatedUp += (-delta)
+          accumulatedDown = 0
+          if (accumulatedUp >= 25 || (currentIndex == 0 && currentOffset < 30)) {
+            appState.isBottomBarVisible = true
+          }
+        }
+
+        if (currentIndex == 0 && currentOffset < 15) {
+          appState.isBottomBarVisible = true
+          accumulatedDown = 0
+          accumulatedUp = 0
+        }
+
+        lastIndex = currentIndex
+        lastOffset = currentOffset
+      }
+  }
+
+  // Animate bottom padding so when the bottom bar slides down, items fill the screen with zero dead space
+  val listBottomPadding by animateDpAsState(
+    targetValue = if (appState.isBottomBarVisible) 90.dp else 24.dp,
+    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+    label = "menuListBottomPadding"
+  )
 
   // Hardware/System back button closes full-screen filter panel
   BackHandler(enabled = appState.isMenuFilterOpen) {
@@ -353,7 +409,7 @@ fun MenuScreen(
         modifier = Modifier
           .fillMaxWidth()
           .weight(1f),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = listBottomPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
       ) {
 
@@ -434,6 +490,8 @@ fun MenuScreen(
               Box(modifier = Modifier.weight(1f)) {
                 MenuItemGridCard(
                   foodItem = foodItem,
+                  isFavorite = appState.isItemFavorite(foodItem.id),
+                  onToggleFavorite = { appState.toggleFavorite(foodItem.id, foodItem) },
                   onAddToCart = { appState.addToCart(foodItem) },
                   onCardClick = { appState.openFoodDetail(foodItem) },
                 )
@@ -1048,6 +1106,8 @@ private fun DietaryOptionCard(
 @Composable
 private fun MenuItemGridCard(
   foodItem: FoodItem,
+  isFavorite: Boolean = false,
+  onToggleFavorite: () -> Unit = {},
   onAddToCart: () -> Unit,
   onCardClick: () -> Unit,
   modifier: Modifier = Modifier,
@@ -1066,15 +1126,39 @@ private fun MenuItemGridCard(
         .fillMaxWidth()
         .padding(10.dp),
     ) {
-      FoodImagePlaceholder(
-        itemName = foodItem.name,
-        imageUrl = foodItem.imageUrl,
-        rating = foodItem.rating,
-        compact = false,
+      Box(
         modifier = Modifier
           .fillMaxWidth()
           .height(138.dp),
-      )
+      ) {
+        FoodImagePlaceholder(
+          itemName = foodItem.name,
+          imageUrl = foodItem.imageUrl,
+          rating = foodItem.rating,
+          compact = false,
+          modifier = Modifier.fillMaxSize(),
+        )
+
+        // Floating Favorite Heart Button (Top-Left, complementing top-right rating badge)
+        Box(
+          modifier = Modifier
+            .align(Alignment.TopStart)
+            .padding(6.dp)
+            .size(30.dp)
+            .shadow(2.dp, CircleShape)
+            .clip(CircleShape)
+            .background(PureWhite.copy(alpha = 0.92f))
+            .clickable { onToggleFavorite() },
+          contentAlignment = Alignment.Center,
+        ) {
+          Icon(
+            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+            contentDescription = if (isFavorite) "Remove from Favorites" else "Add to Favorites",
+            tint = if (isFavorite) Color(0xFFEF4444) else Color(0xFF6B7280),
+            modifier = Modifier.size(17.dp),
+          )
+        }
+      }
 
       Spacer(modifier = Modifier.height(10.dp))
 
