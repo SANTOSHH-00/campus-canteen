@@ -51,6 +51,7 @@ const apiLimiter = rateLimit({
   max: 15000,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { keyGeneratorIpFallback: false },
   keyGenerator: (req) => {
     // Prioritize user authorization token or student ID so campus Wi-Fi NAT doesn't throttle all students
     const authHeader = req.headers['authorization'];
@@ -75,6 +76,7 @@ const authLimiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { keyGeneratorIpFallback: false },
   keyGenerator: (req) => {
     const email = (req.body?.email || '').trim().toLowerCase();
     if (email) return `auth_email_${email}`;
@@ -96,6 +98,10 @@ app.use('/api/owner/login', authLimiter);
 app.use('/api/owners/login', authLimiter);
 app.use('/api/owner/resend-otp', authLimiter);
 app.use('/api/owners/resend-otp', authLimiter);
+app.use('/api/admin/login', authLimiter);
+app.use('/api/admin/resend-otp', authLimiter);
+app.use('/api/owners/admin/login', authLimiter);
+app.use('/api/owners/admin/resend-otp', authLimiter);
 
 // Google Play Mandatory Compliance Pages
 app.get('/privacy-policy', (req, res) => {
@@ -143,6 +149,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/owner', require('./routes/owners'));
 app.use('/api/owners', require('./routes/owners'));
+app.use('/api/admin', require('./routes/owners'));
 app.use('/api/canteens', require('./routes/canteens'));
 app.use('/api/items', require('./routes/items'));
 app.use('/api/orders', require('./routes/orders'));

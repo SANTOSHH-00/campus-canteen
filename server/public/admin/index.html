@@ -90,22 +90,27 @@
       gap: 0.4rem;
     }
 
-    .badge-auth {
-      background: #388BFD22;
-      border: 1px solid #388BFD88;
-      color: #58A6FF;
-      font-size: 0.75rem;
+    .user-chip {
+      background: #388BFD18;
+      border: 1px solid #388BFD66;
+      color: #79C0FF;
+      font-size: 0.8rem;
       font-weight: 600;
-      padding: 0.35rem 0.75rem;
+      padding: 0.35rem 0.85rem;
       border-radius: 20px;
-      cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 0.35rem;
+      gap: 0.45rem;
     }
 
-    .badge-auth:hover {
-      background: #388BFD33;
+    .user-avatar {
+      font-size: 0.95rem;
+    }
+
+    .btn-sm {
+      padding: 0.35rem 0.85rem;
+      font-size: 0.8rem;
+      border-radius: 6px;
     }
 
     .container {
@@ -497,8 +502,8 @@
     #authGateOverlay {
       position: fixed;
       inset: 0;
-      background: #0D1117EE;
-      backdrop-filter: blur(10px);
+      background: rgba(13, 17, 23, 0.94);
+      backdrop-filter: blur(14px);
       z-index: 9999;
       display: flex;
       align-items: center;
@@ -509,29 +514,149 @@
     .auth-card {
       background: var(--surface);
       border: 1px solid var(--surface-border);
-      border-radius: 16px;
-      max-width: 440px;
+      border-radius: 18px;
+      max-width: 460px;
       width: 100%;
       padding: 2.25rem;
-      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+      box-shadow: 0 25px 70px rgba(0, 0, 0, 0.75);
       text-align: center;
+      position: relative;
+      overflow: hidden;
+      animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    .auth-icon {
-      font-size: 2.5rem;
-      margin-bottom: 1rem;
+    .auth-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--primary), #FFA040, var(--primary));
+    }
+
+    .auth-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(255, 107, 0, 0.12);
+      border: 1px solid rgba(255, 107, 0, 0.3);
+      color: var(--primary);
+      padding: 0.35rem 0.85rem;
+      border-radius: 30px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      margin-bottom: 1.15rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .auth-title {
-      font-size: 1.4rem;
+      font-size: 1.5rem;
       font-weight: 800;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.4rem;
+      letter-spacing: -0.4px;
     }
 
     .auth-desc {
       color: var(--text-muted);
-      font-size: 0.9rem;
-      margin-bottom: 1.5rem;
+      font-size: 0.88rem;
+      margin-bottom: 1.6rem;
+      line-height: 1.45;
+    }
+
+    .auth-error-box {
+      background: rgba(218, 54, 51, 0.12);
+      border: 1px solid rgba(218, 54, 51, 0.35);
+      color: #F85149;
+      font-size: 0.84rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      text-align: left;
+      line-height: 1.4;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+    }
+
+    .otp-digit-input {
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 1.85rem;
+      font-weight: 800;
+      letter-spacing: 12px;
+      text-align: center;
+      padding: 0.75rem 1rem;
+      color: #FFF;
+      background: #0D1117;
+      border: 2px solid var(--surface-border);
+      border-radius: 12px;
+      width: 100%;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .otp-digit-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px rgba(255, 107, 0, 0.2);
+    }
+
+    .otp-timer-box {
+      margin-top: 1.25rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--surface-border);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 0.85rem;
+    }
+
+    .link-btn {
+      background: none;
+      border: none;
+      color: var(--primary);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.3rem 0.6rem;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .link-btn:hover {
+      text-decoration: underline;
+      background: rgba(255, 107, 0, 0.08);
+    }
+
+    .link-btn-subtle {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .link-btn-subtle:hover {
+      color: var(--text-main);
+    }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #FFF;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
 
     /* Toast */
@@ -570,26 +695,90 @@
 </head>
 <body>
 
-  <!-- ADMIN AUTH GATE -->
+  <!-- ADMIN AUTH GATE (2-STEP: EMAIL & PASSWORD -> 6-DIGIT EMAIL OTP) -->
   <div id="authGateOverlay" style="display: none;">
     <div class="auth-card">
-      <div class="auth-icon">🛡️</div>
-      <h2 class="auth-title">Campus Admin Access</h2>
-      <p class="auth-desc">Enter your campus Master Admin passcode to synchronize and manage canteen allocations in MongoDB Atlas.</p>
       
-      <form id="adminAuthForm" onsubmit="verifyAdminPasscode(event)">
-        <div class="form-group" style="text-align: left;">
-          <label for="adminPasscodeInput">Admin Passcode</label>
-          <div class="password-wrapper">
-            <input type="password" id="adminPasscodeInput" required placeholder="Enter master admin passcode" autocomplete="current-password">
-            <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('adminPasscodeInput')">👁️</button>
-          </div>
+      <!-- STEP 1: CREDENTIALS -->
+      <div id="authStepCredentials">
+        <div class="auth-badge">
+          <span>🛡️</span> Quickbite Security Gateway
         </div>
-        <div id="authErrorMsg" style="color: #F85149; font-size: 0.85rem; margin-bottom: 1rem; display: none;"></div>
-        <button type="submit" class="btn" style="width: 100%; justify-content: center; padding: 0.8rem;">
-          🔓 Unlock Admin Dashboard
-        </button>
-      </form>
+        <h2 class="auth-title">Admin & Owner Sign In</h2>
+        <p class="auth-desc">Enter your registered email and password. A secure 6-digit verification code will be dispatched to your email.</p>
+
+        <form id="adminLoginForm" onsubmit="submitAdminLogin(event)">
+          <div class="form-group" style="text-align: left;">
+            <label for="adminEmailInput">Account Email</label>
+            <input type="email" id="adminEmailInput" required placeholder="e.g. owner@campus.edu" autocomplete="email">
+          </div>
+
+          <div class="form-group" style="text-align: left;">
+            <label for="adminPasswordInput">Password</label>
+            <div class="password-wrapper">
+              <input type="password" id="adminPasswordInput" required placeholder="Enter your password" autocomplete="current-password">
+              <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('adminPasswordInput')">👁️</button>
+            </div>
+          </div>
+
+          <div id="loginErrorMsg" class="auth-error-box" style="display: none;"></div>
+
+          <button type="submit" id="btnLoginSubmit" class="btn" style="width: 100%; justify-content: center; padding: 0.85rem; font-size: 0.95rem;">
+            <span>Verify & Send OTP</span> ➔
+          </button>
+        </form>
+      </div>
+
+      <!-- STEP 2: 6-DIGIT OTP VERIFICATION -->
+      <div id="authStepOtp" style="display: none;">
+        <div class="auth-badge" style="background: rgba(255, 107, 0, 0.15); color: var(--primary);">
+          <span>📬</span> Step 2: Two-Factor Verification
+        </div>
+        <h2 class="auth-title">Enter Verification Code</h2>
+        <p class="auth-desc">
+          We dispatched a 6-digit security code to<br>
+          <strong id="otpTargetEmailDisplay" style="color: var(--text-main); font-weight: 700;">email@domain.com</strong>
+        </p>
+
+        <form id="adminOtpForm" onsubmit="submitAdminOtp(event)">
+          <div class="form-group">
+            <label for="adminOtpInput" style="text-align: center;">Enter 6-Digit OTP</label>
+            <input 
+              type="text" 
+              id="adminOtpInput" 
+              maxlength="6" 
+              pattern="[0-9]{6}" 
+              inputmode="numeric" 
+              autocomplete="one-time-code" 
+              placeholder="······" 
+              class="otp-digit-input"
+              required
+            >
+          </div>
+
+          <div id="otpErrorMsg" class="auth-error-box" style="display: none;"></div>
+
+          <button type="submit" id="btnOtpSubmit" class="btn" style="width: 100%; justify-content: center; padding: 0.85rem; font-size: 0.95rem; margin-top: 0.5rem;">
+            🔓 Verify & Enter Portal
+          </button>
+
+          <div class="otp-timer-box">
+            <span id="otpCountdownText" style="color: var(--text-muted); font-size: 0.85rem;">
+              Resend code in <strong id="otpTimerSeconds" style="color: var(--primary);">60s</strong>
+            </span>
+            <button type="button" id="btnResendOtp" class="link-btn" style="display: none;" onclick="resendAdminOtp()">
+              🔄 Resend Verification Code
+            </button>
+          </div>
+
+          <div style="margin-top: 1.25rem;">
+            <button type="button" class="link-btn-subtle" onclick="switchToStepCredentials()">
+              ← Back to Sign In / Change Email
+            </button>
+          </div>
+        </form>
+      </div>
+
     </div>
   </div>
 
@@ -602,9 +791,13 @@
       <div class="badge-db" id="dbStatusBadge">
         <span>●</span> Connected: MongoDB Atlas (Quickbite)
       </div>
-      <div class="badge-auth" onclick="lockAdminSession()" title="Click to lock admin session">
-        🔒 Admin: Authenticated
+      <div class="user-chip" id="adminUserPill" style="display: none;">
+        <span class="user-avatar">👤</span>
+        <span id="adminSessionEmail">Admin</span>
       </div>
+      <button class="btn btn-secondary btn-sm" id="btnSignOut" onclick="logoutAdmin()" style="display: none;">
+        🚪 Sign Out
+      </button>
     </div>
   </header>
 
@@ -796,87 +989,237 @@
   <script>
     let canteensList = [];
     let ownersList = [];
-    let adminSecretKey = localStorage.getItem('qb_admin_key') || '';
+    let adminToken = localStorage.getItem('qb_admin_token') || '';
+    let pendingAuthEmail = '';
+    let otpCountdownInterval = null;
 
-    // Check if session is unlocked
+    // Check if session is already active on page load
     window.addEventListener('DOMContentLoaded', () => {
-      if (!adminSecretKey) {
+      if (!adminToken) {
         showAuthGate();
       } else {
-        validateSavedKey();
+        validateSavedSession();
       }
     });
 
     function showAuthGate() {
       document.getElementById('authGateOverlay').style.display = 'flex';
+      document.getElementById('authStepCredentials').style.display = 'block';
+      document.getElementById('authStepOtp').style.display = 'none';
+      document.getElementById('loginErrorMsg').style.display = 'none';
+      document.getElementById('otpErrorMsg').style.display = 'none';
+      document.getElementById('adminUserPill').style.display = 'none';
+      document.getElementById('btnSignOut').style.display = 'none';
+      setTimeout(() => {
+        const emailInput = document.getElementById('adminEmailInput');
+        if (emailInput) emailInput.focus();
+      }, 100);
     }
 
-    function hideAuthGate() {
+    function hideAuthGate(userEmail = '') {
       document.getElementById('authGateOverlay').style.display = 'none';
+      if (userEmail) {
+        document.getElementById('adminSessionEmail').textContent = userEmail;
+        document.getElementById('adminUserPill').style.display = 'inline-flex';
+        document.getElementById('btnSignOut').style.display = 'inline-flex';
+      }
     }
 
-    async function validateSavedKey() {
+    function switchToStepCredentials() {
+      if (otpCountdownInterval) clearInterval(otpCountdownInterval);
+      document.getElementById('authStepOtp').style.display = 'none';
+      document.getElementById('authStepCredentials').style.display = 'block';
+      document.getElementById('loginErrorMsg').style.display = 'none';
+    }
+
+    function startOtpCountdown(seconds = 60) {
+      if (otpCountdownInterval) clearInterval(otpCountdownInterval);
+      let remaining = seconds;
+      const countdownText = document.getElementById('otpCountdownText');
+      const timerSec = document.getElementById('otpTimerSeconds');
+      const resendBtn = document.getElementById('btnResendOtp');
+
+      countdownText.style.display = 'inline';
+      resendBtn.style.display = 'none';
+      timerSec.textContent = `${remaining}s`;
+
+      otpCountdownInterval = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          clearInterval(otpCountdownInterval);
+          countdownText.style.display = 'none';
+          resendBtn.style.display = 'inline-flex';
+        } else {
+          timerSec.textContent = `${remaining}s`;
+        }
+      }, 1000);
+    }
+
+    async function validateSavedSession() {
       try {
-        const res = await fetch('/api/owners/admin/verify-key', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: adminSecretKey })
+        const res = await fetch('/api/owners/admin/verify-token', {
+          headers: getAdminHeaders()
         });
         if (res.ok) {
-          hideAuthGate();
+          const data = await res.json();
+          hideAuthGate(data.admin?.email || 'Admin');
           fetchData();
         } else {
-          localStorage.removeItem('qb_admin_key');
-          adminSecretKey = '';
+          localStorage.removeItem('qb_admin_token');
+          adminToken = '';
           showAuthGate();
         }
       } catch (err) {
-        // Offline or connection error, allow attempt
+        // Network failure; allow attempt
         fetchData();
       }
     }
 
-    async function verifyAdminPasscode(e) {
+    // Step 1: Submit Email & Password -> Dispatches 6-digit OTP
+    async function submitAdminLogin(e) {
       e.preventDefault();
-      const input = document.getElementById('adminPasscodeInput').value.trim();
-      const errBox = document.getElementById('authErrorMsg');
+      const email = document.getElementById('adminEmailInput').value.trim();
+      const password = document.getElementById('adminPasswordInput').value;
+      const errBox = document.getElementById('loginErrorMsg');
+      const submitBtn = document.getElementById('btnLoginSubmit');
+
+      errBox.style.display = 'none';
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner"></span> Verifying credentials...';
 
       try {
-        const res = await fetch('/api/owners/admin/verify-key', {
+        const res = await fetch('/api/owners/admin/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: input })
+          body: JSON.stringify({ email, password })
         });
 
-        if (res.ok) {
-          adminSecretKey = input;
-          localStorage.setItem('qb_admin_key', input);
-          errBox.style.display = 'none';
-          hideAuthGate();
-          showToast('✅ Admin authenticated successfully', 'success');
-          fetchData();
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          pendingAuthEmail = data.email || email;
+          document.getElementById('otpTargetEmailDisplay').textContent = pendingAuthEmail;
+          document.getElementById('authStepCredentials').style.display = 'none';
+          document.getElementById('authStepOtp').style.display = 'block';
+          document.getElementById('adminOtpInput').value = '';
+          document.getElementById('otpErrorMsg').style.display = 'none';
+          startOtpCountdown(60);
+          showToast(`📬 Verification code sent to ${pendingAuthEmail}`, 'success');
+          setTimeout(() => {
+            const otpInput = document.getElementById('adminOtpInput');
+            if (otpInput) otpInput.focus();
+          }, 150);
         } else {
-          errBox.textContent = '❌ Incorrect admin passcode. Please check .env ADMIN_SECRET.';
-          errBox.style.display = 'block';
+          errBox.innerHTML = `⚠️ ${escapeHtml(data.error || 'Authentication failed. Please check your credentials.')}`;
+          errBox.style.display = 'flex';
         }
       } catch (err) {
-        errBox.textContent = 'Error communicating with server: ' + err.message;
-        errBox.style.display = 'block';
+        errBox.innerHTML = `❌ Connection error: ${escapeHtml(err.message)}`;
+        errBox.style.display = 'flex';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>Verify & Send OTP</span> ➔';
       }
     }
 
-    function lockAdminSession() {
-      if (confirm('Lock admin dashboard? You will need to enter the admin passcode again.')) {
-        localStorage.removeItem('qb_admin_key');
-        adminSecretKey = '';
+    // Step 2: Submit 6-digit OTP -> Generates JWT Token
+    async function submitAdminOtp(e) {
+      e.preventDefault();
+      const otp = document.getElementById('adminOtpInput').value.trim();
+      const errBox = document.getElementById('otpErrorMsg');
+      const submitBtn = document.getElementById('btnOtpSubmit');
+
+      if (otp.length !== 6) {
+        errBox.innerHTML = '⚠️ Please enter all 6 digits of the verification code.';
+        errBox.style.display = 'flex';
+        return;
+      }
+
+      errBox.style.display = 'none';
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner"></span> Validating security code...';
+
+      try {
+        const res = await fetch('/api/owners/admin/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: pendingAuthEmail, otp })
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.token) {
+          if (otpCountdownInterval) clearInterval(otpCountdownInterval);
+          adminToken = data.token;
+          localStorage.setItem('qb_admin_token', data.token);
+          hideAuthGate(data.admin?.email || pendingAuthEmail);
+          showToast(`✅ Welcome, ${data.admin?.name || 'Administrator'}! Session authenticated.`, 'success');
+          fetchData();
+        } else {
+          errBox.innerHTML = `⚠️ ${escapeHtml(data.error || 'Invalid verification code. Please try again.')}`;
+          errBox.style.display = 'flex';
+        }
+      } catch (err) {
+        errBox.innerHTML = `❌ Connection error: ${escapeHtml(err.message)}`;
+        errBox.style.display = 'flex';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '🔓 Verify & Enter Portal';
+      }
+    }
+
+    // Resend OTP
+    async function resendAdminOtp() {
+      const resendBtn = document.getElementById('btnResendOtp');
+      const errBox = document.getElementById('otpErrorMsg');
+      resendBtn.disabled = true;
+      resendBtn.textContent = 'Sending fresh code...';
+
+      try {
+        const res = await fetch('/api/owners/admin/resend-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: pendingAuthEmail })
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          startOtpCountdown(60);
+          showToast(`📩 Fresh code sent to ${pendingAuthEmail}`, 'success');
+          errBox.style.display = 'none';
+        } else {
+          errBox.innerHTML = `⚠️ ${escapeHtml(data.error || 'Failed to resend code.')}`;
+          errBox.style.display = 'flex';
+          resendBtn.disabled = false;
+          resendBtn.textContent = '🔄 Resend Verification Code';
+        }
+      } catch (err) {
+        errBox.innerHTML = `❌ Connection error: ${escapeHtml(err.message)}`;
+        errBox.style.display = 'flex';
+        resendBtn.disabled = false;
+        resendBtn.textContent = '🔄 Resend Verification Code';
+      }
+    }
+
+    // Sign Out / Lock Session
+    function logoutAdmin() {
+      if (confirm('Are you sure you want to sign out of the Quickbite Admin Portal?')) {
+        localStorage.removeItem('qb_admin_token');
+        adminToken = '';
+        pendingAuthEmail = '';
+        if (otpCountdownInterval) clearInterval(otpCountdownInterval);
+        document.getElementById('adminLoginForm').reset();
+        document.getElementById('adminOtpForm').reset();
         showAuthGate();
+        showToast('🔒 You have signed out.', 'info');
       }
     }
 
     function getAdminHeaders() {
       return {
         'Content-Type': 'application/json',
-        'x-admin-key': adminSecretKey
+        'Authorization': `Bearer ${adminToken}`
       };
     }
 
@@ -900,7 +1243,10 @@
         });
 
         if (oRes.status === 401) {
+          localStorage.removeItem('qb_admin_token');
+          adminToken = '';
           showAuthGate();
+          showToast('⚠️ Session expired. Please sign in again.', 'error');
           return;
         }
 

@@ -371,9 +371,32 @@ async function sendPasswordResetEmail(toEmail, resetUrl, userName = 'Student') {
   return sendEmail({ to: toEmail, subject, html, text });
 }
 
+/**
+ * Sends 6-digit verification OTP email for Quickbite Campus Admin Portal
+ * @param {string} toEmail 
+ * @param {string} otpCode 
+ * @param {string} name 
+ */
+async function sendAdminPortalOTP(toEmail, otpCode, name = 'Administrator') {
+  const subject = `Quickbite Admin Portal - Security Verification Code: ${otpCode}`;
+
+  const html = buildQuickBiteEmailHtml({
+    title: 'Admin Portal Verification',
+    bodyHtml: `We received a sign-in request to the Quickbite Campus Admin Portal for <strong style="color: #FAFAFA;">${toEmail}</strong>. Enter the 6-digit security code below to complete authentication:`,
+    code: otpCode,
+    expiryText: 'This code expires in 5 minutes.',
+    securityNote: "If you did not attempt to sign in to the Quickbite Admin Portal, please protect your credentials immediately.",
+  });
+
+  const text = `Quickbite Admin Portal - Verification\n\nWe received a sign-in request to the Quickbite Campus Admin Portal for ${toEmail}.\n\nVerification Code: ${otpCode}\n\nThis code expires in 5 minutes.\nIf you did not initiate this sign-in attempt, please protect your credentials immediately.`;
+
+  return sendEmail({ to: toEmail, subject, html, text });
+}
+
 module.exports = {
   sendEmail,
   sendOwnerOTP,
+  sendAdminPortalOTP,
   sendAccountVerificationOTP,
   sendPasswordResetEmail,
 };

@@ -4,9 +4,10 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Owner = require('../models/Owner');
+const User = require('../models/User');
 const Canteen = require('../models/Canteen');
 const OtpVerification = require('../models/OtpVerification');
-const { sendOwnerOTP } = require('../services/emailService');
+const { sendOwnerOTP, sendAdminPortalOTP } = require('../services/emailService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'quickbite-super-secure-jwt-secret-key-2026';
 
@@ -248,35 +249,292 @@ router.post('/resend-otp', async (req, res) => {
   }
 });
 
-// Helper: Verify Admin Secret (from Header `x-admin-key`, query `adminKey`, or Bearer)
+// ── Middleware: Verify Admin or Owner JWT Token ──────────────────────────────
 function requireAdminAuth(req, res, next) {
-  const configuredSecret = process.env.ADMIN_SECRET || 'QuickbiteAdminMaster2026!';
-  const providedKey = req.headers['x-admin-key'] || req.query.adminKey || req.headers.authorization?.replace('Bearer ', '');
-  
-  if (!providedKey || providedKey !== configuredSecret) {
-    return res.status(401).json({ error: 'Unauthorized: Invalid or missing Admin Secret key.' });
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7).trim()
+    : (req.headers['x-admin-token'] || req.query.token || '').trim();
+
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized: Admin authentication token required. Please sign in.' });
   }
-  next();
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded || (decoded.role !== 'admin' && decoded.role !== 'owner')) {
+      return res.status(403).json({ error: 'Forbidden: Canteen owner or administrator privileges required.' });
+    }
+    req.admin = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Session expired or invalid token. Please sign in again.' });
+  }
 }
 
-// ── GET /api/owners - List all owners (for Quickbite Admin Portal) ────────────
-router.get('/', async (req, res) => {
+// ── POST /api/owners/admin/login (Admin/Owner Email & Password -> Sends 6-digit OTP) ─────
+router.post('/admin/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Please enter both your email and password.' });
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+
+    // 1. Check Owner collection first
+    let account = await Owner.findOne({ email: trimmedEmail });
+    let role = 'owner';
+
+    // 2. If not found in Owner, check User collection for admin/owner role
+    if (!account) {
+      account = await User.findOne({ email: trimmedEmail, role: { $in: ['admin', 'owner'] } });
+      if (account) role = account.role;
+    }
+
+    // 3. If account does not exist
+    if (!account) {
+      return res.status(404).json({
+        error: 'Access denied: No canteen owner or administrator account found for this email.',
+      });
+    }
+
+    // 4. Verify password
+    if (account.password && account.password.trim()) {
+      const isMatch = await bcrypt.compare(password, account.password);
+      if (!isMatch) {
+        return res.status(401).json({ error: 'Incorrect password. Please verify and try again.' });
+      }
+    } else {
+      // First-time owner initialization: hash and save
+      account.password = await bcrypt.hash(password, 10);
+      await account.save();
+    }
+
+    // 5. Generate secure 6-digit numeric OTP
+    const rawOtp = crypto.randomInt(100000, 1000000).toString();
+    const otpHash = hashOtp(rawOtp);
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+    // 6. Save or update OtpVerification in MongoDB
+    await OtpVerification.findOneAndUpdate(
+      { email: trimmedEmail },
+      {
+        $set: {
+          email: trimmedEmail,
+          otpHash,
+          expiresAt,
+          attempts: 0,
+          maxAttempts: 5,
+          lastSentAt: new Date(),
+          verified: false,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    // 7. Dispatch OTP through Gmail SMTP in background (non-blocking)
+    console.log(`[AdminAuth] Dispatching 6-digit verification code to ${trimmedEmail} (Code: ${rawOtp})...`);
+    sendAdminPortalOTP(trimmedEmail, rawOtp, account.name || 'Owner / Administrator').catch(err => {
+      console.error('[AdminAuth] Error sending admin OTP email in background:', err.message);
+    });
+
+    res.json({
+      success: true,
+      message: 'A 6-digit verification code has been dispatched to your registered email.',
+      email: trimmedEmail,
+      name: account.name || 'Administrator',
+      role,
+    });
+  } catch (err) {
+    console.error('[AdminAuth] Login error:', err);
+    res.status(500).json({ error: err.message || 'Authentication failed.' });
+  }
+});
+
+// ── POST /api/owners/admin/verify-otp (Verify 6-digit OTP -> Generates Admin JWT) ─────────
+router.post('/admin/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body || {};
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'Email and 6-digit verification code are required.' });
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedOtp = otp.toString().trim();
+
+    if (trimmedOtp.length !== 6 || !/^\d+$/.test(trimmedOtp)) {
+      return res.status(400).json({ error: 'Please enter a valid 6-digit verification code.' });
+    }
+
+    // 1. Fetch OTP record
+    const otpRecord = await OtpVerification.findOne({ email: trimmedEmail });
+    if (!otpRecord) {
+      return res.status(400).json({
+        error: 'No active OTP verification session found. Please request a new code.',
+      });
+    }
+
+    // 2. Check expiration
+    if (new Date() > new Date(otpRecord.expiresAt)) {
+      await OtpVerification.deleteOne({ _id: otpRecord._id });
+      return res.status(400).json({
+        error: 'This verification code has expired. Please click Resend Code to receive a new one.',
+      });
+    }
+
+    // 3. Check attempt limit
+    if (otpRecord.attempts >= otpRecord.maxAttempts) {
+      await OtpVerification.deleteOne({ _id: otpRecord._id });
+      return res.status(429).json({
+        error: 'Too many incorrect attempts. For security, please request a new verification code.',
+      });
+    }
+
+    // 4. Validate OTP hash
+    const inputHash = hashOtp(trimmedOtp);
+    if (inputHash !== otpRecord.otpHash) {
+      otpRecord.attempts += 1;
+      await otpRecord.save();
+      const remaining = otpRecord.maxAttempts - otpRecord.attempts;
+      return res.status(400).json({
+        error: `Incorrect verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`,
+      });
+    }
+
+    // 5. Invalidate OTP (single-use)
+    await OtpVerification.deleteOne({ _id: otpRecord._id });
+
+    // 6. Look up account details
+    let account = await Owner.findOne({ email: trimmedEmail }).lean();
+    let role = 'owner';
+    if (!account) {
+      account = await User.findOne({ email: trimmedEmail }).lean();
+      if (account) role = account.role;
+    }
+
+    if (!account) {
+      return res.status(404).json({ error: 'User account record not found.' });
+    }
+
+    // 7. Generate JWT token
+    const token = jwt.sign(
+      {
+        uid: account.uid,
+        email: account.email,
+        name: account.name || 'Admin',
+        role: role || 'admin',
+        canteenId: account.canteenId || '',
+        isAdmin: true,
+      },
+      JWT_SECRET,
+      { expiresIn: '14d' }
+    );
+
+    res.json({
+      success: true,
+      message: 'Admin authentication verified successfully.',
+      token,
+      admin: {
+        uid: account.uid,
+        email: account.email,
+        name: account.name || 'Admin',
+        role: role || 'admin',
+        canteenId: account.canteenId || '',
+      },
+    });
+  } catch (err) {
+    console.error('[AdminAuth] Verify OTP error:', err);
+    res.status(500).json({ error: err.message || 'Verification failed.' });
+  }
+});
+
+// ── POST /api/owners/admin/resend-otp (Enforce cooldown -> Resend 6-digit OTP) ──────
+router.post('/admin/resend-otp', async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'Email is required to resend verification code.' });
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+
+    // Verify account exists
+    let account = await Owner.findOne({ email: trimmedEmail });
+    if (!account) {
+      account = await User.findOne({ email: trimmedEmail, role: { $in: ['admin', 'owner'] } });
+    }
+    if (!account) {
+      return res.status(404).json({ error: 'No authorized owner or admin account found with this email.' });
+    }
+
+    // Cooldown check (60 seconds)
+    const existing = await OtpVerification.findOne({ email: trimmedEmail });
+    if (existing && existing.lastSentAt) {
+      const elapsed = Date.now() - new Date(existing.lastSentAt).getTime();
+      const cooldownMs = 60 * 1000;
+      if (elapsed < cooldownMs) {
+        const remainingSec = Math.ceil((cooldownMs - elapsed) / 1000);
+        return res.status(429).json({
+          error: `Please wait ${remainingSec} seconds before requesting a new code.`,
+        });
+      }
+    }
+
+    // Generate new OTP
+    const rawOtp = crypto.randomInt(100000, 1000000).toString();
+    const otpHash = hashOtp(rawOtp);
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+    await OtpVerification.findOneAndUpdate(
+      { email: trimmedEmail },
+      {
+        $set: {
+          email: trimmedEmail,
+          otpHash,
+          expiresAt,
+          attempts: 0,
+          maxAttempts: 5,
+          lastSentAt: new Date(),
+          verified: false,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    console.log(`[AdminAuth] Resending verification code to ${trimmedEmail} (Code: ${rawOtp})...`);
+    sendAdminPortalOTP(trimmedEmail, rawOtp, account.name || 'Owner / Administrator').catch(err => {
+      console.error('[AdminAuth] Error resending admin OTP email in background:', err.message);
+    });
+
+    res.json({
+      success: true,
+      message: 'A fresh verification code has been dispatched to your registered email.',
+      email: trimmedEmail,
+    });
+  } catch (err) {
+    console.error('[AdminAuth] Resend OTP error:', err);
+    res.status(500).json({ error: err.message || 'Failed to resend verification code.' });
+  }
+});
+
+// ── GET /api/owners/admin/verify-token (Verify current session JWT token) ─────────
+router.get('/admin/verify-token', requireAdminAuth, (req, res) => {
+  res.json({
+    success: true,
+    message: 'Admin session is active and valid.',
+    admin: req.admin,
+  });
+});
+
+// ── GET /api/owners - List all owners (Requires Admin/Owner Auth) ────────────
+router.get('/', requireAdminAuth, async (req, res) => {
   try {
     const owners = await Owner.find({}).sort({ createdAt: -1 }).select('-password').lean();
     res.json(owners);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
-
-// ── POST /api/owners/admin/verify-key - Validate admin passcode ───────────────
-router.post('/admin/verify-key', (req, res) => {
-  const configuredSecret = process.env.ADMIN_SECRET || 'QuickbiteAdminMaster2026!';
-  const { key } = req.body || {};
-  if (key === configuredSecret) {
-    return res.json({ success: true, message: 'Admin passcode verified' });
-  }
-  return res.status(401).json({ error: 'Invalid admin passcode' });
 });
 
 // ── GET /api/owners/:uid - Get owner details by uid or email ─────────────────
@@ -294,8 +552,8 @@ router.get('/:uid', async (req, res) => {
   }
 });
 
-// ── POST /api/owners - Create or update owner profile (Admin or Android API) ──
-router.post('/', async (req, res) => {
+// ── POST /api/owners - Create or update owner profile (Requires Admin Auth) ──
+router.post('/', requireAdminAuth, async (req, res) => {
   try {
     let { uid, name, email, password, role, canteenAssigned, canteenId, block, phone } = req.body;
     
@@ -368,7 +626,7 @@ router.post('/', async (req, res) => {
 });
 
 // ── PATCH /api/owners/:uid/assign - Assign or unassign a canteen ─────────────
-router.patch('/:uid/assign', async (req, res) => {
+router.patch('/:uid/assign', requireAdminAuth, async (req, res) => {
   try {
     const { canteenAssigned, canteenId, block } = req.body;
     const query = req.params.uid.includes('@')
@@ -396,7 +654,7 @@ router.patch('/:uid/assign', async (req, res) => {
 });
 
 // ── PATCH /api/owners/:uid/password - Admin reset owner password ──────────────
-router.patch('/:uid/password', async (req, res) => {
+router.patch('/:uid/password', requireAdminAuth, async (req, res) => {
   try {
     const { newPassword } = req.body;
     if (!newPassword || newPassword.trim().length < 6) {
@@ -423,7 +681,7 @@ router.patch('/:uid/password', async (req, res) => {
 });
 
 // ── DELETE /api/owners/:uid - Remove owner account from MongoDB ───────────────
-router.delete('/:uid', async (req, res) => {
+router.delete('/:uid', requireAdminAuth, async (req, res) => {
   try {
     const query = req.params.uid.includes('@')
       ? { email: req.params.uid.trim().toLowerCase() }
