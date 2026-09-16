@@ -34,6 +34,10 @@ const otpVerificationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    tempData: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
   },
   { timestamps: true }
 );

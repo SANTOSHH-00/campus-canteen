@@ -3,35 +3,47 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quickbite Campus Admin Portal - Canteen Management</title>
+  <title>QuickBite Campus Admin Portal - Canteen Management</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #FF6B00;
-      --primary-dark: #E65100;
-      --primary-light: #FFF3E0;
-      --bg: #0D1117;
-      --surface: #161B22;
-      --surface-border: #30363D;
-      --text-main: #F0F6FC;
-      --text-muted: #8B949E;
-      --success: #238636;
-      --success-bg: #0F381E;
-      --danger: #DA3633;
-      --danger-bg: #3E1B1B;
-      --warning: #D29922;
-      --warning-bg: #382A0C;
+      /* App Theme Palette (QuickBite Flame & Warm Amber) */
+      --primary: #FF5200;
+      --primary-dark: #E04800;
+      --amber: #F5A623;
+      --amber-dark: #D4922A;
+      --amber-light: #FFF5E4;
+      --primary-gradient: linear-gradient(135deg, #FF5200 0%, #F5A623 100%);
+      --btn-shadow: 0 8px 24px rgba(255, 82, 0, 0.32);
+      
+      /* Dark Modern Canvas */
+      --bg: #0C0F14;
+      --surface: #151922;
+      --surface-elevated: #1D2330;
+      --surface-border: #283040;
+      --text-main: #F9FAFB;
+      --text-muted: #9CA3AF;
+      
+      /* App Accents */
+      --success: #10B981;
+      --success-bg: rgba(16, 185, 129, 0.12);
+      --danger: #EF4444;
+      --danger-bg: rgba(239, 68, 68, 0.12);
+      --warning: #F59E0B;
+      --warning-bg: rgba(245, 158, 11, 0.12);
+      
       --radius: 12px;
-      --card-radius: 14px;
+      --card-radius: 18px;
+      --pill-radius: 9999px;
     }
 
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
     body {
@@ -40,18 +52,20 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      background-image: radial-gradient(circle at 50% 0%, rgba(255, 82, 0, 0.08) 0%, transparent 60%);
     }
 
     header {
       background: var(--surface);
       border-bottom: 1px solid var(--surface-border);
-      padding: 1rem 2rem;
+      padding: 0.9rem 2rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
       position: sticky;
       top: 0;
       z-index: 100;
+      backdrop-filter: blur(12px);
     }
 
     .brand {
@@ -60,44 +74,72 @@
       gap: 0.75rem;
     }
 
-    .brand-icon {
-      font-size: 1.8rem;
+    .brand-logo-badge {
+      width: 40px;
+      height: 40px;
+      background: var(--primary-gradient);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.35rem;
+      box-shadow: 0 4px 14px rgba(255, 82, 0, 0.35);
+    }
+
+    .brand-text-col {
+      display: flex;
+      flex-direction: column;
     }
 
     .brand-title {
-      font-size: 1.25rem;
+      font-size: 1.18rem;
       font-weight: 800;
-      letter-spacing: -0.5px;
+      letter-spacing: -0.4px;
+      color: #FFF;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .brand-title span.accent {
       color: var(--primary);
+    }
+
+    .brand-subtitle {
+      font-size: 0.72rem;
+      color: var(--amber);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
     }
 
     .header-badges {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 0.85rem;
     }
 
     .badge-db {
-      background: #00ED6422;
-      border: 1px solid #00ED6488;
-      color: #00ED64;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34D399;
       font-size: 0.75rem;
-      font-weight: 600;
-      padding: 0.35rem 0.75rem;
-      border-radius: 20px;
+      font-weight: 700;
+      padding: 0.4rem 0.85rem;
+      border-radius: var(--pill-radius);
       display: inline-flex;
       align-items: center;
-      gap: 0.4rem;
+      gap: 0.45rem;
     }
 
     .user-chip {
-      background: #388BFD18;
-      border: 1px solid #388BFD66;
-      color: #79C0FF;
+      background: rgba(255, 82, 0, 0.12);
+      border: 1px solid rgba(255, 82, 0, 0.3);
+      color: #FFA066;
       font-size: 0.8rem;
-      font-weight: 600;
-      padding: 0.35rem 0.85rem;
-      border-radius: 20px;
+      font-weight: 700;
+      padding: 0.4rem 0.95rem;
+      border-radius: var(--pill-radius);
       display: inline-flex;
       align-items: center;
       gap: 0.45rem;
@@ -108,9 +150,9 @@
     }
 
     .btn-sm {
-      padding: 0.35rem 0.85rem;
+      padding: 0.4rem 0.95rem;
       font-size: 0.8rem;
-      border-radius: 6px;
+      border-radius: var(--pill-radius);
     }
 
     .container {
@@ -127,13 +169,13 @@
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
-      gap: 1rem;
+      gap: 1.25rem;
     }
 
     .page-title {
-      font-size: 1.85rem;
+      font-size: 1.9rem;
       font-weight: 800;
-      letter-spacing: -0.5px;
+      letter-spacing: -0.6px;
     }
 
     .page-subtitle {
@@ -149,68 +191,89 @@
     }
 
     .btn {
-      background: var(--primary);
       color: white;
       border: none;
-      padding: 0.65rem 1.25rem;
-      border-radius: 8px;
-      font-weight: 600;
+      padding: 0.7rem 1.35rem;
+      border-radius: var(--pill-radius);
+      font-weight: 700;
       font-size: 0.9rem;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      transition: all 0.2s ease;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       text-decoration: none;
     }
 
-    .btn:hover {
-      background: var(--primary-dark);
-      transform: translateY(-1px);
+    .btn-app-primary {
+      background: var(--primary-gradient);
+      box-shadow: var(--btn-shadow);
+      color: #FFF;
+    }
+
+    .btn-app-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(255, 82, 0, 0.42);
+    }
+
+    .btn-app-primary:active {
+      transform: translateY(0);
     }
 
     .btn-secondary {
-      background: #21262D;
+      background: var(--surface-elevated);
       border: 1px solid var(--surface-border);
       color: var(--text-main);
     }
 
     .btn-secondary:hover {
-      background: #30363D;
+      background: #262E3E;
+      border-color: rgba(255, 255, 255, 0.15);
+      transform: translateY(-1px);
     }
 
     .btn-danger {
       background: var(--danger-bg);
       border: 1px solid var(--danger);
-      color: #F85149;
+      color: #F87171;
     }
 
     .btn-danger:hover {
       background: var(--danger);
       color: white;
+      transform: translateY(-1px);
     }
 
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.25rem;
       margin-bottom: 2rem;
     }
 
     .stat-card {
       background: var(--surface);
       border: 1px solid var(--surface-border);
-      border-radius: var(--radius);
-      padding: 1.25rem 1.5rem;
+      border-radius: var(--card-radius);
+      padding: 1.35rem 1.6rem;
       display: flex;
       flex-direction: column;
       gap: 0.4rem;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255, 255, 255, 0.14);
     }
 
     .stat-num {
-      font-size: 2rem;
+      font-size: 2.15rem;
       font-weight: 800;
       color: var(--primary);
+      letter-spacing: -0.5px;
     }
 
     .stat-label {
@@ -225,11 +288,11 @@
       border-radius: var(--card-radius);
       overflow: hidden;
       margin-bottom: 2rem;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
     }
 
     .card-header {
-      padding: 1.25rem 1.5rem;
+      padding: 1.35rem 1.6rem;
       border-bottom: 1px solid var(--surface-border);
       display: flex;
       justify-content: space-between;
@@ -239,21 +302,29 @@
     }
 
     .card-title {
-      font-size: 1.15rem;
-      font-weight: 700;
+      font-size: 1.18rem;
+      font-weight: 800;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.6rem;
+      letter-spacing: -0.3px;
     }
 
     .search-input {
-      background: #0D1117;
+      background: #0C0F14;
       border: 1px solid var(--surface-border);
-      border-radius: 8px;
-      padding: 0.5rem 0.9rem;
+      border-radius: var(--pill-radius);
+      padding: 0.65rem 1.15rem;
       color: var(--text-main);
-      font-size: 0.85rem;
-      width: 250px;
+      font-size: 0.88rem;
+      width: 280px;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .search-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(255, 82, 0, 0.2);
     }
 
     table {
@@ -263,19 +334,19 @@
     }
 
     th, td {
-      padding: 1rem 1.25rem;
+      padding: 1.1rem 1.35rem;
       border-bottom: 1px solid var(--surface-border);
       font-size: 0.9rem;
       vertical-align: middle;
     }
 
     th {
-      background: #1C2128;
+      background: rgba(0, 0, 0, 0.25);
       color: var(--text-muted);
-      font-weight: 600;
+      font-weight: 700;
       text-transform: uppercase;
       font-size: 0.72rem;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.6px;
     }
 
     tr:last-child td {
@@ -307,10 +378,10 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background-color: #30363D;
-      transition: 0.3s;
+      background-color: #283040;
+      transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
       border-radius: 34px;
-      border: 1px solid #484F58;
+      border: 1px solid #3E4756;
     }
 
     .slider:before {
@@ -321,13 +392,13 @@
       left: 3px;
       bottom: 3px;
       background-color: white;
-      transition: 0.3s;
+      transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
       border-radius: 50%;
     }
 
     input:checked + .slider {
       background-color: var(--success);
-      border-color: #3FB950;
+      border-color: #34D399;
     }
 
     input:checked + .slider:before {
@@ -342,26 +413,26 @@
 
     .toggle-label {
       font-size: 0.8rem;
-      font-weight: 600;
+      font-weight: 700;
     }
 
     .text-active {
-      color: #3FB950;
+      color: #34D399;
     }
 
     .text-inactive {
-      color: #F85149;
+      color: #F87171;
     }
 
     .canteen-pill {
       display: inline-flex;
       align-items: center;
       gap: 0.4rem;
-      background: #21262D;
-      border: 1px solid #30363D;
-      padding: 0.35rem 0.7rem;
-      border-radius: 6px;
-      font-weight: 600;
+      background: var(--surface-elevated);
+      border: 1px solid var(--surface-border);
+      padding: 0.4rem 0.8rem;
+      border-radius: 8px;
+      font-weight: 700;
       font-size: 0.85rem;
     }
 
@@ -372,36 +443,37 @@
     }
 
     .btn-icon {
-      padding: 0.45rem 0.65rem;
-      font-size: 0.8rem;
-      border-radius: 6px;
-      background: #21262D;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.82rem;
+      border-radius: 8px;
+      background: var(--surface-elevated);
       border: 1px solid var(--surface-border);
       color: var(--text-main);
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 0.3rem;
+      font-weight: 600;
       transition: all 0.2s;
     }
 
     .btn-icon:hover {
-      background: #30363D;
-      border-color: var(--text-muted);
+      background: #2A3344;
+      border-color: rgba(255, 255, 255, 0.2);
     }
 
     .btn-icon.delete:hover {
       background: var(--danger-bg);
       border-color: var(--danger);
-      color: #F85149;
+      color: #F87171;
     }
 
     /* Modals */
     .modal-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(5px);
+      background: rgba(12, 15, 20, 0.85);
+      backdrop-filter: blur(8px);
       display: none;
       place-items: center;
       z-index: 1000;
@@ -415,21 +487,21 @@
     .modal {
       background: var(--surface);
       border: 1px solid var(--surface-border);
-      border-radius: var(--radius);
+      border-radius: 20px;
       width: 100%;
       max-width: 520px;
-      padding: 2rem;
-      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6);
-      animation: modalPop 0.2s ease-out;
+      padding: 2.2rem;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+      animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     @keyframes modalPop {
-      from { transform: scale(0.95); opacity: 0; }
+      from { transform: scale(0.96); opacity: 0; }
       to { transform: scale(1); opacity: 1; }
     }
 
     .modal-title {
-      font-size: 1.35rem;
+      font-size: 1.4rem;
       font-weight: 800;
       margin-bottom: 0.35rem;
       display: flex;
@@ -440,8 +512,8 @@
     .modal-subtitle {
       color: var(--text-muted);
       font-size: 0.88rem;
-      margin-bottom: 1.5rem;
-      line-height: 1.4;
+      margin-bottom: 1.6rem;
+      line-height: 1.45;
     }
 
     .form-group {
@@ -450,20 +522,20 @@
 
     label {
       display: block;
-      margin-bottom: 0.4rem;
-      font-size: 0.82rem;
+      margin-bottom: 0.45rem;
+      font-size: 0.8rem;
       font-weight: 700;
-      color: #C9D1D9;
+      color: #D1D5DB;
       text-transform: uppercase;
-      letter-spacing: 0.4px;
+      letter-spacing: 0.5px;
     }
 
     input, select {
       width: 100%;
-      background: #0D1117;
+      background: #0C0F14;
       border: 1px solid var(--surface-border);
-      border-radius: 8px;
-      padding: 0.75rem 0.95rem;
+      border-radius: 10px;
+      padding: 0.8rem 1rem;
       color: var(--text-main);
       font-size: 0.95rem;
       outline: none;
@@ -472,7 +544,7 @@
 
     input:focus, select:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(255, 107, 0, 0.15);
+      box-shadow: 0 0 0 3px rgba(255, 82, 0, 0.2);
     }
 
     .password-wrapper {
@@ -481,48 +553,50 @@
 
     .password-toggle {
       position: absolute;
-      right: 12px;
+      right: 14px;
       top: 50%;
       transform: translateY(-50%);
       cursor: pointer;
       background: none;
       border: none;
       color: var(--text-muted);
-      font-size: 1rem;
+      font-size: 1.1rem;
+      padding: 0.2rem;
     }
 
     .modal-footer {
       display: flex;
       justify-content: flex-end;
       gap: 0.75rem;
-      margin-top: 1.75rem;
+      margin-top: 1.85rem;
     }
 
-    /* Auth Gate Overlay */
+    /* ── AUTH GATE OVERLAY (SIDE-BY-SIDE SIGN IN & REGISTER) ── */
     #authGateOverlay {
       position: fixed;
       inset: 0;
-      background: rgba(13, 17, 23, 0.94);
+      background: rgba(10, 13, 18, 0.94);
       backdrop-filter: blur(14px);
       z-index: 9999;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 1.5rem;
+      overflow-y: auto;
     }
 
     .auth-card {
       background: var(--surface);
       border: 1px solid var(--surface-border);
-      border-radius: 18px;
-      max-width: 460px;
+      border-radius: 22px;
+      max-width: 480px;
       width: 100%;
       padding: 2.25rem;
       box-shadow: 0 25px 70px rgba(0, 0, 0, 0.75);
-      text-align: center;
       position: relative;
       overflow: hidden;
       animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      margin: auto;
     }
 
     .auth-card::before {
@@ -532,65 +606,155 @@
       left: 0;
       right: 0;
       height: 3px;
-      background: linear-gradient(90deg, var(--primary), #FFA040, var(--primary));
+      background: var(--primary-gradient);
     }
 
-    .auth-badge {
+    .auth-brand-header {
+      text-align: center;
+      margin-bottom: 1.4rem;
+    }
+
+    .auth-brand-logo {
+      width: 48px;
+      height: 48px;
+      background: var(--primary-gradient);
+      border-radius: 14px;
       display: inline-flex;
       align-items: center;
-      gap: 0.4rem;
-      background: rgba(255, 107, 0, 0.12);
-      border: 1px solid rgba(255, 107, 0, 0.3);
-      color: var(--primary);
-      padding: 0.35rem 0.85rem;
-      border-radius: 30px;
-      font-size: 0.78rem;
-      font-weight: 700;
-      margin-bottom: 1.15rem;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      justify-content: center;
+      font-size: 1.6rem;
+      box-shadow: 0 6px 20px rgba(255, 82, 0, 0.35);
+      margin-bottom: 0.65rem;
     }
 
-    .auth-title {
-      font-size: 1.5rem;
+    .auth-portal-title {
+      font-size: 1.45rem;
       font-weight: 800;
-      margin-bottom: 0.4rem;
-      letter-spacing: -0.4px;
+      letter-spacing: -0.5px;
+      margin-bottom: 0.25rem;
     }
 
-    .auth-desc {
+    .auth-portal-desc {
       color: var(--text-muted);
-      font-size: 0.88rem;
+      font-size: 0.86rem;
+      line-height: 1.4;
+    }
+
+    /* Segmented Tab Switcher */
+    .auth-tabs {
+      display: flex;
+      background: #0C0F14;
+      padding: 4px;
+      border-radius: var(--pill-radius);
+      border: 1px solid var(--surface-border);
       margin-bottom: 1.6rem;
-      line-height: 1.45;
+      gap: 4px;
+    }
+
+    .auth-tab {
+      flex: 1;
+      padding: 0.65rem 1rem;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-weight: 700;
+      font-size: 0.88rem;
+      border-radius: var(--pill-radius);
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+    }
+
+    .auth-tab.active {
+      background: var(--primary-gradient);
+      color: #FFF;
+      box-shadow: 0 4px 14px rgba(255, 82, 0, 0.35);
+    }
+
+    .auth-tab:not(.active):hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .input-with-icon {
+      position: relative;
+    }
+
+    .input-with-icon input {
+      padding-left: 2.75rem;
+      border-radius: 10px;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1.05rem;
+      pointer-events: none;
+      opacity: 0.7;
     }
 
     .auth-error-box {
-      background: rgba(218, 54, 51, 0.12);
-      border: 1px solid rgba(218, 54, 51, 0.35);
-      color: #F85149;
+      background: var(--danger-bg);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #FCA5A5;
       font-size: 0.84rem;
       padding: 0.75rem 1rem;
-      border-radius: 8px;
-      margin-bottom: 1rem;
+      border-radius: 10px;
+      margin-bottom: 1.15rem;
       text-align: left;
-      line-height: 1.4;
+      line-height: 1.45;
       display: flex;
       align-items: flex-start;
-      gap: 0.5rem;
+      gap: 0.55rem;
     }
 
+    .auth-security-notice {
+      background: rgba(245, 166, 35, 0.1);
+      border: 1px solid rgba(245, 166, 35, 0.28);
+      color: #FBBF24;
+      border-radius: 10px;
+      padding: 0.7rem 0.9rem;
+      font-size: 0.78rem;
+      text-align: left;
+      margin-bottom: 1.25rem;
+      line-height: 1.45;
+    }
+
+    .auth-switch-note {
+      text-align: center;
+      margin-top: 1.35rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .auth-switch-note a {
+      color: var(--primary);
+      font-weight: 700;
+      text-decoration: none;
+      margin-left: 0.25rem;
+    }
+
+    .auth-switch-note a:hover {
+      text-decoration: underline;
+    }
+
+    /* OTP Step */
     .otp-digit-input {
       font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
       font-size: 1.85rem;
       font-weight: 800;
       letter-spacing: 12px;
       text-align: center;
-      padding: 0.75rem 1rem;
+      padding: 0.85rem 1rem;
       color: #FFF;
-      background: #0D1117;
+      background: #0C0F14;
       border: 2px solid var(--surface-border);
-      border-radius: 12px;
+      border-radius: 14px;
       width: 100%;
       outline: none;
       transition: all 0.2s;
@@ -598,7 +762,7 @@
 
     .otp-digit-input:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 4px rgba(255, 107, 0, 0.2);
+      box-shadow: 0 0 0 4px rgba(255, 82, 0, 0.22);
     }
 
     .otp-timer-box {
@@ -628,14 +792,14 @@
 
     .link-btn:hover {
       text-decoration: underline;
-      background: rgba(255, 107, 0, 0.08);
+      background: rgba(255, 82, 0, 0.08);
     }
 
     .link-btn-subtle {
       background: none;
       border: none;
       color: var(--text-muted);
-      font-size: 0.82rem;
+      font-size: 0.84rem;
       font-weight: 600;
       cursor: pointer;
       transition: color 0.2s;
@@ -664,27 +828,27 @@
       position: fixed;
       bottom: 2rem;
       right: 2rem;
-      background: #1C2128;
+      background: #1C222E;
       border: 1px solid var(--primary);
       padding: 1rem 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      border-radius: 12px;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.55);
       display: none;
       animation: slideIn 0.3s ease;
       z-index: 3000;
-      max-width: 420px;
+      max-width: 440px;
       font-size: 0.92rem;
       line-height: 1.4;
     }
 
     .toast.success {
-      border-color: #3FB950;
-      color: #3FB950;
+      border-color: #10B981;
+      color: #34D399;
     }
 
     .toast.error {
-      border-color: #F85149;
-      color: #F85149;
+      border-color: #EF4444;
+      color: #F87171;
     }
 
     @keyframes slideIn {
@@ -695,54 +859,136 @@
 </head>
 <body>
 
-  <!-- ADMIN AUTH GATE (2-STEP: EMAIL & PASSWORD -> 6-DIGIT EMAIL OTP) -->
+  <!-- ADMIN AUTH GATE OVERLAY (SIGN IN & REGISTER TABS + 2-FACTOR OTP) -->
   <div id="authGateOverlay" style="display: none;">
     <div class="auth-card">
       
-      <!-- STEP 1: CREDENTIALS -->
-      <div id="authStepCredentials">
-        <div class="auth-badge">
-          <span>🛡️</span> Quickbite Security Gateway
-        </div>
-        <h2 class="auth-title">Admin & Owner Sign In</h2>
-        <p class="auth-desc">Enter your registered email and password. A secure 6-digit verification code will be dispatched to your email.</p>
+      <!-- Top Brand Header -->
+      <div class="auth-brand-header">
+        <div class="auth-brand-logo">🍔</div>
+        <h1 class="auth-portal-title">QuickBite Campus Admin</h1>
+        <p class="auth-portal-desc">Official Canteen Allocation & Administrative Security Gateway</p>
+      </div>
 
+      <!-- Segmented Tab Switcher (Sign In beside Register) -->
+      <div class="auth-tabs" id="authTabsContainer">
+        <button type="button" class="auth-tab active" id="tabBtnSignIn" onclick="switchAuthTab('login')">
+          <span>🔑</span> Sign In
+        </button>
+        <button type="button" class="auth-tab" id="tabBtnRegister" onclick="switchAuthTab('register')">
+          <span>📝</span> Register Admin
+        </button>
+      </div>
+
+      <!-- ── TAB 1: SIGN IN VIEW ── -->
+      <div id="authTabSignInView">
         <form id="adminLoginForm" onsubmit="submitAdminLogin(event)">
           <div class="form-group" style="text-align: left;">
-            <label for="adminEmailInput">Account Email</label>
-            <input type="email" id="adminEmailInput" required placeholder="e.g. owner@campus.edu" autocomplete="email">
+            <label for="adminEmailInput">Administrator Email</label>
+            <div class="input-with-icon">
+              <span class="input-icon">✉️</span>
+              <input type="email" id="adminEmailInput" required placeholder="admin@campus.edu" autocomplete="email">
+            </div>
           </div>
 
           <div class="form-group" style="text-align: left;">
             <label for="adminPasswordInput">Password</label>
-            <div class="password-wrapper">
-              <input type="password" id="adminPasswordInput" required placeholder="Enter your password" autocomplete="current-password">
+            <div class="input-with-icon password-wrapper">
+              <span class="input-icon">🔑</span>
+              <input type="password" id="adminPasswordInput" required placeholder="Enter your administrator password" autocomplete="current-password">
               <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('adminPasswordInput')">👁️</button>
             </div>
           </div>
 
           <div id="loginErrorMsg" class="auth-error-box" style="display: none;"></div>
 
-          <button type="submit" id="btnLoginSubmit" class="btn" style="width: 100%; justify-content: center; padding: 0.85rem; font-size: 0.95rem;">
-            <span>Verify & Send OTP</span> ➔
+          <button type="submit" id="btnLoginSubmit" class="btn btn-app-primary" style="width: 100%; justify-content: center; padding: 0.88rem; font-size: 0.95rem;">
+            <span>Sign In as Administrator</span> ➔
           </button>
+
+          <div class="auth-switch-note">
+            Not registered yet? <a href="javascript:void(0)" onclick="switchAuthTab('register')">Register as an Administrator</a>
+          </div>
         </form>
       </div>
 
-      <!-- STEP 2: 6-DIGIT OTP VERIFICATION -->
-      <div id="authStepOtp" style="display: none;">
-        <div class="auth-badge" style="background: rgba(255, 107, 0, 0.15); color: var(--primary);">
-          <span>📬</span> Step 2: Two-Factor Verification
+      <!-- ── TAB 2: REGISTER VIEW ── -->
+      <div id="authTabRegisterView" style="display: none;">
+        <form id="adminRegisterForm" onsubmit="submitAdminRegister(event)">
+          <div class="form-group" style="text-align: left;">
+            <label for="regAdminName">Administrator Full Name</label>
+            <div class="input-with-icon">
+              <span class="input-icon">👤</span>
+              <input type="text" id="regAdminName" required placeholder="e.g. Ramesh Admin" autocomplete="name">
+            </div>
+          </div>
+
+          <div class="form-group" style="text-align: left;">
+            <label for="regAdminEmail">Official Admin Email</label>
+            <div class="input-with-icon">
+              <span class="input-icon">✉️</span>
+              <input type="email" id="regAdminEmail" required placeholder="admin@campus.edu" autocomplete="email">
+            </div>
+          </div>
+
+          <div class="form-group" style="text-align: left;">
+            <label for="regAdminPhone">Contact Phone (Optional)</label>
+            <div class="input-with-icon">
+              <span class="input-icon">📞</span>
+              <input type="tel" id="regAdminPhone" placeholder="+91 9876543210" autocomplete="tel">
+            </div>
+          </div>
+
+          <div class="form-group" style="text-align: left;">
+            <label for="regAdminPassword">Create Password (Min 6 chars)</label>
+            <div class="input-with-icon password-wrapper">
+              <span class="input-icon">🔑</span>
+              <input type="password" id="regAdminPassword" required minlength="6" placeholder="Create a secure password" autocomplete="new-password">
+              <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('regAdminPassword')">👁️</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="text-align: left;">
+            <label for="regAdminConfirmPassword">Confirm Password</label>
+            <div class="input-with-icon password-wrapper">
+              <span class="input-icon">🔒</span>
+              <input type="password" id="regAdminConfirmPassword" required minlength="6" placeholder="Repeat your password" autocomplete="new-password">
+              <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('regAdminConfirmPassword')">👁️</button>
+            </div>
+          </div>
+
+          <div class="auth-security-notice">
+            🛡️ <strong>Admin Authorization Notice:</strong> Only official campus administrators can register here. Canteen owners and students cannot access or manage the Admin Portal.
+          </div>
+
+          <div id="registerErrorMsg" class="auth-error-box" style="display: none;"></div>
+
+          <button type="submit" id="btnRegisterSubmit" class="btn btn-app-primary" style="width: 100%; justify-content: center; padding: 0.88rem; font-size: 0.95rem;">
+            <span>Create Admin Account</span> ➔
+          </button>
+
+          <div class="auth-switch-note">
+            Already registered? <a href="javascript:void(0)" onclick="switchAuthTab('login')">Sign In to Dashboard</a>
+          </div>
+        </form>
+      </div>
+
+      <!-- ── STEP 2: 6-DIGIT OTP VERIFICATION VIEW (COMMON) ── -->
+      <div id="authStepOtpView" style="display: none;">
+        <div style="text-align: center; margin-bottom: 1.25rem;">
+          <div style="display: inline-flex; align-items: center; gap: 0.4rem; background: rgba(255, 82, 0, 0.15); color: var(--primary); padding: 0.35rem 0.85rem; border-radius: var(--pill-radius); font-size: 0.78rem; font-weight: 700; text-transform: uppercase;">
+            <span>📬</span> Security Verification
+          </div>
+          <h2 class="auth-title" id="otpTitleText" style="margin-top: 0.75rem;">Verify Your Email</h2>
+          <p class="auth-desc" id="otpSubtitleText">
+            We sent a 6-digit security code to<br>
+            <strong id="otpTargetEmailDisplay" style="color: var(--text-main); font-weight: 700;">admin@campus.edu</strong>
+          </p>
         </div>
-        <h2 class="auth-title">Enter Verification Code</h2>
-        <p class="auth-desc">
-          We dispatched a 6-digit security code to<br>
-          <strong id="otpTargetEmailDisplay" style="color: var(--text-main); font-weight: 700;">email@domain.com</strong>
-        </p>
 
         <form id="adminOtpForm" onsubmit="submitAdminOtp(event)">
           <div class="form-group">
-            <label for="adminOtpInput" style="text-align: center;">Enter 6-Digit OTP</label>
+            <label for="adminOtpInput" style="text-align: center;">Enter 6-Digit Passcode</label>
             <input 
               type="text" 
               id="adminOtpInput" 
@@ -758,8 +1004,8 @@
 
           <div id="otpErrorMsg" class="auth-error-box" style="display: none;"></div>
 
-          <button type="submit" id="btnOtpSubmit" class="btn" style="width: 100%; justify-content: center; padding: 0.85rem; font-size: 0.95rem; margin-top: 0.5rem;">
-            🔓 Verify & Enter Portal
+          <button type="submit" id="btnOtpSubmit" class="btn btn-app-primary" style="width: 100%; justify-content: center; padding: 0.88rem; font-size: 0.95rem; margin-top: 0.5rem;">
+            🔓 Verify & Enter Dashboard
           </button>
 
           <div class="otp-timer-box">
@@ -771,9 +1017,9 @@
             </button>
           </div>
 
-          <div style="margin-top: 1.25rem;">
-            <button type="button" class="link-btn-subtle" onclick="switchToStepCredentials()">
-              ← Back to Sign In / Change Email
+          <div style="margin-top: 1.35rem; text-align: center;">
+            <button type="button" class="link-btn-subtle" onclick="cancelOtpAndReturn()">
+              ← Back to Sign In / Register
             </button>
           </div>
         </form>
@@ -784,16 +1030,19 @@
 
   <header>
     <div class="brand">
-      <span class="brand-icon">🍔</span>
-      <span class="brand-title">Quickbite Campus Admin</span>
+      <div class="brand-logo-badge">🍔</div>
+      <div class="brand-text-col">
+        <div class="brand-title">Quick<span class="accent">Bite</span> <span style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Admin</span></div>
+        <div class="brand-subtitle">Campus Management</div>
+      </div>
     </div>
     <div class="header-badges">
       <div class="badge-db" id="dbStatusBadge">
-        <span>●</span> Connected: MongoDB Atlas (Quickbite)
+        <span>●</span> MongoDB Atlas (Quickbite)
       </div>
       <div class="user-chip" id="adminUserPill" style="display: none;">
         <span class="user-avatar">👤</span>
-        <span id="adminSessionEmail">Admin</span>
+        <span id="adminSessionEmail">Administrator</span>
       </div>
       <button class="btn btn-secondary btn-sm" id="btnSignOut" onclick="logoutAdmin()" style="display: none;">
         🚪 Sign Out
@@ -805,11 +1054,11 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">Canteen Owner Access & Allocations</h1>
-        <p class="page-subtitle">Create owners, provision login passwords, assign canteens, and live-toggle access directly in MongoDB Atlas.</p>
+        <p class="page-subtitle">Provision owner credentials, assign campus canteens, and live-toggle access in MongoDB Atlas.</p>
       </div>
       <div class="btn-group">
         <button class="btn btn-secondary" onclick="fetchData()">⟳ Refresh Data</button>
-        <button class="btn" onclick="openCreateOwnerModal()">
+        <button class="btn btn-app-primary" onclick="openCreateOwnerModal()">
           <span>➕</span> Create New Canteen Owner
         </button>
       </div>
@@ -830,7 +1079,7 @@
         <div class="stat-label">Deactivated / Pending (Access Denied)</div>
       </div>
       <div class="stat-card">
-        <div class="stat-num" id="statTotalCanteens" style="color: #58A6FF;">0</div>
+        <div class="stat-num" id="statTotalCanteens" style="color: var(--amber);">0</div>
         <div class="stat-label">Available Campus Canteens</div>
       </div>
     </div>
@@ -868,7 +1117,7 @@
   <div class="modal-overlay" id="createOwnerModal">
     <div class="modal">
       <h2 class="modal-title"><span>➕</span> Create Canteen Owner</h2>
-      <p class="modal-subtitle">Provision login credentials and assign a campus canteen. Credentials will immediately allow access in the Quickbite Android app.</p>
+      <p class="modal-subtitle">Provision login credentials and assign a campus canteen. The owner can then log into the Quickbite Mobile App.</p>
 
       <form id="createOwnerForm" onsubmit="submitCreateOwner(event)">
         <div class="form-group">
@@ -877,14 +1126,14 @@
         </div>
 
         <div class="form-group">
-          <label for="createEmail">Owner Email (For Login & OTP Verification)</label>
+          <label for="createEmail">Owner Email (For App Login & OTP)</label>
           <input type="email" id="createEmail" required placeholder="e.g. owner@campus.edu">
         </div>
 
         <div class="form-group">
           <label for="createPassword">Initial Password (Min 6 chars)</label>
           <div class="password-wrapper">
-            <input type="password" id="createPassword" required minlength="6" placeholder="Set a secure initial password">
+            <input type="password" id="createPassword" required minlength="6" placeholder="Set initial password">
             <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('createPassword')">👁️</button>
           </div>
         </div>
@@ -916,7 +1165,7 @@
 
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('createOwnerModal')">Cancel</button>
-          <button type="submit" class="btn">Create & Save to MongoDB</button>
+          <button type="submit" class="btn btn-app-primary">Create & Save to MongoDB</button>
         </div>
       </form>
     </div>
@@ -953,7 +1202,7 @@
 
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('editModal')">Cancel</button>
-          <button type="submit" class="btn">Save Allocation</button>
+          <button type="submit" class="btn btn-app-primary">Save Allocation</button>
         </div>
       </form>
     </div>
@@ -978,7 +1227,7 @@
 
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('resetPasswordModal')">Cancel</button>
-          <button type="submit" class="btn">Update Password in MongoDB</button>
+          <button type="submit" class="btn btn-app-primary">Update Password in MongoDB</button>
         </div>
       </form>
     </div>
@@ -991,45 +1240,78 @@
     let ownersList = [];
     let adminToken = localStorage.getItem('qb_admin_token') || '';
     let pendingAuthEmail = '';
+    let currentAuthMode = 'login'; // 'login' | 'register'
     let otpCountdownInterval = null;
 
     // Check if session is already active on page load
     window.addEventListener('DOMContentLoaded', () => {
       if (!adminToken) {
-        showAuthGate();
+        showAuthGate('login');
       } else {
         validateSavedSession();
       }
     });
 
-    function showAuthGate() {
+    function switchAuthTab(tab) {
+      currentAuthMode = tab;
+      const tabSignIn = document.getElementById('tabBtnSignIn');
+      const tabRegister = document.getElementById('tabBtnRegister');
+      const viewSignIn = document.getElementById('authTabSignInView');
+      const viewRegister = document.getElementById('authTabRegisterView');
+      const viewOtp = document.getElementById('authStepOtpView');
+
+      viewOtp.style.display = 'none';
+
+      if (tab === 'register') {
+        tabRegister.classList.add('active');
+        tabSignIn.classList.remove('active');
+        viewRegister.style.display = 'block';
+        viewSignIn.style.display = 'none';
+        document.getElementById('registerErrorMsg').style.display = 'none';
+        setTimeout(() => {
+          const regName = document.getElementById('regAdminName');
+          if (regName) regName.focus();
+        }, 100);
+      } else {
+        tabSignIn.classList.add('active');
+        tabRegister.classList.remove('active');
+        viewSignIn.style.display = 'block';
+        viewRegister.style.display = 'none';
+        document.getElementById('loginErrorMsg').style.display = 'none';
+        setTimeout(() => {
+          const emailInput = document.getElementById('adminEmailInput');
+          if (emailInput) emailInput.focus();
+        }, 100);
+      }
+    }
+
+    function showAuthGate(initialTab = 'login') {
       document.getElementById('authGateOverlay').style.display = 'flex';
-      document.getElementById('authStepCredentials').style.display = 'block';
-      document.getElementById('authStepOtp').style.display = 'none';
+      document.getElementById('authTabsContainer').style.display = 'flex';
+      document.getElementById('authStepOtpView').style.display = 'none';
       document.getElementById('loginErrorMsg').style.display = 'none';
+      document.getElementById('registerErrorMsg').style.display = 'none';
       document.getElementById('otpErrorMsg').style.display = 'none';
       document.getElementById('adminUserPill').style.display = 'none';
       document.getElementById('btnSignOut').style.display = 'none';
-      setTimeout(() => {
-        const emailInput = document.getElementById('adminEmailInput');
-        if (emailInput) emailInput.focus();
-      }, 100);
+      switchAuthTab(initialTab);
     }
 
-    function hideAuthGate(userEmail = '') {
+    function hideAuthGate(userEmail = '', userName = '') {
       document.getElementById('authGateOverlay').style.display = 'none';
       if (userEmail) {
-        document.getElementById('adminSessionEmail').textContent = userEmail;
+        const displayLabel = userName ? `${userName} (Admin)` : userEmail;
+        document.getElementById('adminSessionEmail').textContent = displayLabel;
         document.getElementById('adminUserPill').style.display = 'inline-flex';
         document.getElementById('btnSignOut').style.display = 'inline-flex';
       }
     }
 
-    function switchToStepCredentials() {
+    function cancelOtpAndReturn() {
       if (otpCountdownInterval) clearInterval(otpCountdownInterval);
-      document.getElementById('authStepOtp').style.display = 'none';
-      document.getElementById('authStepCredentials').style.display = 'block';
-      document.getElementById('loginErrorMsg').style.display = 'none';
+      document.getElementById('authStepOtpView').style.display = 'none';
+      document.getElementById('authTabsContainer').style.display = 'flex';
+      switchAuthTab(currentAuthMode);
     }
 
     function startOtpCountdown(seconds = 60) {
@@ -1062,20 +1344,19 @@
         });
         if (res.ok) {
           const data = await res.json();
-          hideAuthGate(data.admin?.email || 'Admin');
+          hideAuthGate(data.admin?.email || 'Administrator', data.admin?.name || '');
           fetchData();
         } else {
           localStorage.removeItem('qb_admin_token');
           adminToken = '';
-          showAuthGate();
+          showAuthGate('login');
         }
       } catch (err) {
-        // Network failure; allow attempt
         fetchData();
       }
     }
 
-    // Step 1: Submit Email & Password -> Dispatches 6-digit OTP
+    // ── STEP 1A: ADMIN SIGN IN ─────────────────────────────────────────────
     async function submitAdminLogin(e) {
       e.preventDefault();
       const email = document.getElementById('adminEmailInput').value.trim();
@@ -1085,7 +1366,7 @@
 
       errBox.style.display = 'none';
       submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span class="spinner"></span> Verifying credentials...';
+      submitBtn.innerHTML = '<span class="spinner"></span> Verifying administrator...';
 
       try {
         const res = await fetch('/api/owners/admin/login', {
@@ -1098,13 +1379,19 @@
 
         if (res.ok && data.success) {
           pendingAuthEmail = data.email || email;
+          currentAuthMode = 'login';
+          
+          document.getElementById('otpTitleText').textContent = 'Admin Two-Factor Security';
           document.getElementById('otpTargetEmailDisplay').textContent = pendingAuthEmail;
-          document.getElementById('authStepCredentials').style.display = 'none';
-          document.getElementById('authStepOtp').style.display = 'block';
+          document.getElementById('authTabsContainer').style.display = 'none';
+          document.getElementById('authTabSignInView').style.display = 'none';
+          document.getElementById('authTabRegisterView').style.display = 'none';
+          document.getElementById('authStepOtpView').style.display = 'block';
           document.getElementById('adminOtpInput').value = '';
           document.getElementById('otpErrorMsg').style.display = 'none';
+          
           startOtpCountdown(60);
-          showToast(`📬 Verification code sent to ${pendingAuthEmail}`, 'success');
+          showToast(`📬 6-digit passcode sent to ${pendingAuthEmail}`, 'success');
           setTimeout(() => {
             const otpInput = document.getElementById('adminOtpInput');
             if (otpInput) otpInput.focus();
@@ -1118,11 +1405,74 @@
         errBox.style.display = 'flex';
       } finally {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<span>Verify & Send OTP</span> ➔';
+        submitBtn.innerHTML = '<span>Sign In as Administrator</span> ➔';
       }
     }
 
-    // Step 2: Submit 6-digit OTP -> Generates JWT Token
+    // ── STEP 1B: ADMIN REGISTRATION ────────────────────────────────────────
+    async function submitAdminRegister(e) {
+      e.preventDefault();
+      const name = document.getElementById('regAdminName').value.trim();
+      const email = document.getElementById('regAdminEmail').value.trim();
+      const phone = document.getElementById('regAdminPhone').value.trim();
+      const password = document.getElementById('regAdminPassword').value;
+      const confirmPassword = document.getElementById('regAdminConfirmPassword').value;
+      const errBox = document.getElementById('registerErrorMsg');
+      const submitBtn = document.getElementById('btnRegisterSubmit');
+
+      errBox.style.display = 'none';
+
+      if (password !== confirmPassword) {
+        errBox.innerHTML = '⚠️ Passwords do not match. Please verify your password entry.';
+        errBox.style.display = 'flex';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner"></span> Creating account...';
+
+      try {
+        const res = await fetch('/api/owners/admin/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password, phone })
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          pendingAuthEmail = data.email || email;
+          currentAuthMode = 'register';
+          
+          document.getElementById('otpTitleText').textContent = 'Confirm Administrator Email';
+          document.getElementById('otpTargetEmailDisplay').textContent = pendingAuthEmail;
+          document.getElementById('authTabsContainer').style.display = 'none';
+          document.getElementById('authTabSignInView').style.display = 'none';
+          document.getElementById('authTabRegisterView').style.display = 'none';
+          document.getElementById('authStepOtpView').style.display = 'block';
+          document.getElementById('adminOtpInput').value = '';
+          document.getElementById('otpErrorMsg').style.display = 'none';
+          
+          startOtpCountdown(60);
+          showToast(`📩 Verification code dispatched to ${pendingAuthEmail}`, 'success');
+          setTimeout(() => {
+            const otpInput = document.getElementById('adminOtpInput');
+            if (otpInput) otpInput.focus();
+          }, 150);
+        } else {
+          errBox.innerHTML = `⚠️ ${escapeHtml(data.error || 'Registration failed.')}`;
+          errBox.style.display = 'flex';
+        }
+      } catch (err) {
+        errBox.innerHTML = `❌ Connection error: ${escapeHtml(err.message)}`;
+        errBox.style.display = 'flex';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>Create Admin Account</span> ➔';
+      }
+    }
+
+    // ── STEP 2: SUBMIT 6-DIGIT OTP (LOGIN OR REGISTRATION) ─────────────────
     async function submitAdminOtp(e) {
       e.preventDefault();
       const otp = document.getElementById('adminOtpInput').value.trim();
@@ -1137,10 +1487,14 @@
 
       errBox.style.display = 'none';
       submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span class="spinner"></span> Validating security code...';
+      submitBtn.innerHTML = '<span class="spinner"></span> Verifying security code...';
+
+      const targetEndpoint = currentAuthMode === 'register' 
+        ? '/api/owners/admin/verify-register-otp'
+        : '/api/owners/admin/verify-otp';
 
       try {
-        const res = await fetch('/api/owners/admin/verify-otp', {
+        const res = await fetch(targetEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: pendingAuthEmail, otp })
@@ -1152,8 +1506,8 @@
           if (otpCountdownInterval) clearInterval(otpCountdownInterval);
           adminToken = data.token;
           localStorage.setItem('qb_admin_token', data.token);
-          hideAuthGate(data.admin?.email || pendingAuthEmail);
-          showToast(`✅ Welcome, ${data.admin?.name || 'Administrator'}! Session authenticated.`, 'success');
+          hideAuthGate(data.admin?.email || pendingAuthEmail, data.admin?.name || '');
+          showToast(`🎉 Welcome, ${data.admin?.name || 'Administrator'}! Session authenticated.`, 'success');
           fetchData();
         } else {
           errBox.innerHTML = `⚠️ ${escapeHtml(data.error || 'Invalid verification code. Please try again.')}`;
@@ -1164,11 +1518,11 @@
         errBox.style.display = 'flex';
       } finally {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '🔓 Verify & Enter Portal';
+        submitBtn.innerHTML = '🔓 Verify & Enter Dashboard';
       }
     }
 
-    // Resend OTP
+    // ── RESEND OTP (COOLDOWN PROTECTED) ────────────────────────────────────
     async function resendAdminOtp() {
       const resendBtn = document.getElementById('btnResendOtp');
       const errBox = document.getElementById('otpErrorMsg');
@@ -1202,16 +1556,17 @@
       }
     }
 
-    // Sign Out / Lock Session
+    // ── SIGN OUT / LOCK SESSION ────────────────────────────────────────────
     function logoutAdmin() {
-      if (confirm('Are you sure you want to sign out of the Quickbite Admin Portal?')) {
+      if (confirm('Sign out of the Quickbite Admin Portal?')) {
         localStorage.removeItem('qb_admin_token');
         adminToken = '';
         pendingAuthEmail = '';
         if (otpCountdownInterval) clearInterval(otpCountdownInterval);
         document.getElementById('adminLoginForm').reset();
+        document.getElementById('adminRegisterForm').reset();
         document.getElementById('adminOtpForm').reset();
-        showAuthGate();
+        showAuthGate('login');
         showToast('🔒 You have signed out.', 'info');
       }
     }
@@ -1223,30 +1578,27 @@
       };
     }
 
-    // Toggle password visibility
     function togglePasscodeVisibility(fieldId) {
       const field = document.getElementById(fieldId);
       field.type = field.type === 'password' ? 'text' : 'password';
     }
 
-    // Fetch Data
+    // ── FETCH CANTEENS & OWNERS DATA ────────────────────────────────────────
     async function fetchData() {
       try {
-        // Fetch canteens
         const cRes = await fetch('/api/canteens');
         canteensList = await cRes.json();
         populateCanteenDropdowns();
 
-        // Fetch owners
         const oRes = await fetch('/api/owners', {
           headers: getAdminHeaders()
         });
 
-        if (oRes.status === 401) {
+        if (oRes.status === 401 || oRes.status === 403) {
           localStorage.removeItem('qb_admin_token');
           adminToken = '';
-          showAuthGate();
-          showToast('⚠️ Session expired. Please sign in again.', 'error');
+          showAuthGate('login');
+          showToast('⚠️ Session unauthorized. Please sign in as an Administrator.', 'error');
           return;
         }
 
@@ -1359,7 +1711,6 @@
       renderOwnersTable(filtered);
     }
 
-    // Live On/Off Toggle
     async function toggleOwnerStatus(uid, isChecked) {
       const owner = ownersList.find(o => o.uid === uid);
       if (!owner) return;
@@ -1367,7 +1718,6 @@
       const label = document.getElementById(`status-label-${uid}`);
       label.textContent = isChecked ? 'Updating...' : 'Disabling...';
 
-      // If turning ON but no canteenId exists, prompt user to select one
       if (isChecked && (!owner.canteenId || !owner.canteenId.trim())) {
         showToast('⚠️ Please assign a canteen to this owner first.', 'error');
         document.getElementById(`toggle-${uid}`).checked = false;
@@ -1389,10 +1739,6 @@
         if (!res.ok) throw new Error('Failed to update status in MongoDB');
 
         owner.canteenAssigned = isChecked;
-        if (!isChecked) {
-          // Keep canteenId reference in local state for convenience when turning back on
-        }
-
         label.textContent = isChecked ? 'Active (Assigned)' : 'Off (Access Denied)';
         label.className = `toggle-label ${isChecked ? 'text-active' : 'text-inactive'}`;
         updateStats();
@@ -1409,7 +1755,6 @@
       }
     }
 
-    // Create Owner Modal Handling
     function openCreateOwnerModal() {
       document.getElementById('createOwnerForm').reset();
       document.getElementById('createCanteenAssigned').checked = true;
@@ -1472,7 +1817,6 @@
       }
     }
 
-    // Edit Allocation Modal
     function openEditModal(uid) {
       const owner = ownersList.find(o => o.uid === uid);
       if (!owner) return;
@@ -1529,7 +1873,6 @@
       }
     }
 
-    // Reset Password Modal
     function openResetPasswordModal(uid, email) {
       document.getElementById('resetPasswordUid').value = uid;
       document.getElementById('resetPasswordSubtitle').textContent = `Set new password for ${email}`;
@@ -1559,7 +1902,6 @@
       }
     }
 
-    // Delete Owner
     async function deleteOwner(uid, email) {
       if (!confirm(`Are you sure you want to permanently delete the owner account for ${email} from MongoDB Atlas?`)) {
         return;

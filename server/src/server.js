@@ -99,8 +99,10 @@ app.use('/api/owners/login', authLimiter);
 app.use('/api/owner/resend-otp', authLimiter);
 app.use('/api/owners/resend-otp', authLimiter);
 app.use('/api/admin/login', authLimiter);
+app.use('/api/admin/register', authLimiter);
 app.use('/api/admin/resend-otp', authLimiter);
 app.use('/api/owners/admin/login', authLimiter);
+app.use('/api/owners/admin/register', authLimiter);
 app.use('/api/owners/admin/resend-otp', authLimiter);
 
 // Google Play Mandatory Compliance Pages
