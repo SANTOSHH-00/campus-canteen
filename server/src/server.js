@@ -28,9 +28,11 @@ app.use(helmet({
 }));
 app.use(cors());
 app.use(express.json());
-app.use(morgan('dev'));
-
 const isDev = process.env.NODE_ENV !== 'production';
+const morganFormat = isDev
+  ? 'dev'
+  : '[:date[iso]] :method :url :status :response-time ms - :res[content-length]';
+app.use(morgan(morganFormat));
 const isLocalOrPrivateIp = (ip) => {
   if (!ip) return false;
   return (
@@ -115,6 +117,9 @@ app.get('/delete-account', (req, res) => {
 });
 
 // Static Admin Portal
+app.get(['/admin', '/admin/'], (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/admin/index.html'));
+});
 app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
 
 // Root homepage endpoint
@@ -122,8 +127,11 @@ app.get('/', (req, res) => {
   res.json({
     status: 'online',
     message: 'Welcome to Quickbite Express API connected to MongoDB Atlas (Database: Quickbite)',
+    adminPortal: '/admin',
     endpoints: {
-      health: '/api/health',
+      admin: '/admin',
+      health: '/health',
+      apiHealth: '/api/health',
       canteens: '/api/canteens',
       sampleCanteenItems: '/api/items/canteen/canteen_33',
       sampleOrders: '/api/orders/canteen/canteen_33',
@@ -132,20 +140,46 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
+// Health check handler (supports GET and HEAD on /health and /api/health for cron-job.org and Render health probes)
+const healthCheckHandler = (req, res) => {
   const mongoose = require('mongoose');
-  const isConnected = mongoose.connection.readyState === 1;
-  res.json({
-    success: true,
+  // readyState: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+  const dbStatusMap = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting',
+  };
+  const dbState = dbStatusMap[mongoose.connection.readyState] || 'unknown';
+  const isDbReady = mongoose.connection.readyState === 1;
+
+  const healthData = {
+    status: isDbReady ? 'ok' : 'degraded',
     message: 'Quick Bite backend is running',
-    database: isConnected ? 'connected' : 'disconnected',
-    databaseName: process.env.MONGODB_DB_NAME || 'Quickbite',
     timestamp: new Date().toISOString(),
-  });
-});
+    uptime: Math.floor(process.uptime()),
+    database: {
+      status: dbState,
+      name: process.env.MONGODB_DB_NAME || 'Quickbite',
+    },
+    memory: {
+      rssMb: Math.round(process.memoryUsage().rss / (1024 * 1024)),
+      heapUsedMb: Math.round(process.memoryUsage().heapUsed / (1024 * 1024)),
+    },
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+  };
 
+  // Always return HTTP 200 so monitors (cron-job.org, UptimeRobot, Render health check)
+  // do not treat temporary DB reconnection lag as a dead server or trigger crash restarts.
+  return res.status(200).json(healthData);
+};
 
+// Health check endpoints for external monitors and Render zero-downtime health probes
+app.get('/health', healthCheckHandler);
+app.head('/health', healthCheckHandler);
+app.get('/api/health', healthCheckHandler);
+app.head('/api/health', healthCheckHandler);
 
 // Mount Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -159,19 +193,84 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/notifications', require('./routes/notifications'));
 
-// Global error handler
+// 404 handler for unmatched routes
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Not Found',
+    message: `Cannot ${req.method} ${req.originalUrl}`,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Centralized structured error handler
 app.use((err, req, res, next) => {
-  console.error('Unhandled Error:', err.stack);
-  res.status(500).json({ error: err.message || 'Internal Server Error' });
+  if (res.headersSent) {
+    return next(err);
+  }
+  const statusCode = err.status || err.statusCode || 500;
+  console.error(`[${new Date().toISOString()}] [ERROR] [Unhandled] ${req.method} ${req.originalUrl} - ${err.message}`, err.stack || '');
+  res.status(statusCode).json({
+    error: statusCode === 500 && process.env.NODE_ENV === 'production'
+      ? 'Internal Server Error'
+      : (err.message || 'Internal Server Error'),
+    status: statusCode,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 const http = require('http');
 const { initWebSocket } = require('./services/socketService');
 
 const server = http.createServer(app);
-initWebSocket(server).catch((err) => console.error('WebSocket Init Error:', err.message));
+initWebSocket(server).catch((err) => {
+  console.error(`[${new Date().toISOString()}] [ERROR] WebSocket Init Error:`, err.message);
+});
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Quickbite Node.js/Express Server & WebSocket Gateway listening on port ${PORT}`);
+// Process-level safety: Catch unhandled promise rejections and uncaught exceptions to prevent silent crashes
+process.on('uncaughtException', (err) => {
+  console.error(`[${new Date().toISOString()}] [FATAL] Uncaught Exception:`, err.message, err.stack);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error(`[${new Date().toISOString()}] [WARN] Unhandled Promise Rejection at:`, promise, 'reason:', reason);
+});
+
+// Graceful shutdown handling for Render deploys, scale events, and restarts
+const handleShutdown = (signal) => {
+  console.log(`[${new Date().toISOString()}] [INFO] Received ${signal}. Initiating graceful shutdown...`);
+  server.close(async () => {
+    console.log(`[${new Date().toISOString()}] [INFO] HTTP/WebSocket server closed to new connections.`);
+    try {
+      const mongoose = require('mongoose');
+      if (mongoose.connection.readyState !== 0) {
+        await mongoose.connection.close(false);
+        console.log(`[${new Date().toISOString()}] [INFO] MongoDB Atlas connection closed cleanly.`);
+      }
+    } catch (dbErr) {
+      console.error(`[${new Date().toISOString()}] [ERROR] Error closing database connection:`, dbErr.message);
+    }
+    process.exit(0);
+  });
+
+  // Force close after 10s if graceful shutdown hangs
+  setTimeout(() => {
+    console.error(`[${new Date().toISOString()}] [ERROR] Graceful shutdown timed out. Forcing process exit.`);
+    process.exit(1);
+  }, 10000).unref();
+};
+
+process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+process.on('SIGINT', () => handleShutdown('SIGINT'));
+
+const PORT = parseInt(process.env.PORT, 10) || 5000;
+const HOST = '0.0.0.0';
+
+server.listen(PORT, HOST, () => {
+  console.log(`[${new Date().toISOString()}] [INFO] 🚀 Quickbite Node.js/Express Server & WebSocket Gateway listening on http://${HOST}:${PORT}`);
+  console.log(`[${new Date().toISOString()}] [INFO] Node environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`[${new Date().toISOString()}] [INFO] Health endpoints active: /health and /api/health`);
+});
+
+server.on('error', (err) => {
+  console.error(`[${new Date().toISOString()}] [FATAL] Server listener error:`, err.message);
 });
