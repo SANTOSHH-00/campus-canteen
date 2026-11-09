@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.util.lerp
@@ -163,17 +164,14 @@ fun FoodImagePlaceholder(
           .diskCachePolicy(coil.request.CachePolicy.ENABLED)
           .build()
       }
-      SubcomposeAsyncImage(
+      // Underlying fallback view
+      FallbackFoodCardView(itemName = itemName, compact = compact)
+
+      AsyncImage(
         model = imageRequest,
         contentDescription = itemName,
         contentScale = ContentScale.Crop,
         modifier = Modifier.fillMaxSize(),
-        loading = {
-          ShimmerPlaceholder(modifier = Modifier.fillMaxSize())
-        },
-        error = {
-          FallbackFoodCardView(itemName = itemName, compact = compact)
-        }
       )
     } else {
       FallbackFoodCardView(itemName = itemName, compact = compact)

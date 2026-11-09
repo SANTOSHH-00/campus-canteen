@@ -19,11 +19,11 @@ enum class PopularBadge(val displayName: String) {
 
 enum class MenuSortOption(val displayName: String, val shortLabel: String = displayName) {
   RECOMMENDED("Recommended", "Recommended"),
+  POPULAR("Popular", "Popular"),
   PRICE_LOW_TO_HIGH("Price: Low to High", "Price ↑"),
   PRICE_HIGH_TO_LOW("Price: High to Low", "Price ↓"),
+  NEWEST_FIRST("Recently Added", "Recently Added"),
   RATING_HIGH_TO_LOW("Rating: High to Low", "Rating ★"),
-  NEWEST_FIRST("Newest First", "Newest"),
-  POPULAR("Popular Items", "Popular"),
   FASTEST_PREP("Fastest Prep Time", "Fast Prep"),
   TOP_RATED("Highest Rated (4.0+ ★)", "Top Rated"),
 }
@@ -101,6 +101,7 @@ enum class OrderStatus(val displayName: String) {
   PREPARING("Preparing at Counter"),
   READY("Ready for Pickup!"),
   COMPLETED("Completed"),
+  CANCELLED("Cancelled"),
 }
 
 enum class CrowdStatus(val label: String, val colorHex: Long) {

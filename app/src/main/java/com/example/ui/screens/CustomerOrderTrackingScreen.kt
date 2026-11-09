@@ -25,13 +25,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -54,40 +57,63 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.OrderRecord
 import com.example.data.OrderStatus
 import com.example.data.api.MongoRepository
 import com.example.data.api.OrderBarcodeResponseDto
-import com.example.data.api.OrderQrResponseDto
-import androidx.compose.material.icons.filled.QrCodeScanner
 import com.example.data.api.OrderQueuePositionDto
 import com.example.data.api.WebSocketManager
 import com.example.data.api.formatUtcToLocalTime
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberDark
+import com.example.ui.theme.DrawerAmberLight
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.TextDark
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.WarmCream
-import kotlinx.coroutines.launch
 import com.example.util.BarcodeGenerator
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
 private val PageBackground = WarmCream
-private val GreenReady = Color(0xFF16A34A)
-private val DarkCardBg = PureWhite
+private val GreenSuccess = Color(0xFF16A34A)
+private val AlertRed = Color(0xFFDC2626)
 
+private fun decodeBase64DataUrl(dataUrl: String?): android.graphics.Bitmap? {
+  if (dataUrl.isNullOrBlank()) return null
+  return try {
+    val clean = if (dataUrl.contains(",")) dataUrl.substringAfter(",") else dataUrl
+    val bytes = Base64.decode(clean.trim(), Base64.DEFAULT)
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+  } catch (_: Exception) {
+    null
+  }
+}
+
+/**
+ * Modern, Professional Student Order Tracking Screen for QuickBite:
+ * 1. Order Number & Canteen Name
+ * 2. Order Date and Time
+ * 3. Ordered Food Items with quantity and price
+ * 4. Total Amount & Payment Status
+ * 5. Pickup Information & Counter
+ * 6. Code 128 1D Barcode with token verification
+ * 7. Order Progress Timeline:
+ *    Order Placed → Order Accepted → Preparing → Ready for Pickup → Picked Up → Completed
+ */
 @Composable
 fun CustomerOrderTrackingScreen(
   order: OrderRecord,
@@ -100,7 +126,7 @@ fun CustomerOrderTrackingScreen(
   var queuePositionData by remember { mutableStateOf<OrderQueuePositionDto?>(null) }
   var isLoadingQueue by remember { mutableStateOf(true) }
 
-  // ── Dynamic Code 128 Barcode Verification State ─────────────────────────
+  // ── Dynamic Code 128 1D Barcode Verification State ────────────────────────
   var barcodeResponse by remember { mutableStateOf<OrderBarcodeResponseDto?>(null) }
   var isLoadingBarcode by remember { mutableStateOf(false) }
   var barcodeErrorMessage by remember { mutableStateOf<String?>(null) }
@@ -124,33 +150,8 @@ fun CustomerOrderTrackingScreen(
     }
   }
 
-  // ── Dynamic QR Verification State ─────────────────────────────────────────
-  var qrResponse by remember { mutableStateOf<OrderQrResponseDto?>(null) }
-  var isLoadingQr by remember { mutableStateOf(false) }
-  var qrErrorMessage by remember { mutableStateOf<String?>(null) }
-  var isRotatingQr by remember { mutableStateOf(false) }
-
-  fun fetchOrderQr(isManualRefresh: Boolean = false) {
-    val targetId = currentOrder.id.ifBlank { currentOrder.tokenNumber }
-    if (targetId.isBlank()) return
-    coroutineScope.launch {
-      if (isManualRefresh) isRotatingQr = true else isLoadingQr = true
-      qrErrorMessage = null
-      MongoRepository.getOrderQr(targetId).onSuccess { dto ->
-        qrResponse = dto
-        isLoadingQr = false
-        isRotatingQr = false
-      }.onFailure { err ->
-        qrErrorMessage = err.message ?: "Unable to load QR code."
-        isLoadingQr = false
-        isRotatingQr = false
-      }
-    }
-  }
-
   LaunchedEffect(currentOrder.id, currentOrder.status) {
     fetchOrderBarcode()
-    fetchOrderQr()
   }
 
   val effectiveCanteenId = queuePositionData?.canteenId?.ifBlank { null }
@@ -159,12 +160,14 @@ fun CustomerOrderTrackingScreen(
   val tokenRaw = currentOrder.tokenNumber.ifBlank { "1042" }
   val tokenDisplay = if (tokenRaw.startsWith("#")) tokenRaw else "#Q$tokenRaw"
 
-  val isPickedUp = currentOrder.status == OrderStatus.COMPLETED
+  val isCancelled = currentOrder.status == OrderStatus.CANCELLED
+  val isCompleted = currentOrder.status == OrderStatus.COMPLETED
+  val isPickedUp = isCompleted || barcodeResponse?.code == "ALREADY_COLLECTED"
   val isReady = currentOrder.status == OrderStatus.READY
   val isPreparing = currentOrder.status == OrderStatus.PREPARING
-  val hasStartedPreparing = isPreparing || isReady || isPickedUp
+  val isAccepted = isPreparing || isReady || isPickedUp
 
-  // Server-authoritative status timestamps (exact milestone event times, never device clock)
+  // Server-authoritative status timestamps
   val placedTimeDisplay = formatUtcToLocalTime(currentOrder.orderPlacedAt).ifBlank {
     queuePositionData?.orderPlacedAtLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
       ?: queuePositionData?.orderTime?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
@@ -180,7 +183,7 @@ fun CustomerOrderTrackingScreen(
       }
       df.format(Date(epochFromId))
     } else ""
-  }.ifBlank { "-" }
+  }.ifBlank { "Just now" }
 
   val confirmedTimeDisplay = formatUtcToLocalTime(currentOrder.confirmedAt).ifBlank {
     queuePositionData?.confirmedAtLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
@@ -197,7 +200,7 @@ fun CustomerOrderTrackingScreen(
     historyPreparing?.timestampLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
       ?: formatUtcToLocalTime(historyPreparing?.timestamp)
   }.ifBlank {
-    if (hasStartedPreparing) placedTimeDisplay else "-"
+    if (isPreparing || isReady || isPickedUp) placedTimeDisplay else "-"
   }
 
   val readyTimeDisplay = formatUtcToLocalTime(currentOrder.readyAt).ifBlank {
@@ -211,11 +214,11 @@ fun CustomerOrderTrackingScreen(
     "-"
   }
 
-  val completedTimeDisplay = formatUtcToLocalTime(currentOrder.completedAt).ifBlank {
+  val pickedUpTimeDisplay = formatUtcToLocalTime(currentOrder.completedAt).ifBlank {
     queuePositionData?.completedAtLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
       ?: formatUtcToLocalTime(queuePositionData?.completedAt)
   }.ifBlank {
-    val historyCompleted = queuePositionData?.statusHistory?.find { it.status.equals("COMPLETED", ignoreCase = true) }
+    val historyCompleted = queuePositionData?.statusHistory?.find { it.status.equals("PICKED_UP", ignoreCase = true) || it.status.equals("COMPLETED", ignoreCase = true) }
     historyCompleted?.timestampLocal?.let { formatUtcToLocalTime(it) }?.ifBlank { null }
       ?: formatUtcToLocalTime(historyCompleted?.timestamp)
   }.ifBlank {
@@ -230,37 +233,12 @@ fun CustomerOrderTrackingScreen(
         queuePositionData = it
         isLoadingQueue = false
       }.onFailure {
-        // Fallback: try by raw token number if distinct from orderId
-        val rawToken = currentOrder.tokenNumber.replace("^[^0-9]+".toRegex(), "")
-        if (rawToken.isNotBlank() && rawToken != queryId) {
-          MongoRepository.getOrderQueuePosition(rawToken).onSuccess {
-            queuePositionData = it
-            isLoadingQueue = false
-          }.onFailure {
-            // Further fallback: fetch canteen overall active queue to estimate position
-            MongoRepository.getCanteenQueue(effectiveCanteenId).onSuccess { cq ->
-              queuePositionData = OrderQueuePositionDto(
-                orderId = currentOrder.id,
-                tokenNumber = currentOrder.tokenNumber,
-                status = currentOrder.status.name,
-                canteenId = effectiveCanteenId,
-                queuePosition = cq.queueCount.coerceAtLeast(1),
-                ordersAhead = (cq.queueCount - 1).coerceAtLeast(0),
-                estWaitMinutes = cq.avgWaitMinutes.coerceAtLeast(5),
-              )
-              isLoadingQueue = false
-            }.onFailure {
-              isLoadingQueue = false
-            }
-          }
-        } else {
-          isLoadingQueue = false
-        }
+        isLoadingQueue = false
       }
     }
   }
 
-  // Subscribe to both order channel and canteen queue channel for live kitchen advancement
+  // Live WebSocket updates
   DisposableEffect(currentOrder.id, effectiveCanteenId) {
     refreshQueue()
     WebSocketManager.subscribe("order:${currentOrder.id}")
@@ -271,16 +249,6 @@ fun CustomerOrderTrackingScreen(
     }
   }
 
-  // Live WebSocket queue updates when kitchen updates/completes preceding orders
-  LaunchedEffect(effectiveCanteenId) {
-    WebSocketManager.queueUpdates.collect { updatedCanteenId ->
-      if (updatedCanteenId.isBlank() || updatedCanteenId == effectiveCanteenId) {
-        refreshQueue()
-      }
-    }
-  }
-
-  // Live Order Status updates for this order specifically via WebSocket
   LaunchedEffect(currentOrder.id) {
     WebSocketManager.observeOrder(currentOrder.id).collect { updatedDto ->
       currentOrder = updatedDto.toOrderRecord()
@@ -288,21 +256,10 @@ fun CustomerOrderTrackingScreen(
     }
   }
 
-  // Fetch initial authoritative order data from server on launch to ensure latest status & timestamps
   LaunchedEffect(order.id) {
     val queryId = order.id.ifBlank { order.tokenNumber }
     MongoRepository.getOrder(queryId).onSuccess { fetchedDto ->
       currentOrder = fetchedDto.toOrderRecord()
-    }
-  }
-
-  // Graceful API polling fallback every 8 seconds if WebSocket is interrupted
-  LaunchedEffect(currentOrder.id) {
-    while (true) {
-      kotlinx.coroutines.delay(8000)
-      if (!isPickedUp) {
-        refreshQueue()
-      }
     }
   }
 
@@ -314,12 +271,12 @@ fun CustomerOrderTrackingScreen(
       .navigationBarsPadding()
       .testTag("customer_order_tracking_screen"),
   ) {
-    // ── Clean Minimal Top Bar ───────────────────────────────────────────────
+    // ── Top App Bar ─────────────────────────────────────────────────────────
     Row(
       modifier = Modifier
         .fillMaxWidth()
         .background(PureWhite)
-        .padding(horizontal = 12.dp, vertical = 10.dp),
+        .padding(horizontal = 14.dp, vertical = 10.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       IconButton(
@@ -337,7 +294,7 @@ fun CustomerOrderTrackingScreen(
       Spacer(Modifier.width(6.dp))
 
       Text(
-        text = "Order Tracking",
+        text = "Order Details",
         fontSize = 18.sp,
         fontWeight = FontWeight.Bold,
         color = TextDark,
@@ -348,20 +305,20 @@ fun CustomerOrderTrackingScreen(
       Box(
         modifier = Modifier
           .clip(RoundedCornerShape(8.dp))
-          .background(Color(0xFFF3F4F6))
-          .border(1.dp, BorderGray, RoundedCornerShape(8.dp))
+          .background(DrawerAmberLight)
+          .border(1.dp, DrawerAmberDark.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
           .padding(horizontal = 10.dp, vertical = 4.dp),
       ) {
         Text(
           text = tokenDisplay,
           fontSize = 13.sp,
           fontWeight = FontWeight.ExtraBold,
-          color = TextDark,
+          color = DrawerAmberDark,
         )
       }
     }
 
-    HorizontalDivider(thickness = 1.dp, color = Color(0xFFE5E7EB))
+    HorizontalDivider(thickness = 1.dp, color = BorderGray.copy(alpha = 0.6f))
 
     // ── Scrollable Body ─────────────────────────────────────────────────────
     Column(
@@ -373,16 +330,16 @@ fun CustomerOrderTrackingScreen(
       verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
 
-      // ── Card 1: Queue Feedback & Status Hero Card ─────────────────────────
+      // ── Card 1: Order Information & Header (Items 1, 2, 3, 7, 8) ───────────
       Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkCardBg),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E7EB)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(containerColor = PureWhite),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray.copy(alpha = 0.6f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
       ) {
         Column(modifier = Modifier.padding(18.dp)) {
-          // Status Badge + Live Dot
+          // Status Pill & Order Date
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -393,40 +350,44 @@ fun CustomerOrderTrackingScreen(
                 .clip(RoundedCornerShape(8.dp))
                 .background(
                   when {
-                    isPickedUp -> Color(0xFFF3F4F6)
-                    isReady -> Color(0xFFF0FDF4)
-                    else -> Color(0xFFFFF7ED)
+                    isCancelled -> Color(0xFFFEE2E2)
+                    isPickedUp -> Color(0xFFDCFCE7)
+                    isReady -> Color(0xFFDCFCE7)
+                    else -> DrawerAmberLight
                   }
                 )
                 .padding(horizontal = 10.dp, vertical = 4.dp),
             ) {
               Text(
                 text = when {
+                  isCancelled -> "Cancelled"
                   isPickedUp -> "Picked Up"
                   isReady -> "Ready for Pickup"
-                  else -> "In Kitchen Queue"
+                  isPreparing -> "Preparing"
+                  else -> "Order Confirmed"
                 },
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = when {
-                  isPickedUp -> Color(0xFF4B5563)
-                  isReady -> GreenReady
-                  else -> Color(0xFFEA580C)
+                  isCancelled -> AlertRed
+                  isPickedUp || isReady -> GreenSuccess
+                  else -> DrawerAmberDark
                 },
               )
             }
 
+            // Order Date & Time
             Row(verticalAlignment = Alignment.CenterVertically) {
-              Box(
-                modifier = Modifier
-                  .size(7.dp)
-                  .clip(CircleShape)
-                  .background(if (isPickedUp) Color(0xFF9CA3AF) else GreenReady)
+              Icon(
+                imageVector = Icons.Default.AccessTime,
+                contentDescription = null,
+                tint = TextMuted,
+                modifier = Modifier.size(13.dp),
               )
-              Spacer(Modifier.width(5.dp))
+              Spacer(Modifier.width(4.dp))
               Text(
-                text = if (isPickedUp) "Completed" else "Live Tracking",
-                fontSize = 11.5.sp,
+                text = placedTimeDisplay,
+                fontSize = 12.sp,
                 color = TextMuted,
                 fontWeight = FontWeight.Medium,
               )
@@ -435,333 +396,230 @@ fun CustomerOrderTrackingScreen(
 
           Spacer(Modifier.height(14.dp))
 
-          // Main Headline with Item-Aware Queue Feedback
-          val headlineText = when {
-            isPickedUp -> "Order Picked Up ✓"
-            isReady -> "Your order is ready for pickup!"
-            isLoadingQueue && queuePositionData == null -> "Checking Kitchen Queue..."
-            else -> {
-              val similarAhead = queuePositionData?.similarOrdersAhead ?: queuePositionData?.ordersAhead ?: 0
-              val pos = queuePositionData?.queuePosition ?: 1
-              if (similarAhead == 0) "You are next in line"
-              else "You are #$pos in line"
-            }
-          }
-
-          Text(
-            text = headlineText,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = TextDark,
-          )
-
-          Spacer(Modifier.height(6.dp))
-
-          val sublineText = when {
-            isPickedUp -> "Handed over to you. Thank you for dining with QuickBite!"
-            isReady -> "Please show Token $tokenDisplay at ${order.pickupCounter.ifBlank { "Counter 1" }} to collect."
-            isLoadingQueue && queuePositionData == null -> "Retrieving live wait time and position from canteen..."
-            else -> {
-              val similarAhead = queuePositionData?.similarOrdersAhead ?: queuePositionData?.ordersAhead ?: 0
-              val workload = queuePositionData?.workloadSummary?.ifBlank {
-                if (similarAhead == 0) "0 orders ahead of you" else "$similarAhead order${if (similarAhead > 1) "s" else ""} ahead of you"
-              } ?: if (similarAhead == 0) "0 orders ahead of you" else "$similarAhead order${if (similarAhead > 1) "s" else ""} ahead of you"
-              val waitMins = queuePositionData?.estWaitMinutes ?: 7
-              val serverCompletion = queuePositionData?.estimatedCompletionTime?.ifBlank { null }
-                ?: currentOrder.estimatedCompletionTime.ifBlank { null }
-                ?: currentOrder.estimatedReadyTime.ifBlank { null }
-                ?: "~$waitMins min"
-              "$workload • Estimated ready: $serverCompletion (~$waitMins min)"
-            }
-          }
-
-          Text(
-            text = sublineText,
-            fontSize = 13.5.sp,
-            color = Color(0xFF4B5563),
-            lineHeight = 18.sp,
-          )
-
-          // Live Anonymous Queue Statistics Bar (Active kitchen queue)
-          if (isPreparing) {
-            val similarAhead = queuePositionData?.similarOrdersAhead ?: queuePositionData?.ordersAhead ?: 0
-            val pos = queuePositionData?.queuePosition ?: 1
-            val estMins = queuePositionData?.estWaitMinutes ?: 7
-            val completionTimeStr = queuePositionData?.estimatedCompletionTime?.ifBlank { null }
-              ?: currentOrder.estimatedCompletionTime.ifBlank { null }
-              ?: currentOrder.estimatedReadyTime.ifBlank { null }
-              ?: "~$estMins min"
-
-            Spacer(Modifier.height(14.dp))
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFFF9FAFB))
-                .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(12.dp))
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Column {
-                Text(
-                  text = "Queue Position",
-                  fontSize = 11.sp,
-                  color = TextMuted,
-                  fontWeight = FontWeight.Medium,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                  text = if (similarAhead == 0) "Next in Line" else "#$pos in Line",
-                  fontSize = 14.sp,
-                  fontWeight = FontWeight.ExtraBold,
-                  color = TextDark,
-                )
-              }
-
-              Box(
-                modifier = Modifier
-                  .width(1.dp)
-                  .height(24.dp)
-                  .background(Color(0xFFE5E7EB))
-              )
-
-              Column {
-                Text(
-                  text = "Workload Ahead",
-                  fontSize = 11.sp,
-                  color = TextMuted,
-                  fontWeight = FontWeight.Medium,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                  text = if (similarAhead == 0) "0 orders" else "$similarAhead order${if (similarAhead > 1) "s" else ""}",
-                  fontSize = 14.sp,
-                  fontWeight = FontWeight.ExtraBold,
-                  color = TextDark,
-                )
-              }
-
-              Box(
-                modifier = Modifier
-                  .width(1.dp)
-                  .height(24.dp)
-                  .background(Color(0xFFE5E7EB))
-              )
-
-              Column(horizontalAlignment = Alignment.End) {
-                Text(
-                  text = "Est. Completion",
-                  fontSize = 11.sp,
-                  color = TextMuted,
-                  fontWeight = FontWeight.Medium,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                  text = completionTimeStr,
-                  fontSize = 14.sp,
-                  fontWeight = FontWeight.ExtraBold,
-                  color = Color(0xFFEA580C),
-                )
-              }
-            }
-          }
-        }
-      }
-
-      // ── Dynamic Code 128 Barcode & QR Verification Card ────────────────────
-      OrderBarcodeCard(
-        order = currentOrder,
-        tokenDisplay = tokenDisplay,
-        barcodeResponse = barcodeResponse,
-        qrResponse = qrResponse,
-        isLoading = isLoadingBarcode || isLoadingQr,
-        isRefreshing = isRefreshingBarcode || isRotatingQr,
-        errorMessage = barcodeErrorMessage ?: qrErrorMessage,
-        onRefreshBarcode = {
-          fetchOrderBarcode(isManualRefresh = true)
-          fetchOrderQr(isManualRefresh = true)
-        },
-      )
-
-      // ── Card 2: Pickup Location & Counter ─────────────────────────────────
-      Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = PureWhite),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E7EB)),
-      ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-          Text(
-            text = "Pickup Details",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = TextDark,
-          )
-          Spacer(Modifier.height(10.dp))
-
+          // Order Title / Canteen Info
           Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
           ) {
             Box(
               modifier = Modifier
-                .size(38.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFFF3F4F6)),
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(DrawerAmber.copy(alpha = 0.12f)),
               contentAlignment = Alignment.Center,
             ) {
               Icon(
-                imageVector = Icons.Default.LocationOn,
+                imageVector = Icons.Default.Storefront,
                 contentDescription = null,
-                tint = TextDark,
-                modifier = Modifier.size(20.dp),
+                tint = DrawerAmberDark,
+                modifier = Modifier.size(22.dp),
               )
             }
+
             Spacer(Modifier.width(12.dp))
+
             Column(modifier = Modifier.weight(1f)) {
               Text(
                 text = currentOrder.pickupCanteenName.ifBlank { "Campus Canteen" },
-                fontSize = 14.5.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextDark,
               )
               Text(
-                text = currentOrder.pickupLocation.ifBlank { "Block 26-27 Food Court" },
+                text = currentOrder.pickupLocation.ifBlank { "Campus Food Court" },
                 fontSize = 12.5.sp,
                 color = TextMuted,
               )
             }
 
-            // Counter Assigned Badge
+            // Pickup Counter Pill
             Box(
               modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFFF9FAFB))
+                .background(WarmCream)
                 .border(1.dp, BorderGray, RoundedCornerShape(8.dp))
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                .padding(horizontal = 10.dp, vertical = 5.dp),
             ) {
               Text(
                 text = currentOrder.pickupCounter.ifBlank { "Counter 1" },
-                fontSize = 12.5.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextDark,
+                color = BlackPrimary,
               )
             }
           }
 
           HorizontalDivider(
             modifier = Modifier.padding(vertical = 12.dp),
-            thickness = 1.dp,
-            color = Color(0xFFF3F4F6)
+            thickness = 0.8.dp,
+            color = BorderGray.copy(alpha = 0.4f),
           )
 
-          val customerPickupDisplay = queuePositionData?.customerPickupTime?.ifBlank { null }
-            ?: currentOrder.customerPickupTime.ifBlank {
-              currentOrder.pickupPreference.ifBlank { "ASAP" }
-            }
-          val estCompletionDisplay = queuePositionData?.estimatedCompletionTime?.ifBlank { null }
-            ?: currentOrder.estimatedCompletionTime.ifBlank { null }
-            ?: currentOrder.estimatedReadyTime.ifBlank { null }
-            ?: "In kitchen queue"
-
+          // Payment Status & Pickup Information
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
           ) {
-            Column {
-              Text(
-                text = "Customer Pickup",
-                fontSize = 11.5.sp,
-                color = TextMuted,
-                fontWeight = FontWeight.Medium,
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(
+                imageVector = Icons.Default.Payment,
+                contentDescription = null,
+                tint = GreenSuccess,
+                modifier = Modifier.size(15.dp),
               )
-              Spacer(Modifier.height(2.dp))
+              Spacer(Modifier.width(6.dp))
               Text(
-                text = customerPickupDisplay,
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextDark,
+                text = "Payment: Paid Online",
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = GreenSuccess,
               )
             }
 
-            Column(horizontalAlignment = Alignment.End) {
-              Text(
-                text = "Est. Completion",
-                fontSize = 11.5.sp,
-                color = TextMuted,
-                fontWeight = FontWeight.Medium,
-              )
-              Spacer(Modifier.height(2.dp))
-              Text(
-                text = estCompletionDisplay,
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFFEA580C),
-              )
-            }
+            val estDisplay = queuePositionData?.estimatedCompletionTime?.ifBlank { null }
+              ?: currentOrder.estimatedCompletionTime.ifBlank { null }
+              ?: currentOrder.estimatedReadyTime.ifBlank { null }
+              ?: "5-10 min"
+
+            Text(
+              text = "Ready in: $estDisplay",
+              fontSize = 12.sp,
+              fontWeight = FontWeight.Bold,
+              color = DrawerAmberDark,
+            )
           }
         }
       }
 
-      // ── Card 3: Minimal Timeline Milestones ────────────────────────────────
+      // ── Card 2: 1D Code 128 Barcode for Order Verification (Item 9) ─────────
+      if (!isCancelled) {
+        OrderBarcode1DCard(
+          order = currentOrder,
+          tokenDisplay = tokenDisplay,
+          barcodeResponse = barcodeResponse,
+          isLoading = isLoadingBarcode,
+          isRefreshing = isRefreshingBarcode,
+          errorMessage = barcodeErrorMessage,
+          onRefreshBarcode = { fetchOrderBarcode(isManualRefresh = true) },
+        )
+      }
+
+      // ── Card 3: Order Progress Timeline (Item 10) ──────────────────────────
       Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = PureWhite),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E7EB)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray.copy(alpha = 0.6f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
       ) {
         Column(modifier = Modifier.padding(18.dp)) {
           Text(
             text = "Order Progress",
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
-            color = TextDark,
+            color = BlackPrimary,
           )
+
           Spacer(Modifier.height(14.dp))
 
-          TrackingMilestone(
-            title = "Order Received",
-            time = placedTimeDisplay,
-            isCompleted = true,
-            isLast = false,
-          )
-          TrackingMilestone(
-            title = "Payment Confirmed",
-            time = confirmedTimeDisplay,
-            isCompleted = true,
-            isLast = false,
-          )
-          TrackingMilestone(
-            title = "Kitchen Preparing",
-            time = if (hasStartedPreparing) preparingTimeDisplay else "-",
-            isCompleted = hasStartedPreparing,
-            isLast = false,
-          )
-          TrackingMilestone(
-            title = "Ready for Pickup",
-            time = if (isReady || isPickedUp) readyTimeDisplay else "-",
-            isCompleted = isReady || isPickedUp,
-            isLast = false,
-          )
-          TrackingMilestone(
-            title = "Picked Up",
-            time = if (isPickedUp) completedTimeDisplay else "-",
-            isCompleted = isPickedUp,
-            isLast = true,
-          )
+          if (isCancelled) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFFFEE2E2))
+                .border(1.dp, AlertRed.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                .padding(14.dp),
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(32.dp)
+                  .clip(CircleShape)
+                  .background(AlertRed),
+                contentAlignment = Alignment.Center,
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Close,
+                  contentDescription = null,
+                  tint = PureWhite,
+                  modifier = Modifier.size(18.dp),
+                )
+              }
+              Spacer(Modifier.width(12.dp))
+              Column {
+                Text(
+                  text = "Order Cancelled",
+                  fontSize = 14.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = AlertRed,
+                )
+                Text(
+                  text = "This order was cancelled and cannot be picked up.",
+                  fontSize = 12.sp,
+                  color = Color(0xFF7F1D1D),
+                )
+              }
+            }
+          } else {
+            // 6-stage requested timeline:
+            // Order Placed → Order Accepted → Preparing → Ready for Pickup → Picked Up → Completed
+            TimelineStage(
+              stageName = "Order Placed",
+              timestamp = placedTimeDisplay,
+              isCompleted = true,
+              isCurrent = !isAccepted,
+              isLast = false,
+            )
+            TimelineStage(
+              stageName = "Order Accepted",
+              timestamp = confirmedTimeDisplay,
+              isCompleted = isAccepted,
+              isCurrent = isAccepted && !isPreparing && !isReady && !isPickedUp,
+              isLast = false,
+            )
+            TimelineStage(
+              stageName = "Preparing",
+              timestamp = preparingTimeDisplay,
+              isCompleted = isPreparing || isReady || isPickedUp,
+              isCurrent = isPreparing && !isReady && !isPickedUp,
+              isLast = false,
+            )
+            TimelineStage(
+              stageName = "Ready for Pickup",
+              timestamp = readyTimeDisplay,
+              isCompleted = isReady || isPickedUp,
+              isCurrent = isReady && !isPickedUp,
+              isLast = false,
+            )
+            TimelineStage(
+              stageName = "Picked Up",
+              timestamp = pickedUpTimeDisplay,
+              isCompleted = isPickedUp,
+              isCurrent = isPickedUp && !isCompleted,
+              isLast = false,
+            )
+            TimelineStage(
+              stageName = "Completed",
+              timestamp = pickedUpTimeDisplay,
+              isCompleted = isCompleted,
+              isCurrent = isCompleted,
+              isLast = true,
+            )
+          }
         }
       }
 
-      // ── Card 4: Order Summary ─────────────────────────────────────────────
+      // ── Card 4: Ordered Food Items & Total Amount (Items 4, 5, 6) ───────────
       Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = PureWhite),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E7EB)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray.copy(alpha = 0.6f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
       ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(18.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -771,7 +629,7 @@ fun CustomerOrderTrackingScreen(
               text = "Ordered Items",
               fontSize = 15.sp,
               fontWeight = FontWeight.Bold,
-              color = TextDark,
+              color = BlackPrimary,
             )
             Text(
               text = "${currentOrder.items.size} item(s)",
@@ -786,7 +644,7 @@ fun CustomerOrderTrackingScreen(
             Row(
               modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
+                .padding(vertical = 5.dp),
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -811,15 +669,15 @@ fun CustomerOrderTrackingScreen(
               }
               Text(
                 text = "₹${item.totalPrice}",
-                fontSize = 13.5.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextDark,
+                color = BlackPrimary,
               )
             }
           }
 
           Spacer(Modifier.height(10.dp))
-          HorizontalDivider(thickness = 0.8.dp, color = Color(0xFFE5E7EB))
+          HorizontalDivider(thickness = 0.8.dp, color = BorderGray.copy(alpha = 0.5f))
           Spacer(Modifier.height(10.dp))
 
           Row(
@@ -828,7 +686,7 @@ fun CustomerOrderTrackingScreen(
             verticalAlignment = Alignment.CenterVertically,
           ) {
             Text(
-              text = "Total Paid",
+              text = "Total Amount",
               fontSize = 15.sp,
               fontWeight = FontWeight.Bold,
               color = TextDark,
@@ -837,7 +695,7 @@ fun CustomerOrderTrackingScreen(
               text = "₹${currentOrder.totalPrice}",
               fontSize = 18.sp,
               fontWeight = FontWeight.ExtraBold,
-              color = TextDark,
+              color = BlackPrimary,
             )
           }
         }
@@ -846,7 +704,7 @@ fun CustomerOrderTrackingScreen(
       Spacer(Modifier.height(10.dp))
     }
 
-    // ── Bottom Clean Action Bar ─────────────────────────────────────────────
+    // ── Bottom Action Button ────────────────────────────────────────────────
     Box(
       modifier = Modifier
         .fillMaxWidth()
@@ -890,26 +748,225 @@ fun CustomerOrderTrackingScreen(
   }
 }
 
-// ── Clean Minimal Timeline Milestone ────────────────────────────────────────
+/**
+ * Clean 1D Code 128 Barcode Card:
+ * - Traditional high-contrast 1D barcode generated from backend verification token
+ * - Displays token in clean monospace font
+ * - Pickup instruction for canteen collection
+ */
 @Composable
-private fun TrackingMilestone(
-  title: String,
-  time: String,
+private fun OrderBarcode1DCard(
+  order: OrderRecord,
+  tokenDisplay: String,
+  barcodeResponse: OrderBarcodeResponseDto?,
+  isLoading: Boolean,
+  isRefreshing: Boolean,
+  errorMessage: String?,
+  onRefreshBarcode: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val isPickedUp = order.status == OrderStatus.COMPLETED || barcodeResponse?.code == "ALREADY_COLLECTED"
+
+  val effectiveToken = remember(barcodeResponse?.verificationToken, order.id, order.tokenNumber) {
+    barcodeResponse?.verificationToken?.ifBlank { null }
+      ?: order.id.ifBlank { order.tokenNumber }
+  }
+
+  // Generate or decode 1D Code 128 Barcode
+  val barcodeBitmap = remember(barcodeResponse?.barcodeDataUrl, effectiveToken) {
+    decodeBase64DataUrl(barcodeResponse?.barcodeDataUrl)
+      ?: BarcodeGenerator.generateCode128Barcode(effectiveToken, widthPx = 640, heightPx = 180)
+  }
+
+  Card(
+    modifier = modifier.fillMaxWidth(),
+    shape = RoundedCornerShape(18.dp),
+    colors = CardDefaults.cardColors(containerColor = PureWhite),
+    border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray.copy(alpha = 0.6f)),
+    elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
+  ) {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(18.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Box(
+            modifier = Modifier
+              .size(32.dp)
+              .clip(CircleShape)
+              .background(DrawerAmberLight),
+            contentAlignment = Alignment.Center,
+          ) {
+            Icon(
+              imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
+              contentDescription = null,
+              tint = DrawerAmberDark,
+              modifier = Modifier.size(17.dp),
+            )
+          }
+          Spacer(Modifier.width(10.dp))
+          Text(
+            text = "Pickup Verification Barcode",
+            fontSize = 14.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = BlackPrimary,
+          )
+        }
+
+        if (isRefreshing || (isLoading && barcodeBitmap == null)) {
+          CircularProgressIndicator(
+            modifier = Modifier.size(16.dp),
+            strokeWidth = 2.dp,
+            color = DrawerAmber,
+          )
+        } else {
+          IconButton(
+            onClick = onRefreshBarcode,
+            modifier = Modifier.size(24.dp),
+          ) {
+            Icon(
+              imageVector = Icons.Default.Refresh,
+              contentDescription = "Refresh barcode",
+              tint = TextMuted,
+              modifier = Modifier.size(16.dp),
+            )
+          }
+        }
+      }
+
+      Spacer(Modifier.height(14.dp))
+
+      if (isPickedUp) {
+        // Collected State
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFFDCFCE7).copy(alpha = 0.5f))
+            .border(1.dp, GreenSuccess.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+            .padding(vertical = 18.dp),
+          contentAlignment = Alignment.Center,
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.Default.CheckCircle,
+              contentDescription = null,
+              tint = GreenSuccess,
+              modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+              text = "Order Verified & Picked Up",
+              fontSize = 14.sp,
+              fontWeight = FontWeight.Bold,
+              color = GreenSuccess,
+            )
+          }
+        }
+      } else {
+        // High-contrast 1D Barcode Container
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(PureWhite)
+            .border(1.dp, BorderGray.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+          contentAlignment = Alignment.Center,
+        ) {
+          if (barcodeBitmap != null) {
+            Column(
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.Center,
+            ) {
+              Image(
+                bitmap = barcodeBitmap.asImageBitmap(),
+                contentDescription = "1D Order Barcode",
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .height(84.dp),
+                contentScale = ContentScale.FillBounds,
+              )
+              Spacer(Modifier.height(6.dp))
+              Text(
+                text = effectiveToken,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                color = BlackPrimary,
+                letterSpacing = 1.5.sp,
+              )
+            }
+          } else {
+            Column(
+              horizontalAlignment = Alignment.CenterHorizontally,
+              modifier = Modifier.padding(16.dp),
+            ) {
+              CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = DrawerAmber,
+                strokeWidth = 2.dp,
+              )
+              Spacer(Modifier.height(8.dp))
+              Text(
+                text = "Generating verification barcode...",
+                fontSize = 12.sp,
+                color = TextMuted,
+              )
+            }
+          }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // Short Pickup Instruction
+        Text(
+          text = "Show this barcode at the canteen counter for pickup verification.",
+          fontSize = 12.sp,
+          color = TextMuted,
+          textAlign = TextAlign.Center,
+        )
+      }
+    }
+  }
+}
+
+/**
+ * Clean Timeline Milestone Component for the 6-stage lifecycle
+ */
+@Composable
+private fun TimelineStage(
+  stageName: String,
+  timestamp: String,
   isCompleted: Boolean,
+  isCurrent: Boolean,
   isLast: Boolean,
 ) {
   Row(
     modifier = Modifier
       .fillMaxWidth()
-      .padding(vertical = 3.dp),
+      .padding(vertical = 4.dp),
     verticalAlignment = Alignment.Top,
   ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
       Box(
         modifier = Modifier
-          .size(20.dp)
+          .size(22.dp)
           .clip(CircleShape)
-          .background(if (isCompleted) Color(0xFF16A34A) else Color(0xFFE5E7EB)),
+          .background(
+            when {
+              isCompleted -> GreenSuccess
+              isCurrent -> DrawerAmber
+              else -> Color(0xFFE2E8F0)
+            }
+          ),
         contentAlignment = Alignment.Center,
       ) {
         if (isCompleted) {
@@ -917,7 +974,14 @@ private fun TrackingMilestone(
             imageVector = Icons.Default.Check,
             contentDescription = null,
             tint = PureWhite,
-            modifier = Modifier.size(12.dp),
+            modifier = Modifier.size(13.dp),
+          )
+        } else if (isCurrent) {
+          Box(
+            modifier = Modifier
+              .size(8.dp)
+              .clip(CircleShape)
+              .background(PureWhite),
           )
         }
       }
@@ -925,9 +989,9 @@ private fun TrackingMilestone(
       if (!isLast) {
         Box(
           modifier = Modifier
-            .width(1.5.dp)
-            .height(26.dp)
-            .background(if (isCompleted) Color(0xFF16A34A).copy(alpha = 0.4f) else Color(0xFFE5E7EB))
+            .width(2.dp)
+            .height(28.dp)
+            .background(if (isCompleted) GreenSuccess.copy(alpha = 0.5f) else Color(0xFFE2E8F0)),
         )
       }
     }
@@ -942,798 +1006,18 @@ private fun TrackingMilestone(
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Text(
-        text = title,
-        fontSize = 14.sp,
-        fontWeight = if (isCompleted) FontWeight.Bold else FontWeight.Medium,
-        color = if (isCompleted) TextDark else Color(0xFF9CA3AF),
+        text = stageName,
+        fontSize = 13.5.sp,
+        fontWeight = if (isCompleted || isCurrent) FontWeight.Bold else FontWeight.Medium,
+        color = if (isCompleted || isCurrent) BlackPrimary else TextMuted,
       )
 
-      Text(
-        text = time,
-        fontSize = 12.sp,
-        color = Color(0xFF6B7280),
-      )
-    }
-  }
-}
-
-// ── Dynamic QR & Code 128 Barcode Verification Card ─────────────────────────
-
-private fun decodeBase64DataUrl(dataUrl: String?): android.graphics.Bitmap? {
-  if (dataUrl.isNullOrBlank()) return null
-  return try {
-    val clean = if (dataUrl.contains(",")) dataUrl.substringAfter(",") else dataUrl
-    val bytes = Base64.decode(clean.trim(), Base64.DEFAULT)
-    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-  } catch (_: Exception) {
-    null
-  }
-}
-
-enum class VerificationType(val title: String) {
-  QR_CODE("QR Code"),
-  BARCODE("Barcode"),
-}
-
-@Composable
-fun OrderBarcodeCard(
-  order: OrderRecord,
-  tokenDisplay: String,
-  barcodeResponse: OrderBarcodeResponseDto?,
-  qrResponse: OrderQrResponseDto? = null,
-  isLoading: Boolean = false,
-  isRefreshing: Boolean = false,
-  errorMessage: String? = null,
-  onRefreshBarcode: () -> Unit = {},
-  modifier: Modifier = Modifier,
-) {
-  var selectedType by remember { mutableStateOf(VerificationType.QR_CODE) }
-
-  val isPickedUp = order.status == OrderStatus.COMPLETED || barcodeResponse?.code == "ALREADY_COLLECTED"
-  val isReady = order.status == OrderStatus.READY
-
-  // Cryptographically unique verification token, fallback to order.id / tokenNumber
-  val effectiveToken = remember(barcodeResponse?.verificationToken, qrResponse?.rawToken, order.id, order.tokenNumber) {
-    qrResponse?.rawToken?.ifBlank { null }
-      ?: barcodeResponse?.verificationToken?.ifBlank { null }
-      ?: order.id.ifBlank { order.tokenNumber }
-  }
-
-  // QR Code Bitmap: server dataUrl or locally generated via ZXing BarcodeGenerator directly on order.id
-  val qrBitmap = remember(qrResponse?.qrDataUrl, effectiveToken, order.id) {
-    decodeBase64DataUrl(qrResponse?.qrDataUrl)
-      ?: BarcodeGenerator.generateQrCode(order.id.ifBlank { effectiveToken }, sizePx = 512)
-  }
-
-  // Code 128 Barcode Bitmap: server dataUrl or locally generated via ZXing BarcodeGenerator
-  val barcodeBitmap = remember(barcodeResponse?.barcodeDataUrl, effectiveToken) {
-    decodeBase64DataUrl(barcodeResponse?.barcodeDataUrl)
-      ?: BarcodeGenerator.generateCode128Barcode(effectiveToken, widthPx = 640, heightPx = 180)
-  }
-
-  val borderColor = when {
-    isPickedUp -> Color(0xFF86EFAC)
-    isReady -> Color(0xFF22C55E)
-    else -> Color(0xFFE5E7EB)
-  }
-
-  Card(
-    modifier = modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(18.dp),
-    colors = CardDefaults.cardColors(containerColor = PureWhite),
-    border = androidx.compose.foundation.BorderStroke(1.5.dp, borderColor),
-    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-  ) {
-    Column(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(16.dp)
-    ) {
-      // ── Top Header Row ───────────────────────────────────────────
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Box(
-            modifier = Modifier
-              .size(34.dp)
-              .clip(RoundedCornerShape(8.dp))
-              .background(if (isReady) Color(0xFFDCFCE7) else Color(0xFFFFF7ED)),
-            contentAlignment = Alignment.Center
-          ) {
-            Icon(
-              imageVector = if (isReady) Icons.Default.CheckCircle else Icons.Default.QrCodeScanner,
-              contentDescription = null,
-              tint = if (isReady) Color(0xFF16A34A) else Color(0xFFEA580C),
-              modifier = Modifier.size(20.dp)
-            )
-          }
-          Spacer(Modifier.width(10.dp))
-          Column {
-            Text(
-              text = "Pickup Barcode & QR",
-              fontSize = 15.sp,
-              fontWeight = FontWeight.Bold,
-              color = TextDark
-            )
-            Text(
-              text = tokenDisplay,
-              fontSize = 12.sp,
-              fontWeight = FontWeight.SemiBold,
-              color = TextMuted
-            )
-          }
-        }
-
-        // Status Badge + background sync indicator
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          if (isRefreshing || (isLoading && qrBitmap == null && barcodeBitmap == null)) {
-            CircularProgressIndicator(
-              modifier = Modifier
-                .padding(end = 8.dp)
-                .size(14.dp),
-              strokeWidth = 2.dp,
-              color = Color(0xFFEA580C)
-            )
-          }
-          Box(
-            modifier = Modifier
-              .clip(RoundedCornerShape(6.dp))
-              .background(
-                when {
-                  isPickedUp -> Color(0xFFDCFCE7)
-                  isReady -> Color(0xFFDCFCE7)
-                  else -> Color(0xFFFFF7ED)
-                }
-              )
-              .padding(horizontal = 8.dp, vertical = 4.dp)
-          ) {
-            Text(
-              text = when {
-                isPickedUp -> "COLLECTED"
-                isReady -> "READY FOR PICKUP"
-                else -> order.status.name
-              },
-              fontSize = 11.sp,
-              fontWeight = FontWeight.ExtraBold,
-              color = when {
-                isPickedUp || isReady -> Color(0xFF16A34A)
-                else -> Color(0xFFEA580C)
-              }
-            )
-          }
-        }
-      }
-
-      if (!isPickedUp) {
-        Spacer(Modifier.height(12.dp))
-
-        // ── Tab Switcher: QR Code vs Barcode ─────────────────────────
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFFF3F4F6))
-            .padding(3.dp),
-          horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-          VerificationType.values().forEach { type ->
-            val isSelected = selectedType == type
-            Box(
-              modifier = Modifier
-                .weight(1f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (isSelected) PureWhite else Color.Transparent)
-                .clickable { selectedType = type }
-                .padding(vertical = 7.dp),
-              contentAlignment = Alignment.Center
-            ) {
-              Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                  imageVector = if (type == VerificationType.QR_CODE) Icons.Default.QrCode else Icons.Default.QrCodeScanner,
-                  contentDescription = null,
-                  tint = if (isSelected) Color(0xFFEA580C) else Color(0xFF6B7280),
-                  modifier = Modifier.size(15.dp)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                  text = type.title,
-                  fontSize = 12.sp,
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                  color = if (isSelected) TextDark else Color(0xFF6B7280)
-                )
-              }
-            }
-          }
-        }
-      }
-
-      Spacer(Modifier.height(14.dp))
-
-      // ── Center Code Graphic Display (White background, black bars/modules) ──
-      Box(
-        modifier = Modifier
-          .fillMaxWidth()
-          .clip(RoundedCornerShape(12.dp))
-          .background(Color(0xFFFFFFFF))
-          .border(
-            width = 1.dp,
-            color = if (isPickedUp) Color(0xFFBBF7D0) else Color(0xFFE5E7EB),
-            shape = RoundedCornerShape(12.dp)
-          )
-          .padding(vertical = 14.dp, horizontal = 16.dp),
-        contentAlignment = Alignment.Center
-      ) {
-        when {
-          isPickedUp -> {
-            Column(
-              horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.Center,
-              modifier = Modifier.padding(vertical = 16.dp)
-            ) {
-              Icon(
-                imageVector = Icons.Default.CheckCircle,
-                contentDescription = null,
-                tint = Color(0xFF16A34A),
-                modifier = Modifier.size(48.dp)
-              )
-              Spacer(Modifier.height(6.dp))
-              Text(
-                text = "Order Successfully Collected",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF15803D)
-              )
-              val pickupTime = barcodeResponse?.collectedAtLocal ?: ""
-              if (pickupTime.isNotBlank()) {
-                Text(
-                  text = "Collected at $pickupTime",
-                  fontSize = 11.sp,
-                  color = TextMuted
-                )
-              }
-            }
-          }
-          selectedType == VerificationType.QR_CODE && qrBitmap != null -> {
-            Column(
-              horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.Center,
-              modifier = Modifier.fillMaxWidth()
-            ) {
-              // High-resolution ZXing QR Code
-              Image(
-                bitmap = qrBitmap.asImageBitmap(),
-                contentDescription = "Order Pickup QR Code for Order ID ${order.id}",
-                modifier = Modifier
-                  .size(160.dp)
-                  .clip(RoundedCornerShape(8.dp)),
-                contentScale = ContentScale.Fit
-              )
-              Spacer(Modifier.height(8.dp))
-              Text(
-                text = "Order ID: ${order.id}",
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextDark,
-                letterSpacing = 0.5.sp
-              )
-              Text(
-                text = "Token: $tokenDisplay • Scan for instant pickup",
-                fontSize = 11.sp,
-                color = TextMuted,
-                modifier = Modifier.padding(top = 2.dp)
-              )
-            }
-          }
-          selectedType == VerificationType.BARCODE && barcodeBitmap != null -> {
-            Column(
-              horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.Center,
-              modifier = Modifier.fillMaxWidth()
-            ) {
-              // High-resolution Code 128 Barcode Image
-              Image(
-                bitmap = barcodeBitmap.asImageBitmap(),
-                contentDescription = "Order Pickup Barcode",
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .height(72.dp),
-                contentScale = ContentScale.FillBounds
-              )
-              Spacer(Modifier.height(6.dp))
-              Text(
-                text = effectiveToken,
-                fontSize = 13.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1F2937),
-                letterSpacing = 1.sp
-              )
-            }
-          }
-          isLoading -> {
-            Column(
-              horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.Center,
-              modifier = Modifier.padding(vertical = 24.dp)
-            ) {
-              CircularProgressIndicator(
-                modifier = Modifier.size(28.dp),
-                color = Color(0xFFEA580C),
-                strokeWidth = 2.5.dp
-              )
-              Spacer(Modifier.height(8.dp))
-              Text(
-                text = "Generating verification code...",
-                fontSize = 11.sp,
-                color = TextMuted,
-                fontWeight = FontWeight.Medium
-              )
-            }
-          }
-          else -> {
-            // Instant fallback: generates QR code on device
-            val fallbackBitmap = BarcodeGenerator.generateQrCode(effectiveToken, sizePx = 512)
-            if (fallbackBitmap != null) {
-              Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxWidth()
-              ) {
-                Image(
-                  bitmap = fallbackBitmap.asImageBitmap(),
-                  contentDescription = "Order Pickup Code",
-                  modifier = Modifier.size(160.dp),
-                  contentScale = ContentScale.Fit
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                  text = effectiveToken,
-                  fontSize = 13.sp,
-                  fontFamily = FontFamily.Monospace,
-                  fontWeight = FontWeight.Bold,
-                  color = Color(0xFF1F2937),
-                  letterSpacing = 1.sp
-                )
-              }
-            } else {
-              CircularProgressIndicator(
-                modifier = Modifier.size(24.dp),
-                color = Color(0xFFEA580C),
-                strokeWidth = 2.dp
-              )
-            }
-          }
-        }
-      }
-
-      // If server error occurred, show subtle notice with retry without blocking code display
-      if (errorMessage != null && !isPickedUp) {
-        Spacer(Modifier.height(6.dp))
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onRefreshBarcode() }
-            .padding(vertical = 2.dp),
-          horizontalArrangement = Arrangement.Center,
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Icon(
-            imageVector = Icons.Default.Refresh,
-            contentDescription = "Refresh Server Token",
-            tint = Color(0xFFEA580C),
-            modifier = Modifier.size(13.dp)
-          )
-          Spacer(Modifier.width(4.dp))
-          Text(
-            text = "Ready to scan • Tap to re-sync server",
-            fontSize = 10.5.sp,
-            color = Color(0xFFEA580C),
-            fontWeight = FontWeight.SemiBold
-          )
-        }
-      }
-
-      Spacer(Modifier.height(10.dp))
-
-      // ── Clear Instruction Banner ──────────────────────────────────
-      Box(
-        modifier = Modifier
-          .fillMaxWidth()
-          .clip(RoundedCornerShape(8.dp))
-          .background(Color(0xFFEFF6FF))
-          .border(1.dp, Color(0xFFBFDBFE), RoundedCornerShape(8.dp))
-          .padding(horizontal = 10.dp, vertical = 7.dp)
-      ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Icon(
-            imageVector = Icons.Default.Check,
-            contentDescription = null,
-            tint = Color(0xFF2563EB),
-            modifier = Modifier.size(14.dp)
-          )
-          Spacer(Modifier.width(6.dp))
-          Text(
-            text = "Show this QR code or barcode to the canteen owner when collecting your order.",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color(0xFF1E40AF)
-          )
-        }
-      }
-
-      Spacer(Modifier.height(12.dp))
-      HorizontalDivider(color = Color(0xFFF3F4F6))
-      Spacer(Modifier.height(10.dp))
-
-      // ── Order Details Section ─────────────────────────────────────
-      // Order ID and Date/Time
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-      ) {
+      if (timestamp.isNotBlank() && timestamp != "-") {
         Text(
-          text = "Order ID: #${order.id.takeLast(8)}",
+          text = timestamp,
           fontSize = 11.5.sp,
           color = TextMuted,
-          fontWeight = FontWeight.Medium
         )
-        val dateDisplay = barcodeResponse?.orderDate
-          ?: (if (order.placedEpoch > 0) SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(Date(order.placedEpoch)) else null)
-          ?: order.orderDate.ifBlank { null }
-          ?: "Today"
-        Text(
-          text = dateDisplay,
-          fontSize = 11.5.sp,
-          color = TextMuted,
-          fontWeight = FontWeight.Medium
-        )
-      }
-
-      Spacer(Modifier.height(6.dp))
-
-      // Order Items summary
-      if (order.items.isNotEmpty()) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-          order.items.forEach { item ->
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-              Text(
-                text = "${item.quantity}x ${item.foodItem.name}",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextDark,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-              )
-              Text(
-                text = "₹${"%.2f".format(item.totalPrice.toDouble())}",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = TextDark
-              )
-            }
-          }
-        }
-      }
-
-      Spacer(Modifier.height(8.dp))
-
-      // Total Amount
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Text(
-          text = "Total Amount",
-          fontSize = 13.sp,
-          fontWeight = FontWeight.Bold,
-          color = TextDark
-        )
-        Text(
-          text = "₹${"%.2f".format(order.totalPrice.toDouble())}",
-          fontSize = 16.sp,
-          fontWeight = FontWeight.ExtraBold,
-          color = Color(0xFFEA580C)
-        )
-      }
-    }
-  }
-}
-
-// ── Rectangular Dynamic QR Verification Card ─────────────────────────────────
-
-@Composable
-private fun RectangularOrderQrCard(
-  order: OrderRecord,
-  tokenDisplay: String,
-  qrResponse: OrderQrResponseDto?,
-  isLoading: Boolean,
-  isRotating: Boolean,
-  errorMessage: String?,
-  onRefreshQr: () -> Unit,
-  modifier: Modifier = Modifier,
-) {
-  val isPickedUp = order.status == OrderStatus.COMPLETED
-  val isReady = order.status == OrderStatus.READY
-  val qrBitmap = remember(qrResponse?.qrDataUrl, order.id, order.tokenNumber) {
-    decodeBase64DataUrl(qrResponse?.qrDataUrl)
-      ?: BarcodeGenerator.generateQrCode(order.id.ifBlank { order.tokenNumber }, sizePx = 512)
-  }
-
-  val borderColor = when {
-    isPickedUp -> Color(0xFFDCFCE7)
-    isReady -> Color(0xFF16A34A).copy(alpha = 0.5f)
-    else -> Color(0xFFE5E7EB)
-  }
-
-  Card(
-    modifier = modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(18.dp),
-    colors = CardDefaults.cardColors(containerColor = PureWhite),
-    border = androidx.compose.foundation.BorderStroke(1.5.dp, borderColor),
-    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-  ) {
-    Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(14.dp),
-      verticalAlignment = Alignment.CenterVertically
-    ) {
-      // ── Left: QR Code Box or Picked Up Verified Badge ─────────
-      Box(
-        modifier = Modifier
-          .size(112.dp)
-          .clip(RoundedCornerShape(14.dp))
-          .background(if (isPickedUp) Color(0xFFF0FDF4) else Color(0xFFF9FAFB))
-          .border(
-            1.dp,
-            if (isPickedUp) Color(0xFFDCFCE7) else Color(0xFFE5E7EB),
-            RoundedCornerShape(14.dp)
-          ),
-        contentAlignment = Alignment.Center
-      ) {
-        when {
-          isPickedUp -> {
-            Column(
-              horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.Center
-            ) {
-              Icon(
-                imageVector = Icons.Default.CheckCircle,
-                contentDescription = null,
-                tint = Color(0xFF16A34A),
-                modifier = Modifier.size(42.dp)
-              )
-              Spacer(Modifier.height(4.dp))
-              Text(
-                text = "VERIFIED",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFF15803D)
-              )
-              Text(
-                text = "Picked Up",
-                fontSize = 10.sp,
-                color = Color(0xFF16A34A)
-              )
-            }
-          }
-          isLoading && qrBitmap == null -> {
-            Column(
-              horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.Center
-            ) {
-              CircularProgressIndicator(
-                modifier = Modifier.size(26.dp),
-                color = Color(0xFFEA580C),
-                strokeWidth = 2.5.dp
-              )
-              Spacer(Modifier.height(6.dp))
-              Text(
-                text = "Loading QR",
-                fontSize = 10.sp,
-                color = TextMuted,
-                fontWeight = FontWeight.Medium
-              )
-            }
-          }
-          qrBitmap != null -> {
-            Box(
-              modifier = Modifier
-                .fillMaxSize()
-                .padding(6.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(PureWhite),
-              contentAlignment = Alignment.Center
-            ) {
-              Image(
-                bitmap = qrBitmap.asImageBitmap(),
-                contentDescription = "Order Pickup QR Code",
-                modifier = Modifier.fillMaxSize()
-              )
-            }
-          }
-          errorMessage != null -> {
-            Column(
-              horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.Center,
-              modifier = Modifier
-                .clickable { onRefreshQr() }
-                .padding(8.dp)
-            ) {
-              Icon(
-                imageVector = Icons.Default.Refresh,
-                contentDescription = "Retry QR",
-                tint = Color(0xFFEA580C),
-                modifier = Modifier.size(24.dp)
-              )
-              Spacer(Modifier.height(4.dp))
-              Text(
-                text = "Tap to load",
-                fontSize = 10.sp,
-                color = Color(0xFFEA580C),
-                fontWeight = FontWeight.SemiBold
-              )
-            }
-          }
-          else -> {
-            CircularProgressIndicator(
-              modifier = Modifier.size(24.dp),
-              color = Color(0xFFEA580C),
-              strokeWidth = 2.dp
-            )
-          }
-        }
-      }
-
-      // ── Right: Ticket Details & Validity (Rectangular Layout) ─
-      Column(
-        modifier = Modifier
-          .weight(1f)
-          .padding(start = 14.dp),
-        verticalArrangement = Arrangement.Center
-      ) {
-        // Token + Status Tag
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Text(
-            text = tokenDisplay,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = TextDark
-          )
-
-          Box(
-            modifier = Modifier
-              .clip(RoundedCornerShape(6.dp))
-              .background(
-                when {
-                  isPickedUp -> Color(0xFFDCFCE7)
-                  isReady -> Color(0xFFDCFCE7)
-                  else -> Color(0xFFFFF7ED)
-                }
-              )
-              .padding(horizontal = 7.dp, vertical = 2.dp)
-          ) {
-            Text(
-              text = when {
-                isPickedUp -> "COLLECTED"
-                isReady -> "READY"
-                else -> "ACTIVE"
-              },
-              fontSize = 10.sp,
-              fontWeight = FontWeight.ExtraBold,
-              color = when {
-                isPickedUp || isReady -> Color(0xFF16A34A)
-                else -> Color(0xFFEA580C)
-              }
-            )
-          }
-        }
-
-        Spacer(Modifier.height(4.dp))
-
-        // Canteen Name & Pickup Counter
-        Text(
-          text = order.pickupCanteenName.ifBlank { "Campus Canteen" },
-          fontSize = 13.sp,
-          fontWeight = FontWeight.Bold,
-          color = TextDark,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis
-        )
-        Text(
-          text = "${order.pickupCounter.ifBlank { "Counter 1" }} • Scan for Pickup",
-          fontSize = 11.5.sp,
-          color = TextMuted,
-          maxLines = 1
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        // Pickup Instruction or Refresh Bar
-        when {
-          isPickedUp -> {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = null,
-                tint = Color(0xFF16A34A),
-                modifier = Modifier.size(14.dp)
-              )
-              Spacer(Modifier.width(4.dp))
-              Text(
-                text = "Order verified & collected",
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF16A34A)
-              )
-            }
-          }
-          isReady -> {
-            Text(
-              text = "Show this QR at counter for instant pickup!",
-              fontSize = 11.5.sp,
-              fontWeight = FontWeight.ExtraBold,
-              color = Color(0xFF15803D),
-              lineHeight = 15.sp
-            )
-          }
-          else -> {
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Text(
-                text = "Single-use dynamic token",
-                fontSize = 11.sp,
-                color = TextMuted
-              )
-
-              // Rotate / Refresh QR button
-              Row(
-                modifier = Modifier
-                  .clip(RoundedCornerShape(6.dp))
-                  .clickable(enabled = !isRotating) { onRefreshQr() }
-                  .padding(horizontal = 4.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                if (isRotating) {
-                  CircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 1.5.dp,
-                    color = Color(0xFFEA580C)
-                  )
-                } else {
-                  Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "Rotate QR",
-                    tint = Color(0xFFEA580C),
-                    modifier = Modifier.size(14.dp)
-                  )
-                  Spacer(Modifier.width(3.dp))
-                  Text(
-                    text = "Refresh",
-                    fontSize = 10.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFFEA580C)
-                  )
-                }
-              }
-            }
-          }
-        }
       }
     }
   }

@@ -57,8 +57,9 @@ import com.example.data.NotificationItem
 import com.example.ui.state.CanteenAppState
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
-import com.example.ui.theme.DeliveryOrange
-import com.example.ui.theme.DeliveryOrangeLight
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberDark
+import com.example.ui.theme.DrawerAmberLight
 import com.example.ui.theme.OpenGreen
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.SoftGray
@@ -119,7 +120,7 @@ fun ModernNotificationsSheet(
             .fillMaxHeight(0.82f)
             .clickable(enabled = false) {}, // Prevent dismiss when tapping content
           shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-          color = PureWhite,
+          color = WarmCream,
           shadowElevation = 24.dp,
         ) {
           Column(
@@ -135,7 +136,7 @@ fun ModernNotificationsSheet(
                 .width(44.dp)
                 .height(4.5.dp)
                 .clip(RoundedCornerShape(3.dp))
-                .background(Color(0xFFE2E8F0)),
+                .background(BorderGray),
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -151,13 +152,13 @@ fun ModernNotificationsSheet(
                   modifier = Modifier
                     .size(38.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFF1F5F9)),
+                    .background(DrawerAmber.copy(alpha = 0.15f)),
                   contentAlignment = Alignment.Center,
                 ) {
                   Icon(
                     imageVector = Icons.Default.NotificationsNone,
                     contentDescription = null,
-                    tint = BlackPrimary,
+                    tint = DrawerAmberDark,
                     modifier = Modifier.size(20.dp),
                   )
                 }
@@ -176,7 +177,7 @@ fun ModernNotificationsSheet(
                       Box(
                         modifier = Modifier
                           .clip(RoundedCornerShape(12.dp))
-                          .background(DeliveryOrange)
+                          .background(DrawerAmber)
                           .padding(horizontal = 8.dp, vertical = 2.dp),
                         contentAlignment = Alignment.Center,
                       ) {
@@ -203,7 +204,8 @@ fun ModernNotificationsSheet(
                 modifier = Modifier
                   .size(34.dp)
                   .clip(CircleShape)
-                  .background(SoftGray)
+                  .background(PureWhite)
+                  .border(1.dp, BorderGray.copy(alpha = 0.6f), CircleShape)
                   .clickable { triggerDismiss() },
                 contentAlignment = Alignment.Center,
               ) {
@@ -248,7 +250,7 @@ fun ModernNotificationsSheet(
                     Icon(
                       imageVector = Icons.Default.DoneAll,
                       contentDescription = null,
-                      tint = DeliveryOrange,
+                      tint = DrawerAmberDark,
                       modifier = Modifier.size(15.dp),
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -256,7 +258,7 @@ fun ModernNotificationsSheet(
                       text = "Mark all read",
                       fontSize = 12.5.sp,
                       fontWeight = FontWeight.Bold,
-                      color = DeliveryOrange,
+                      color = DrawerAmberDark,
                     )
                   }
                 }
@@ -364,9 +366,8 @@ private fun NotificationCardItem(item: NotificationItem) {
   val isPreparing = item.title.contains("Kitchen", ignoreCase = true) || item.title.contains("Preparing", ignoreCase = true)
   val isOrder = item.title.contains("Order", ignoreCase = true) || item.title.contains("Token", ignoreCase = true)
 
-  // Clean monochrome icon styling: sleek neutral slate with crisp background
-  val iconColor = BlackPrimary
-  val iconBg = Color(0xFFF1F5F9)
+  val iconColor = DrawerAmberDark
+  val iconBg = DrawerAmber.copy(alpha = 0.12f)
 
   val iconVector = when {
     isReady -> Icons.Default.CheckCircle
@@ -388,10 +389,10 @@ private fun NotificationCardItem(item: NotificationItem) {
     modifier = Modifier
       .fillMaxWidth()
       .clip(RoundedCornerShape(16.dp))
-      .background(if (item.isUnread) Color(0xFFF8FAFC) else PureWhite)
+      .background(PureWhite)
       .border(
-        width = if (item.isUnread) 1.2.dp else 1.dp,
-        color = if (item.isUnread) BlackPrimary.copy(alpha = 0.35f) else BorderGray.copy(alpha = 0.7f),
+        width = if (item.isUnread) 1.5.dp else 1.dp,
+        color = if (item.isUnread) DrawerAmber else BorderGray.copy(alpha = 0.6f),
         shape = RoundedCornerShape(16.dp),
       )
       .padding(14.dp),
@@ -400,7 +401,7 @@ private fun NotificationCardItem(item: NotificationItem) {
       modifier = Modifier.fillMaxWidth(),
       verticalAlignment = Alignment.Top,
     ) {
-      // Sleek Monochrome Icon Badge
+      // Sleek Icon Badge
       Box(
         modifier = Modifier
           .size(38.dp)
@@ -444,7 +445,7 @@ private fun NotificationCardItem(item: NotificationItem) {
                 modifier = Modifier
                   .size(7.dp)
                   .clip(CircleShape)
-                  .background(BlackPrimary),
+                  .background(DrawerAmber),
               )
             }
           }

@@ -219,6 +219,12 @@ fun MenuScreen(
     }
   }
 
+  // Pre-calculate chunked pairs and cart quantities outside LazyColumn to prevent subcomposition lag
+  val chunkedMenuItems = remember(sortedItems) { sortedItems.chunked(2) }
+  val cartCountsMap = remember(appState.cartItems) {
+    appState.cartItems.associate { it.foodItem.id to it.quantity }
+  }
+
   val listState = rememberLazyListState()
 
   DisposableEffect(Unit) {
@@ -658,23 +664,18 @@ fun MenuScreen(
           }
         }
       } else {
-        // ── 2 Items in a Row (Chunked pairs with stable keys) ─────────────────
-        val chunkedItems = sortedItems.chunked(2)
+        // ── 2 Items in a Row (Chunked pairs with stable keys & optimized rendering) ──
         items(
-          items = chunkedItems,
+          items = chunkedMenuItems,
           key = { pair -> pair.joinToString("_") { it.id } },
         ) { pair ->
           Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(IntrinsicSize.Max),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
           ) {
             for (foodItem in pair) {
-              val inCartCount = remember(appState.cartItems.size, appState.cartItems.map { it.quantity }) {
-                appState.cartItems.filter { it.foodItem.id == foodItem.id }.sumOf { it.quantity }
-              }
-              Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+              val inCartCount = cartCountsMap[foodItem.id] ?: 0
+              Box(modifier = Modifier.weight(1f)) {
                 MenuItemGridCard(
                   foodItem = foodItem,
                   isFavorite = appState.isItemFavorite(foodItem.id),
@@ -683,7 +684,7 @@ fun MenuScreen(
                   onAddToCart = { appState.addToCart(foodItem) },
                   onDecreaseQuantity = { appState.decreaseQuantity(foodItem) },
                   onCardClick = { appState.openFoodDetail(foodItem) },
-                  modifier = Modifier.fillMaxSize(),
+                  modifier = Modifier.fillMaxWidth(),
                 )
               }
             }
@@ -850,13 +851,11 @@ private fun SortBottomSheet(
         HorizontalDivider(color = BorderGray.copy(alpha = 0.5f))
 
         val sortOptions = listOf(
-          MenuSortOption.RECOMMENDED to "Popular choices & chef specials",
+          MenuSortOption.RECOMMENDED to "Our top recommended dishes",
+          MenuSortOption.POPULAR to "Most ordered items by students",
           MenuSortOption.PRICE_LOW_TO_HIGH to "Most budget-friendly dishes first",
           MenuSortOption.PRICE_HIGH_TO_LOW to "Premium & deluxe dishes first",
-          MenuSortOption.RATING_HIGH_TO_LOW to "Highest customer review score",
-          MenuSortOption.NEWEST_FIRST to "Fresh additions to the canteen",
-          MenuSortOption.POPULAR to "Most ordered by students today",
-          MenuSortOption.FASTEST_PREP to "Shortest preparation time",
+          MenuSortOption.NEWEST_FIRST to "Newest additions to the canteen",
         )
 
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -1651,13 +1650,6 @@ private fun MenuItemGridCard(
           ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
               DietaryBadge(isVeg = isVeg)
-              Spacer(modifier = Modifier.width(4.dp))
-              Text(
-                text = if (isVeg) "Veg" else "Non-Veg",
-                fontSize = 10.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isVeg) Color(0xFF16A34A) else Color(0xFFDC2626),
-              )
             }
 
             // Prep Time

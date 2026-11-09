@@ -50,14 +50,24 @@ import com.example.data.CampusBlockCanteen
 import com.example.data.SampleFoodData
 import com.example.util.CanteenImageHelper
 
-// ── Private Theme Palette (Matches Reference Design) ──────────────────────────
-private val OrangeBrand = Color(0xFFFF6433)
-private val OrangeBorder = Color(0xFFFF7A45)
-private val OrangeBgSoft = Color(0xFFFFF1EB)
-private val SelectedCardBg = Color(0xFFFFFBF9)
-private val BorderMuted = Color(0xFFF0F1F3)
-private val DarkTitle = Color(0xFF111827)
-private val SubtitleGray = Color(0xFF6B7280)
+import com.example.ui.theme.BlackPrimary
+import com.example.ui.theme.BorderGray
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberDark
+import com.example.ui.theme.DrawerAmberLight
+import com.example.ui.theme.PureWhite
+import com.example.ui.theme.TextDark
+import com.example.ui.theme.TextMuted
+import com.example.ui.theme.WarmCream
+
+// ── QuickBite Theme Palette ──────────────────────────────────────────────────
+private val AmberBrand = DrawerAmber
+private val AmberBorder = DrawerAmberDark
+private val AmberBgSoft = DrawerAmberLight
+private val SelectedCardBg = PureWhite
+private val BorderMuted = BorderGray
+private val DarkTitle = BlackPrimary
+private val SubtitleGray = TextMuted
 private val StatusGreen = Color(0xFF10B981)
 private val StatusRed = Color(0xFFEF4444)
 
@@ -101,7 +111,7 @@ fun BlockCanteenSelectorSheet(
           .fillMaxHeight(0.88f)
           .clickable(enabled = false) {}, // Prevent dismiss when tapping inside sheet
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        color = Color.White,
+        color = WarmCream,
         shadowElevation = 16.dp,
       ) {
         Column(
@@ -131,13 +141,13 @@ fun BlockCanteenSelectorSheet(
               modifier = Modifier
                 .size(42.dp)
                 .clip(CircleShape)
-                .background(OrangeBgSoft),
+                .background(AmberBgSoft),
               contentAlignment = Alignment.Center,
             ) {
               Icon(
                 imageVector = Icons.Default.LocationOn,
                 contentDescription = "Select Canteen",
-                tint = OrangeBrand,
+                tint = AmberBrand,
                 modifier = Modifier.size(23.dp),
               )
             }
@@ -199,13 +209,13 @@ fun BlockCanteenSelectorSheet(
                 modifier = Modifier
                   .size(38.dp)
                   .clip(CircleShape)
-                  .background(OrangeBgSoft),
+                  .background(AmberBgSoft),
                 contentAlignment = Alignment.Center,
               ) {
                 Icon(
                   imageVector = Icons.Default.NearMe,
                   contentDescription = "Current Location",
-                  tint = OrangeBrand,
+                  tint = AmberBrand,
                   modifier = Modifier.size(20.dp),
                 )
               }
@@ -261,11 +271,11 @@ private fun CanteenCardItem(
       .fillMaxWidth()
       .clip(RoundedCornerShape(16.dp))
       .border(
-        width = if (isSelected) 1.6.dp else 1.dp,
-        color = if (isSelected) OrangeBorder else BorderMuted,
+        width = if (isSelected) 1.8.dp else 1.dp,
+        color = if (isSelected) AmberBorder else BorderMuted,
         shape = RoundedCornerShape(16.dp),
       )
-      .background(if (isSelected) SelectedCardBg else Color.White)
+      .background(if (isSelected) SelectedCardBg else PureWhite)
       .clickable { onClick() }
       .padding(12.dp),
   ) {
@@ -288,7 +298,7 @@ private fun CanteenCardItem(
           )
           .border(
             width = if (isSelected) 2.dp else 1.2.dp,
-            color = if (isSelected) OrangeBorder else Color(0xFFE5E7EB),
+            color = if (isSelected) AmberBorder else Color(0xFFE5E7EB),
             shape = CircleShape,
           ),
         contentAlignment = Alignment.Center,
@@ -379,13 +389,13 @@ private fun CanteenCardItem(
           modifier = Modifier
             .size(24.dp)
             .clip(CircleShape)
-            .background(OrangeBorder),
+            .background(AmberBrand),
           contentAlignment = Alignment.Center,
         ) {
           Icon(
             imageVector = Icons.Default.Check,
             contentDescription = "Selected",
-            tint = Color.White,
+            tint = PureWhite,
             modifier = Modifier.size(15.dp),
           )
         }
@@ -411,7 +421,7 @@ private fun CanteenMonogram(name: String) {
     Icon(
       imageVector = Icons.Default.Restaurant,
       contentDescription = null,
-      tint = OrangeBorder.copy(alpha = 0.85f),
+      tint = DrawerAmber.copy(alpha = 0.85f),
       modifier = Modifier.size(18.dp),
     )
     Spacer(modifier = Modifier.height(1.5.dp))
