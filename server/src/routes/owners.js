@@ -1121,7 +1121,7 @@ router.post('/orders/verify-qr', requireOwnerAuth, async (req, res) => {
     }
 
     // 6. Fetch associated order
-    const order = await Order.findOne({ orderId: verification.orderId });
+    order = await Order.findOne({ orderId: verification.orderId });
     if (!order) {
       return res.status(404).json({
         success: false,
