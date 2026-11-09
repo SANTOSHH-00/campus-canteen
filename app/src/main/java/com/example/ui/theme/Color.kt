@@ -2,55 +2,54 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ── Core Neutrals (High-Contrast & Ultra-Sharp Typography) ──────────────────
-val BlackPrimary   = Color(0xFF111112)   // Solid pitch dark for razor-sharp letters
-val BlackSecondary = Color(0xFF252321)   // Crisp dark secondary
+// ── Core Neutrals (Clean, crisp, modern food-app palette) ───────────────────
+val BlackPrimary   = Color(0xFF0F172A)   // Deep premium obsidian slate (modern, sharp)
+val BlackSecondary = Color(0xFF1E293B)   // Rich slate secondary
 val PureWhite      = Color(0xFFFFFFFF)
-val OffWhite       = Color(0xFFFAF7F2)   // True warm off-white
-val SoftGray       = Color(0xFFEEE8E0)   // Crisp surface tint
-val BorderGray     = Color(0xFFCCC5BA)   // Defined crisp border
-val TextDark       = Color(0xFF111112)   // High-contrast primary text
-val TextMuted      = Color(0xFF332E29)   // Deep solid charcoal for subtext (100% crisp, eliminates blur)
-val TextSecondary  = Color(0xFF1E1C1A)   // Ultra-sharp pitch secondary text
+val OffWhite       = Color(0xFFF6ECDA)   // Lightish warm golden amber canvas matching sidebar
+val SoftGray       = Color(0xFFEFE4D0)   // Subtle warm surface tint for pill counters & chips
+val BorderGray     = Color(0xFFE2D6C0)   // Warm subtle hairline border
+val TextDark       = Color(0xFF0F172A)   // Ultra-sharp obsidian text
+val TextMuted      = Color(0xFF64748B)   // Clean, readable slate subtext (replaces murky dark brown)
+val TextSecondary  = Color(0xFF334155)   // Slate 700 secondary
 
-// ── Cream Page Colors (reference style) ─────────────────────────────────────
-val WarmCream      = Color(0xFFF5F0E8)   // Page background — warm linen cream
-val CardSurface    = Color(0xFFFFFFFF)   // Card surface pure white
-val SaffronLight   = Color(0xFFFFF3DC)   // Very light amber tint
-val LightAmber     = Color(0xFFFFF3DC)
+// ── Screen & Page Backgrounds ────────────────────────────────────────────────
+// Lightish warm amber canvas (#F6ECDA) directly matching the side navigation bar style
+val WarmCream      = Color(0xFFF6ECDA)   // Lightish warm amber page background matching sidebar
+val CardSurface    = Color(0xFFFFFFFF)   // Pure white card surfaces
+val SaffronLight   = Color(0xFFFFF7ED)   // Light peach/amber tint
+val LightAmber     = Color(0xFFFEF3C7)   // Soft amber tint
 
-// ── Brand Accent & Drawer Tones ──────────────────────────────────────────────
-val DrawerAmber        = Color(0xFFEBA53D)   // Exact warm caramel-amber from Image 1
-val DrawerAmberDark    = Color(0xFFD4922A)   // Deeper border shade
-val DrawerAmberLight   = Color(0xFFFFF5E4)   // Soft amber tint
-val GoldenAmber        = Color(0xFFEBA53D)   // Matching Image 1 & 2 amber
-val GoldenAmberDark    = Color(0xFFD4922A)
-val GoldenAmberLight   = Color(0xFFFFF5E4)
-val DarkPillBackground = Color(0xFF1B1B1E)   // Sleek dark navigation capsule
+// ── Brand Accent & Highlights ────────────────────────────────────────────────
+val DrawerAmber        = Color(0xFFBA7A18)   // Warm golden bronze amber matching Try Now on moving cards
+val DrawerAmberDark    = Color(0xFF9E6312)   // Deeper bronze border
+val DrawerAmberLight   = Color(0xFFF7E7CD)   // Soft warm golden tint
+val GoldenAmber        = Color(0xFFF59E0B)   // Vibrant golden amber
+val GoldenAmberDark    = Color(0xFFD97706)
+val GoldenAmberLight   = Color(0xFFFEF3C7)
+val DarkPillBackground = Color(0xFF0F172A)   // Sleek dark navigation capsule
 
-val DeepSaffron        = Color(0xFFEBA53D)
-val GoldenYellow       = Color(0xFFEBA53D)
-val SpiceRed           = Color(0xFFD64045)   // Alert
+val DeepSaffron        = Color(0xFFF59E0B)   // Warm golden amber primary
+val GoldenYellow       = Color(0xFFF59E0B)   // Warm golden yellow
+val SpiceRed           = Color(0xFFEF4444)   // Clean alert red
 val MintFresh          = Color(0xFF10B981)   // Success Green (Veg / Active)
 
 // ── Slide Accent Colors ───────────────────────────────────────────────────
-val SlideOneAccent   = Color(0xFFFF5200)
-val SlideTwoAccent   = Color(0xFFFF5200)
-val SlideThreeAccent = Color(0xFFFF5200)
+val SlideOneAccent   = Color(0xFFF59E0B)
+val SlideTwoAccent   = Color(0xFFF59E0B)
+val SlideThreeAccent = Color(0xFFF59E0B)
 
 // ── Legacy aliases ────────────────────────────────────────────────────────
-val AccentOrange = Color(0xFFFF5200)
-val AccentAmber  = Color(0xFFEBA53D)
+val AccentOrange = Color(0xFFF59E0B)
+val AccentAmber  = Color(0xFFF59E0B)
 val AccentGreen  = Color(0xFF10B981)
-val LightOrange  = Color(0xFFFFF0E8)
+val LightOrange  = Color(0xFFFEF3C7)
 val LightGreen   = Color(0xFFECFDF5)
 
-// ── Modern Food Ordering App Accents (Swiggy / DoorDash style) ───────────────
-val DeliveryOrange      = Color(0xFFFF5200)  // Modern appetizing food delivery flame
-val DeliveryOrangeLight = Color(0xFFFFF0E8)  // Soft light peach for cards & pills
-val BreakCardBg         = Color(0xFFF4F1EB)  // Clean modern card surface
+// ── Modern Food Ordering App Accents (QuickBite Warm Golden Amber Theme) ────────
+val DeliveryOrange      = Color(0xFFF59E0B)  // Medium-light warm golden amber primary (eliminates red)
+val DeliveryOrangeLight = Color(0xFFFEF3C7)  // Soft warm amber tint for cards & pills
+val BreakCardBg         = Color(0xFFF6ECDA)  // Lightish warm amber card surface
 val RatingStarYellow    = Color(0xFFF59E0B)  // Golden star rating
 val OpenGreen           = Color(0xFF10B981)  // Clean emerald green status
-
-
-
+val CardBorderColor     = Color(0xFFE2D6C0)  // Warm subtle card border

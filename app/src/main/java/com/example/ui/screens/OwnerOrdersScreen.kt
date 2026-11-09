@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.WarmCream
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.firebase.OrderDocument
 import com.example.data.firebase.OrderItemDocument
@@ -73,7 +74,7 @@ private val BadgePreparingBg = Color(0xFFFFF7ED)
 private val BadgeReadyBg = Color(0xFFF0FDF4)
 private val BadgePickedUpBg = Color(0xFFF3F4F6)
 private val CardBorderColor = Color(0xFFF3F4F6)
-private val PageBackground = Color(0xFFFAFAFA)
+private val PageBackground = WarmCream
 
 // Tabs: Preparing, Ready, Picked Up (All tab removed as requested)
 private val FilterTabs = listOf("Preparing", "Ready", "Picked Up")

@@ -179,6 +179,7 @@ data class ItemDocument(
   val customizationTitle: String = "",
   val customizationOptions: List<String> = emptyList(),
   val addons: List<AddonDocument> = emptyList(),
+  val isVeg: Boolean? = null,
   val createdAt: Long = System.currentTimeMillis(),
   val updatedAt: Long = System.currentTimeMillis(),
 ) {
@@ -188,6 +189,10 @@ data class ItemDocument(
       FoodCategory.valueOf(normalized)
     } catch (e: Exception) {
       FoodCategory.QUICK_ORDER
+    }
+    val actualVeg = isVeg ?: run {
+      val nonVeg = listOf("chicken", "egg", "fish", "mutton", "meat", "pork", "beef", "prawn", "seafood", "wings", "nugget")
+      !nonVeg.any { name.contains(it, ignoreCase = true) || description.contains(it, ignoreCase = true) }
     }
     return FoodItem(
       id = id,
@@ -204,6 +209,9 @@ data class ItemDocument(
       customizationTitle = customizationTitle.ifBlank { "Bread Type" },
       customizationOptions = customizationOptions,
       addons = addons.map { FoodAddon(it.name, it.price) },
+      isAvailable = available,
+      isVeg = actualVeg,
+      createdAt = createdAt,
     )
   }
 
@@ -283,7 +291,7 @@ data class OrderDocument(
     val parsedStatus = when (status.uppercase()) {
       "NEW" -> OrderStatus.NEW
       "READY" -> OrderStatus.READY
-      "COMPLETED" -> OrderStatus.COMPLETED
+      "COMPLETED", "PICKED_UP" -> OrderStatus.COMPLETED
       else -> OrderStatus.PREPARING
     }
 

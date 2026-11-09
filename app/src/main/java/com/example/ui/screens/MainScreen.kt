@@ -131,7 +131,7 @@ fun MainScreen(
         .fillMaxSize()
         .statusBarsPadding()
         .padding(
-          bottom = if (!isDetailOrTracking && !isScrollHideTab) 78.dp else 0.dp
+          bottom = if (!isDetailOrTracking && !isScrollHideTab) 74.dp else 0.dp
         )
     ) {
       if (appState.selectedOrderForTracking != null) {
@@ -255,7 +255,7 @@ fun MainScreen(
         .padding(
           start = 16.dp,
           end = 16.dp,
-          bottom = if (isScrollHideTab && !appState.isBottomBarVisible) 16.dp else 88.dp
+          bottom = if (isScrollHideTab && !appState.isBottomBarVisible) 16.dp else 84.dp
         ),
     ) {
       Box(

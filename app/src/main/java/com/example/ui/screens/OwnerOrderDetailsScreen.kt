@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.WarmCream
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.firebase.OrderDocument
 import com.example.ui.theme.BlackPrimary
@@ -77,7 +78,7 @@ private val BadgeReadyBg = Color(0xFFF0FDF4)
 private val BadgePickedUpBg = Color(0xFFF3F4F6)
 private val CardBorderColor = Color(0xFFF3F4F6)
 private val DividerColor = Color(0xFFF3F4F6)
-private val PageBackground = Color(0xFFFAFAFA)
+private val PageBackground = WarmCream
 
 @Composable
 fun OwnerOrderDetailsScreen(

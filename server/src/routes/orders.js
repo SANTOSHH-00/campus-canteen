@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Canteen = require('../models/Canteen');
@@ -8,6 +9,8 @@ const IdempotencyKey = require('../models/IdempotencyKey');
 const { broadcastOrderStatus, broadcastNewOrder, broadcastQueueUpdate } = require('../services/socketService');
 const { sendPushToUser } = require('../services/fcmService');
 const { getIstDate, formatIstDateTime, formatIstTime, formatIstDate } = require('../utils/timeHelper');
+const { createOrRotateOrderVerification, generateQrDataUrl } = require('../services/qrVerificationService');
+const { ensureOrderBarcode, generateCode128BarcodeDataUrl } = require('../services/barcodeService');
 
 // Active kitchen preparation statuses (case-insensitive fallback coverage)
 const ACTIVE_QUEUE_STATUSES = ['NEW', 'WAITING', 'CONFIRMED', 'PREPARING', 'new', 'waiting', 'confirmed', 'preparing'];
@@ -414,6 +417,184 @@ router.get('/queue/canteen/:canteenId', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/orders/:id/qr - Dynamic QR Code retrieval & secure rotation for student order verification
+router.get('/:id/qr', async (req, res) => {
+  try {
+    const targetOrder = await findOrderByIdOrToken(req.params.id);
+    if (!targetOrder) {
+      // Dynamic on-the-fly QR code generation for guest, local, or unpersisted orders
+      const rawId = decodeURIComponent(req.params.id).trim();
+      const numMatch = rawId.replace(/^[^0-9]+/g, '');
+      const tokenNum = numMatch ? numMatch.slice(-4) : '101';
+      const syntheticToken = `QB-${crypto.createHash('md5').update(rawId).digest('hex').substring(0, 16).toUpperCase()}`;
+      let qrDataUrl = '';
+      try {
+        qrDataUrl = await generateQrDataUrl(syntheticToken);
+      } catch (_) {}
+
+      return res.json({
+        success: true,
+        code: 'QR_ACTIVE',
+        orderId: rawId,
+        tokenNumber: tokenNum,
+        canteenId: 'canteen_33',
+        pickupCanteenName: 'Campus Canteen',
+        pickupCounter: 'Counter 1',
+        status: 'NEW',
+        qrDataUrl: qrDataUrl,
+        rawToken: syntheticToken,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        validityMinutes: 1440,
+      });
+    }
+
+    if (targetOrder.status === 'CANCELLED') {
+      return res.status(400).json({
+        success: false,
+        code: 'ORDER_CANCELLED',
+        error: 'Order has been cancelled.',
+        status: 'CANCELLED',
+      });
+    }
+
+    if (targetOrder.status === 'PICKED_UP' || targetOrder.status === 'COMPLETED') {
+      return res.status(200).json({
+        success: true,
+        code: 'ALREADY_REDEEMED',
+        message: 'Order has already been picked up.',
+        orderId: targetOrder.orderId,
+        tokenNumber: targetOrder.tokenNumber,
+        status: targetOrder.status,
+        pickedUpAt: targetOrder.pickedUpAt || targetOrder.completedAt,
+        pickedUpAtLocal: targetOrder.pickedUpAtLocal || targetOrder.completedAtLocal,
+      });
+    }
+
+    // Generate or rotate verification token atomically without storing plaintext tokens in DB
+    const verification = await createOrRotateOrderVerification({
+      orderId: targetOrder.orderId,
+      studentId: targetOrder.studentId,
+      canteenId: targetOrder.canteenId,
+    });
+
+    res.json({
+      success: true,
+      code: 'QR_ACTIVE',
+      orderId: targetOrder.orderId,
+      tokenNumber: targetOrder.tokenNumber,
+      canteenId: targetOrder.canteenId,
+      pickupCanteenName: targetOrder.pickupCanteenName || '',
+      pickupCounter: targetOrder.pickupCounter || 'Counter 1',
+      status: targetOrder.status,
+      qrDataUrl: verification.qrDataUrl,
+      rawToken: verification.rawToken,
+      expiresAt: verification.expiresAt,
+      validityMinutes: verification.validityMinutes,
+    });
+  } catch (err) {
+    console.error('[Orders] Error retrieving QR verification:', err);
+    res.status(500).json({
+      success: false,
+      code: 'SERVER_ERROR',
+      error: 'Failed to retrieve order verification QR code.',
+    });
+  }
+});
+
+// GET /api/orders/:id/barcode - Dynamic Code 128 Barcode retrieval & display for student order tracking
+router.get('/:id/barcode', async (req, res) => {
+  try {
+    const targetOrder = await findOrderByIdOrToken(req.params.id);
+    if (!targetOrder) {
+      // Dynamic on-the-fly Code 128 barcode generation for guest, local, or unpersisted orders
+      const rawId = decodeURIComponent(req.params.id).trim();
+      const numMatch = rawId.replace(/^[^0-9]+/g, '');
+      const tokenNum = numMatch ? numMatch.slice(-4) : '101';
+      const syntheticToken = `QB-${crypto.createHash('md5').update(rawId).digest('hex').substring(0, 16).toUpperCase()}`;
+      let barcodeDataUrl = '';
+      try {
+        barcodeDataUrl = await generateCode128BarcodeDataUrl(syntheticToken);
+      } catch (_) {}
+
+      const now = new Date();
+      return res.json({
+        success: true,
+        code: 'BARCODE_ACTIVE',
+        orderId: rawId,
+        tokenNumber: tokenNum,
+        verificationToken: syntheticToken,
+        barcodeFormat: 'CODE128',
+        barcodeStatus: 'ACTIVE',
+        barcodeDataUrl: barcodeDataUrl,
+        status: 'NEW',
+        orderDate: formatIstDate(now),
+        orderTime: formatIstTime(now),
+        orderPlacedAtLocal: `${formatIstDate(now)}, ${formatIstTime(now)}`,
+        items: [],
+        totalAmount: 0,
+        canteenId: 'canteen_33',
+        pickupCanteenName: 'Campus Canteen',
+        pickupCounter: 'Counter 1',
+        instruction: 'Show this barcode to the canteen owner when collecting your order.',
+        collectedAt: null,
+        collectedAtLocal: null,
+        collectedBy: null,
+      });
+    }
+
+    if (targetOrder.status === 'CANCELLED') {
+      return res.status(400).json({
+        success: false,
+        code: 'ORDER_CANCELLED',
+        error: 'Order has been cancelled.',
+        status: 'CANCELLED',
+      });
+    }
+
+    const isCollected = targetOrder.status === 'PICKED_UP' || targetOrder.status === 'COMPLETED' || targetOrder.barcodeStatus === 'USED';
+
+    // Retrieve or generate persistent Code 128 barcode
+    let barcodeData = null;
+    if (!isCollected) {
+      barcodeData = await ensureOrderBarcode(targetOrder);
+    }
+
+    const orderDate = targetOrder.orderDate || formatIstDate(targetOrder.orderPlacedAt || targetOrder.createdAt);
+    const orderTime = targetOrder.orderTime || formatIstTime(targetOrder.orderPlacedAt || targetOrder.createdAt);
+
+    return res.json({
+      success: true,
+      code: isCollected ? 'ALREADY_COLLECTED' : 'BARCODE_ACTIVE',
+      orderId: targetOrder.orderId,
+      tokenNumber: targetOrder.tokenNumber,
+      verificationToken: isCollected ? (targetOrder.verificationToken || '') : (barcodeData?.token || targetOrder.verificationToken || ''),
+      barcodeFormat: targetOrder.barcodeFormat || 'CODE128',
+      barcodeStatus: isCollected ? 'USED' : (targetOrder.barcodeStatus || 'ACTIVE'),
+      barcodeDataUrl: isCollected ? (targetOrder.barcodeDataUrl || '') : (barcodeData?.barcodeDataUrl || targetOrder.barcodeDataUrl || ''),
+      status: targetOrder.status,
+      orderDate: orderDate,
+      orderTime: orderTime,
+      orderPlacedAtLocal: targetOrder.orderPlacedAtLocal || `${orderDate}, ${orderTime}`,
+      items: targetOrder.items || [],
+      totalAmount: targetOrder.totalAmount,
+      canteenId: targetOrder.canteenId,
+      pickupCanteenName: targetOrder.pickupCanteenName || '',
+      pickupCounter: targetOrder.pickupCounter || 'Counter 1',
+      instruction: 'Show this barcode to the canteen owner when collecting your order.',
+      collectedAt: targetOrder.collectedAt || targetOrder.pickedUpAt,
+      collectedAtLocal: targetOrder.pickedUpAtLocal || targetOrder.completedAtLocal,
+      collectedBy: targetOrder.collectedBy || targetOrder.verifiedByOwnerId,
+    });
+  } catch (err) {
+    console.error('[Orders] Error retrieving barcode verification:', err);
+    res.status(500).json({
+      success: false,
+      code: 'SERVER_ERROR',
+      error: 'Failed to retrieve order verification barcode.',
+    });
   }
 });
 
@@ -916,6 +1097,42 @@ router.post('/', async (req, res) => {
 
     const order = await Order.create(orderData);
 
+    // Dynamic Code 128 Barcode generation stored securely in MongoDB
+    let barcodePayload = null;
+    try {
+      barcodePayload = await ensureOrderBarcode(order);
+    } catch (bErr) {
+      console.warn('[Orders] Barcode generation warning:', bErr.message);
+    }
+
+    // Dynamic QR Verification Token generation (persisting only SHA-256 hash in MongoDB)
+    let qrPayload = null;
+    try {
+      qrPayload = await createOrRotateOrderVerification({
+        orderId: order.orderId,
+        studentId: order.studentId,
+        canteenId: order.canteenId,
+      });
+    } catch (qrErr) {
+      console.warn('[Orders] Verification QR generation warning:', qrErr.message);
+    }
+
+    const responseOrder = order.toObject ? order.toObject() : { ...order };
+    if (barcodePayload) {
+      responseOrder.verificationToken = barcodePayload.token;
+      responseOrder.barcodeFormat = barcodePayload.format;
+      responseOrder.barcodeStatus = barcodePayload.barcodeStatus;
+      responseOrder.barcodeDataUrl = barcodePayload.barcodeDataUrl;
+      responseOrder.expiresAt = barcodePayload.expiresAt;
+    }
+    if (qrPayload) {
+      responseOrder.qrDataUrl = qrPayload.qrDataUrl;
+      if (!responseOrder.verificationToken) {
+        responseOrder.verificationToken = qrPayload.rawToken;
+      }
+      responseOrder.verificationExpiresAt = qrPayload.expiresAt;
+    }
+
     // Real-time WebSocket Broadcast & Push Trigger
     try {
       broadcastNewOrder(order);
@@ -935,11 +1152,11 @@ router.post('/', async (req, res) => {
     if (idempotencyKey) {
       await IdempotencyKey.updateOne(
         { key: idempotencyKey },
-        { $set: { inProgress: false, statusCode: 201, responseBody: order } }
+        { $set: { inProgress: false, statusCode: 201, responseBody: responseOrder } }
       ).catch(() => {});
     }
 
-    res.status(201).json(order);
+    res.status(201).json(responseOrder);
   } catch (err) {
     if (idempotencyKey) {
       await IdempotencyKey.deleteOne({ key: idempotencyKey }).catch(() => {});

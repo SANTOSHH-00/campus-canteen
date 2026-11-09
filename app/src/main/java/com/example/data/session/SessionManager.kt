@@ -24,6 +24,7 @@ object SessionManager {
   private const val KEY_STUDENT_PHONE = "student_phone"
   private const val KEY_STUDENT_COURSE = "student_course"
   private const val KEY_STUDENT_FAVORITES = "student_favorites"
+  private const val KEY_STUDENT_AUTH_TOKEN = "student_auth_token"
 
   // Canteen Owner Session Keys
   private const val KEY_IS_OWNER_LOGGED_IN = "is_owner_logged_in"
@@ -36,6 +37,7 @@ object SessionManager {
   private const val KEY_OWNER_BLOCK = "owner_block"
   private const val KEY_OWNER_PHONE = "owner_phone"
   private const val KEY_OWNER_FCM_TOKEN = "owner_fcm_token"
+  private const val KEY_OWNER_AUTH_TOKEN = "owner_auth_token"
 
   @Volatile
   private var prefs: SharedPreferences? = null
@@ -229,8 +231,25 @@ object SessionManager {
       remove(KEY_OWNER_BLOCK)
       remove(KEY_OWNER_PHONE)
       remove(KEY_OWNER_FCM_TOKEN)
+      remove(KEY_OWNER_AUTH_TOKEN)
       apply()
     }
+  }
+
+  fun saveOwnerToken(token: String) {
+    prefs?.edit()?.putString(KEY_OWNER_AUTH_TOKEN, token.trim())?.apply()
+  }
+
+  fun getOwnerToken(): String {
+    return prefs?.getString(KEY_OWNER_AUTH_TOKEN, "") ?: ""
+  }
+
+  fun saveStudentToken(token: String) {
+    prefs?.edit()?.putString(KEY_STUDENT_AUTH_TOKEN, token.trim())?.apply()
+  }
+
+  fun getStudentToken(): String {
+    return prefs?.getString(KEY_STUDENT_AUTH_TOKEN, "") ?: ""
   }
 
   fun clearAllSessions() {

@@ -1,7 +1,11 @@
 package com.example.ui.screens
 
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,12 +27,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,13 +53,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.OrderRecord
 import com.example.data.OrderStatus
 import com.example.data.api.MongoRepository
+import com.example.data.api.OrderBarcodeResponseDto
+import com.example.data.api.OrderQrResponseDto
+import androidx.compose.material.icons.filled.QrCodeScanner
 import com.example.data.api.OrderQueuePositionDto
 import com.example.data.api.WebSocketManager
 import com.example.data.api.formatUtcToLocalTime
@@ -62,12 +78,13 @@ import com.example.ui.theme.TextDark
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.WarmCream
 import kotlinx.coroutines.launch
+import com.example.util.BarcodeGenerator
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-private val PageBackground = Color(0xFFF9FAFB)
+private val PageBackground = WarmCream
 private val GreenReady = Color(0xFF16A34A)
 private val DarkCardBg = PureWhite
 
@@ -82,6 +99,59 @@ fun CustomerOrderTrackingScreen(
   var currentOrder by remember(order.id) { mutableStateOf(order) }
   var queuePositionData by remember { mutableStateOf<OrderQueuePositionDto?>(null) }
   var isLoadingQueue by remember { mutableStateOf(true) }
+
+  // ── Dynamic Code 128 Barcode Verification State ─────────────────────────
+  var barcodeResponse by remember { mutableStateOf<OrderBarcodeResponseDto?>(null) }
+  var isLoadingBarcode by remember { mutableStateOf(false) }
+  var barcodeErrorMessage by remember { mutableStateOf<String?>(null) }
+  var isRefreshingBarcode by remember { mutableStateOf(false) }
+
+  fun fetchOrderBarcode(isManualRefresh: Boolean = false) {
+    val targetId = currentOrder.id.ifBlank { currentOrder.tokenNumber }
+    if (targetId.isBlank()) return
+    coroutineScope.launch {
+      if (isManualRefresh) isRefreshingBarcode = true else isLoadingBarcode = true
+      barcodeErrorMessage = null
+      MongoRepository.getOrderBarcode(targetId).onSuccess { dto ->
+        barcodeResponse = dto
+        isLoadingBarcode = false
+        isRefreshingBarcode = false
+      }.onFailure { err ->
+        barcodeErrorMessage = err.message ?: "Unable to load barcode."
+        isLoadingBarcode = false
+        isRefreshingBarcode = false
+      }
+    }
+  }
+
+  // ── Dynamic QR Verification State ─────────────────────────────────────────
+  var qrResponse by remember { mutableStateOf<OrderQrResponseDto?>(null) }
+  var isLoadingQr by remember { mutableStateOf(false) }
+  var qrErrorMessage by remember { mutableStateOf<String?>(null) }
+  var isRotatingQr by remember { mutableStateOf(false) }
+
+  fun fetchOrderQr(isManualRefresh: Boolean = false) {
+    val targetId = currentOrder.id.ifBlank { currentOrder.tokenNumber }
+    if (targetId.isBlank()) return
+    coroutineScope.launch {
+      if (isManualRefresh) isRotatingQr = true else isLoadingQr = true
+      qrErrorMessage = null
+      MongoRepository.getOrderQr(targetId).onSuccess { dto ->
+        qrResponse = dto
+        isLoadingQr = false
+        isRotatingQr = false
+      }.onFailure { err ->
+        qrErrorMessage = err.message ?: "Unable to load QR code."
+        isLoadingQr = false
+        isRotatingQr = false
+      }
+    }
+  }
+
+  LaunchedEffect(currentOrder.id, currentOrder.status) {
+    fetchOrderBarcode()
+    fetchOrderQr()
+  }
 
   val effectiveCanteenId = queuePositionData?.canteenId?.ifBlank { null }
     ?: currentOrder.canteenId.ifBlank { "canteen_33" }
@@ -499,6 +569,21 @@ fun CustomerOrderTrackingScreen(
         }
       }
 
+      // ── Dynamic Code 128 Barcode & QR Verification Card ────────────────────
+      OrderBarcodeCard(
+        order = currentOrder,
+        tokenDisplay = tokenDisplay,
+        barcodeResponse = barcodeResponse,
+        qrResponse = qrResponse,
+        isLoading = isLoadingBarcode || isLoadingQr,
+        isRefreshing = isRefreshingBarcode || isRotatingQr,
+        errorMessage = barcodeErrorMessage ?: qrErrorMessage,
+        onRefreshBarcode = {
+          fetchOrderBarcode(isManualRefresh = true)
+          fetchOrderQr(isManualRefresh = true)
+        },
+      )
+
       // ── Card 2: Pickup Location & Counter ─────────────────────────────────
       Card(
         modifier = Modifier.fillMaxWidth(),
@@ -868,6 +953,788 @@ private fun TrackingMilestone(
         fontSize = 12.sp,
         color = Color(0xFF6B7280),
       )
+    }
+  }
+}
+
+// ── Dynamic QR & Code 128 Barcode Verification Card ─────────────────────────
+
+private fun decodeBase64DataUrl(dataUrl: String?): android.graphics.Bitmap? {
+  if (dataUrl.isNullOrBlank()) return null
+  return try {
+    val clean = if (dataUrl.contains(",")) dataUrl.substringAfter(",") else dataUrl
+    val bytes = Base64.decode(clean.trim(), Base64.DEFAULT)
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+  } catch (_: Exception) {
+    null
+  }
+}
+
+enum class VerificationType(val title: String) {
+  QR_CODE("QR Code"),
+  BARCODE("Barcode"),
+}
+
+@Composable
+fun OrderBarcodeCard(
+  order: OrderRecord,
+  tokenDisplay: String,
+  barcodeResponse: OrderBarcodeResponseDto?,
+  qrResponse: OrderQrResponseDto? = null,
+  isLoading: Boolean = false,
+  isRefreshing: Boolean = false,
+  errorMessage: String? = null,
+  onRefreshBarcode: () -> Unit = {},
+  modifier: Modifier = Modifier,
+) {
+  var selectedType by remember { mutableStateOf(VerificationType.QR_CODE) }
+
+  val isPickedUp = order.status == OrderStatus.COMPLETED || barcodeResponse?.code == "ALREADY_COLLECTED"
+  val isReady = order.status == OrderStatus.READY
+
+  // Cryptographically unique verification token, fallback to order.id / tokenNumber
+  val effectiveToken = remember(barcodeResponse?.verificationToken, qrResponse?.rawToken, order.id, order.tokenNumber) {
+    qrResponse?.rawToken?.ifBlank { null }
+      ?: barcodeResponse?.verificationToken?.ifBlank { null }
+      ?: order.id.ifBlank { order.tokenNumber }
+  }
+
+  // QR Code Bitmap: server dataUrl or locally generated via ZXing BarcodeGenerator directly on order.id
+  val qrBitmap = remember(qrResponse?.qrDataUrl, effectiveToken, order.id) {
+    decodeBase64DataUrl(qrResponse?.qrDataUrl)
+      ?: BarcodeGenerator.generateQrCode(order.id.ifBlank { effectiveToken }, sizePx = 512)
+  }
+
+  // Code 128 Barcode Bitmap: server dataUrl or locally generated via ZXing BarcodeGenerator
+  val barcodeBitmap = remember(barcodeResponse?.barcodeDataUrl, effectiveToken) {
+    decodeBase64DataUrl(barcodeResponse?.barcodeDataUrl)
+      ?: BarcodeGenerator.generateCode128Barcode(effectiveToken, widthPx = 640, heightPx = 180)
+  }
+
+  val borderColor = when {
+    isPickedUp -> Color(0xFF86EFAC)
+    isReady -> Color(0xFF22C55E)
+    else -> Color(0xFFE5E7EB)
+  }
+
+  Card(
+    modifier = modifier.fillMaxWidth(),
+    shape = RoundedCornerShape(18.dp),
+    colors = CardDefaults.cardColors(containerColor = PureWhite),
+    border = androidx.compose.foundation.BorderStroke(1.5.dp, borderColor),
+    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+  ) {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(16.dp)
+    ) {
+      // ── Top Header Row ───────────────────────────────────────────
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Box(
+            modifier = Modifier
+              .size(34.dp)
+              .clip(RoundedCornerShape(8.dp))
+              .background(if (isReady) Color(0xFFDCFCE7) else Color(0xFFFFF7ED)),
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(
+              imageVector = if (isReady) Icons.Default.CheckCircle else Icons.Default.QrCodeScanner,
+              contentDescription = null,
+              tint = if (isReady) Color(0xFF16A34A) else Color(0xFFEA580C),
+              modifier = Modifier.size(20.dp)
+            )
+          }
+          Spacer(Modifier.width(10.dp))
+          Column {
+            Text(
+              text = "Pickup Barcode & QR",
+              fontSize = 15.sp,
+              fontWeight = FontWeight.Bold,
+              color = TextDark
+            )
+            Text(
+              text = tokenDisplay,
+              fontSize = 12.sp,
+              fontWeight = FontWeight.SemiBold,
+              color = TextMuted
+            )
+          }
+        }
+
+        // Status Badge + background sync indicator
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          if (isRefreshing || (isLoading && qrBitmap == null && barcodeBitmap == null)) {
+            CircularProgressIndicator(
+              modifier = Modifier
+                .padding(end = 8.dp)
+                .size(14.dp),
+              strokeWidth = 2.dp,
+              color = Color(0xFFEA580C)
+            )
+          }
+          Box(
+            modifier = Modifier
+              .clip(RoundedCornerShape(6.dp))
+              .background(
+                when {
+                  isPickedUp -> Color(0xFFDCFCE7)
+                  isReady -> Color(0xFFDCFCE7)
+                  else -> Color(0xFFFFF7ED)
+                }
+              )
+              .padding(horizontal = 8.dp, vertical = 4.dp)
+          ) {
+            Text(
+              text = when {
+                isPickedUp -> "COLLECTED"
+                isReady -> "READY FOR PICKUP"
+                else -> order.status.name
+              },
+              fontSize = 11.sp,
+              fontWeight = FontWeight.ExtraBold,
+              color = when {
+                isPickedUp || isReady -> Color(0xFF16A34A)
+                else -> Color(0xFFEA580C)
+              }
+            )
+          }
+        }
+      }
+
+      if (!isPickedUp) {
+        Spacer(Modifier.height(12.dp))
+
+        // ── Tab Switcher: QR Code vs Barcode ─────────────────────────
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFFF3F4F6))
+            .padding(3.dp),
+          horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          VerificationType.values().forEach { type ->
+            val isSelected = selectedType == type
+            Box(
+              modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (isSelected) PureWhite else Color.Transparent)
+                .clickable { selectedType = type }
+                .padding(vertical = 7.dp),
+              contentAlignment = Alignment.Center
+            ) {
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                  imageVector = if (type == VerificationType.QR_CODE) Icons.Default.QrCode else Icons.Default.QrCodeScanner,
+                  contentDescription = null,
+                  tint = if (isSelected) Color(0xFFEA580C) else Color(0xFF6B7280),
+                  modifier = Modifier.size(15.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                  text = type.title,
+                  fontSize = 12.sp,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                  color = if (isSelected) TextDark else Color(0xFF6B7280)
+                )
+              }
+            }
+          }
+        }
+      }
+
+      Spacer(Modifier.height(14.dp))
+
+      // ── Center Code Graphic Display (White background, black bars/modules) ──
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(12.dp))
+          .background(Color(0xFFFFFFFF))
+          .border(
+            width = 1.dp,
+            color = if (isPickedUp) Color(0xFFBBF7D0) else Color(0xFFE5E7EB),
+            shape = RoundedCornerShape(12.dp)
+          )
+          .padding(vertical = 14.dp, horizontal = 16.dp),
+        contentAlignment = Alignment.Center
+      ) {
+        when {
+          isPickedUp -> {
+            Column(
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.Center,
+              modifier = Modifier.padding(vertical = 16.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = Color(0xFF16A34A),
+                modifier = Modifier.size(48.dp)
+              )
+              Spacer(Modifier.height(6.dp))
+              Text(
+                text = "Order Successfully Collected",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF15803D)
+              )
+              val pickupTime = barcodeResponse?.collectedAtLocal ?: ""
+              if (pickupTime.isNotBlank()) {
+                Text(
+                  text = "Collected at $pickupTime",
+                  fontSize = 11.sp,
+                  color = TextMuted
+                )
+              }
+            }
+          }
+          selectedType == VerificationType.QR_CODE && qrBitmap != null -> {
+            Column(
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.Center,
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              // High-resolution ZXing QR Code
+              Image(
+                bitmap = qrBitmap.asImageBitmap(),
+                contentDescription = "Order Pickup QR Code for Order ID ${order.id}",
+                modifier = Modifier
+                  .size(160.dp)
+                  .clip(RoundedCornerShape(8.dp)),
+                contentScale = ContentScale.Fit
+              )
+              Spacer(Modifier.height(8.dp))
+              Text(
+                text = "Order ID: ${order.id}",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark,
+                letterSpacing = 0.5.sp
+              )
+              Text(
+                text = "Token: $tokenDisplay • Scan for instant pickup",
+                fontSize = 11.sp,
+                color = TextMuted,
+                modifier = Modifier.padding(top = 2.dp)
+              )
+            }
+          }
+          selectedType == VerificationType.BARCODE && barcodeBitmap != null -> {
+            Column(
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.Center,
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              // High-resolution Code 128 Barcode Image
+              Image(
+                bitmap = barcodeBitmap.asImageBitmap(),
+                contentDescription = "Order Pickup Barcode",
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .height(72.dp),
+                contentScale = ContentScale.FillBounds
+              )
+              Spacer(Modifier.height(6.dp))
+              Text(
+                text = effectiveToken,
+                fontSize = 13.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1F2937),
+                letterSpacing = 1.sp
+              )
+            }
+          }
+          isLoading -> {
+            Column(
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.Center,
+              modifier = Modifier.padding(vertical = 24.dp)
+            ) {
+              CircularProgressIndicator(
+                modifier = Modifier.size(28.dp),
+                color = Color(0xFFEA580C),
+                strokeWidth = 2.5.dp
+              )
+              Spacer(Modifier.height(8.dp))
+              Text(
+                text = "Generating verification code...",
+                fontSize = 11.sp,
+                color = TextMuted,
+                fontWeight = FontWeight.Medium
+              )
+            }
+          }
+          else -> {
+            // Instant fallback: generates QR code on device
+            val fallbackBitmap = BarcodeGenerator.generateQrCode(effectiveToken, sizePx = 512)
+            if (fallbackBitmap != null) {
+              Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                Image(
+                  bitmap = fallbackBitmap.asImageBitmap(),
+                  contentDescription = "Order Pickup Code",
+                  modifier = Modifier.size(160.dp),
+                  contentScale = ContentScale.Fit
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                  text = effectiveToken,
+                  fontSize = 13.sp,
+                  fontFamily = FontFamily.Monospace,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(0xFF1F2937),
+                  letterSpacing = 1.sp
+                )
+              }
+            } else {
+              CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = Color(0xFFEA580C),
+                strokeWidth = 2.dp
+              )
+            }
+          }
+        }
+      }
+
+      // If server error occurred, show subtle notice with retry without blocking code display
+      if (errorMessage != null && !isPickedUp) {
+        Spacer(Modifier.height(6.dp))
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onRefreshBarcode() }
+            .padding(vertical = 2.dp),
+          horizontalArrangement = Arrangement.Center,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Icon(
+            imageVector = Icons.Default.Refresh,
+            contentDescription = "Refresh Server Token",
+            tint = Color(0xFFEA580C),
+            modifier = Modifier.size(13.dp)
+          )
+          Spacer(Modifier.width(4.dp))
+          Text(
+            text = "Ready to scan • Tap to re-sync server",
+            fontSize = 10.5.sp,
+            color = Color(0xFFEA580C),
+            fontWeight = FontWeight.SemiBold
+          )
+        }
+      }
+
+      Spacer(Modifier.height(10.dp))
+
+      // ── Clear Instruction Banner ──────────────────────────────────
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(8.dp))
+          .background(Color(0xFFEFF6FF))
+          .border(1.dp, Color(0xFFBFDBFE), RoundedCornerShape(8.dp))
+          .padding(horizontal = 10.dp, vertical = 7.dp)
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Icon(
+            imageVector = Icons.Default.Check,
+            contentDescription = null,
+            tint = Color(0xFF2563EB),
+            modifier = Modifier.size(14.dp)
+          )
+          Spacer(Modifier.width(6.dp))
+          Text(
+            text = "Show this QR code or barcode to the canteen owner when collecting your order.",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color(0xFF1E40AF)
+          )
+        }
+      }
+
+      Spacer(Modifier.height(12.dp))
+      HorizontalDivider(color = Color(0xFFF3F4F6))
+      Spacer(Modifier.height(10.dp))
+
+      // ── Order Details Section ─────────────────────────────────────
+      // Order ID and Date/Time
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+      ) {
+        Text(
+          text = "Order ID: #${order.id.takeLast(8)}",
+          fontSize = 11.5.sp,
+          color = TextMuted,
+          fontWeight = FontWeight.Medium
+        )
+        val dateDisplay = barcodeResponse?.orderDate
+          ?: (if (order.placedEpoch > 0) SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(Date(order.placedEpoch)) else null)
+          ?: order.orderDate.ifBlank { null }
+          ?: "Today"
+        Text(
+          text = dateDisplay,
+          fontSize = 11.5.sp,
+          color = TextMuted,
+          fontWeight = FontWeight.Medium
+        )
+      }
+
+      Spacer(Modifier.height(6.dp))
+
+      // Order Items summary
+      if (order.items.isNotEmpty()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+          order.items.forEach { item ->
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              Text(
+                text = "${item.quantity}x ${item.foodItem.name}",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextDark,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+              )
+              Text(
+                text = "₹${"%.2f".format(item.totalPrice.toDouble())}",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextDark
+              )
+            }
+          }
+        }
+      }
+
+      Spacer(Modifier.height(8.dp))
+
+      // Total Amount
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Text(
+          text = "Total Amount",
+          fontSize = 13.sp,
+          fontWeight = FontWeight.Bold,
+          color = TextDark
+        )
+        Text(
+          text = "₹${"%.2f".format(order.totalPrice.toDouble())}",
+          fontSize = 16.sp,
+          fontWeight = FontWeight.ExtraBold,
+          color = Color(0xFFEA580C)
+        )
+      }
+    }
+  }
+}
+
+// ── Rectangular Dynamic QR Verification Card ─────────────────────────────────
+
+@Composable
+private fun RectangularOrderQrCard(
+  order: OrderRecord,
+  tokenDisplay: String,
+  qrResponse: OrderQrResponseDto?,
+  isLoading: Boolean,
+  isRotating: Boolean,
+  errorMessage: String?,
+  onRefreshQr: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val isPickedUp = order.status == OrderStatus.COMPLETED
+  val isReady = order.status == OrderStatus.READY
+  val qrBitmap = remember(qrResponse?.qrDataUrl, order.id, order.tokenNumber) {
+    decodeBase64DataUrl(qrResponse?.qrDataUrl)
+      ?: BarcodeGenerator.generateQrCode(order.id.ifBlank { order.tokenNumber }, sizePx = 512)
+  }
+
+  val borderColor = when {
+    isPickedUp -> Color(0xFFDCFCE7)
+    isReady -> Color(0xFF16A34A).copy(alpha = 0.5f)
+    else -> Color(0xFFE5E7EB)
+  }
+
+  Card(
+    modifier = modifier.fillMaxWidth(),
+    shape = RoundedCornerShape(18.dp),
+    colors = CardDefaults.cardColors(containerColor = PureWhite),
+    border = androidx.compose.foundation.BorderStroke(1.5.dp, borderColor),
+    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(14.dp),
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      // ── Left: QR Code Box or Picked Up Verified Badge ─────────
+      Box(
+        modifier = Modifier
+          .size(112.dp)
+          .clip(RoundedCornerShape(14.dp))
+          .background(if (isPickedUp) Color(0xFFF0FDF4) else Color(0xFFF9FAFB))
+          .border(
+            1.dp,
+            if (isPickedUp) Color(0xFFDCFCE7) else Color(0xFFE5E7EB),
+            RoundedCornerShape(14.dp)
+          ),
+        contentAlignment = Alignment.Center
+      ) {
+        when {
+          isPickedUp -> {
+            Column(
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.Center
+            ) {
+              Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = Color(0xFF16A34A),
+                modifier = Modifier.size(42.dp)
+              )
+              Spacer(Modifier.height(4.dp))
+              Text(
+                text = "VERIFIED",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFF15803D)
+              )
+              Text(
+                text = "Picked Up",
+                fontSize = 10.sp,
+                color = Color(0xFF16A34A)
+              )
+            }
+          }
+          isLoading && qrBitmap == null -> {
+            Column(
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.Center
+            ) {
+              CircularProgressIndicator(
+                modifier = Modifier.size(26.dp),
+                color = Color(0xFFEA580C),
+                strokeWidth = 2.5.dp
+              )
+              Spacer(Modifier.height(6.dp))
+              Text(
+                text = "Loading QR",
+                fontSize = 10.sp,
+                color = TextMuted,
+                fontWeight = FontWeight.Medium
+              )
+            }
+          }
+          qrBitmap != null -> {
+            Box(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(6.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(PureWhite),
+              contentAlignment = Alignment.Center
+            ) {
+              Image(
+                bitmap = qrBitmap.asImageBitmap(),
+                contentDescription = "Order Pickup QR Code",
+                modifier = Modifier.fillMaxSize()
+              )
+            }
+          }
+          errorMessage != null -> {
+            Column(
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.Center,
+              modifier = Modifier
+                .clickable { onRefreshQr() }
+                .padding(8.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = "Retry QR",
+                tint = Color(0xFFEA580C),
+                modifier = Modifier.size(24.dp)
+              )
+              Spacer(Modifier.height(4.dp))
+              Text(
+                text = "Tap to load",
+                fontSize = 10.sp,
+                color = Color(0xFFEA580C),
+                fontWeight = FontWeight.SemiBold
+              )
+            }
+          }
+          else -> {
+            CircularProgressIndicator(
+              modifier = Modifier.size(24.dp),
+              color = Color(0xFFEA580C),
+              strokeWidth = 2.dp
+            )
+          }
+        }
+      }
+
+      // ── Right: Ticket Details & Validity (Rectangular Layout) ─
+      Column(
+        modifier = Modifier
+          .weight(1f)
+          .padding(start = 14.dp),
+        verticalArrangement = Arrangement.Center
+      ) {
+        // Token + Status Tag
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Text(
+            text = tokenDisplay,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = TextDark
+          )
+
+          Box(
+            modifier = Modifier
+              .clip(RoundedCornerShape(6.dp))
+              .background(
+                when {
+                  isPickedUp -> Color(0xFFDCFCE7)
+                  isReady -> Color(0xFFDCFCE7)
+                  else -> Color(0xFFFFF7ED)
+                }
+              )
+              .padding(horizontal = 7.dp, vertical = 2.dp)
+          ) {
+            Text(
+              text = when {
+                isPickedUp -> "COLLECTED"
+                isReady -> "READY"
+                else -> "ACTIVE"
+              },
+              fontSize = 10.sp,
+              fontWeight = FontWeight.ExtraBold,
+              color = when {
+                isPickedUp || isReady -> Color(0xFF16A34A)
+                else -> Color(0xFFEA580C)
+              }
+            )
+          }
+        }
+
+        Spacer(Modifier.height(4.dp))
+
+        // Canteen Name & Pickup Counter
+        Text(
+          text = order.pickupCanteenName.ifBlank { "Campus Canteen" },
+          fontSize = 13.sp,
+          fontWeight = FontWeight.Bold,
+          color = TextDark,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
+        Text(
+          text = "${order.pickupCounter.ifBlank { "Counter 1" }} • Scan for Pickup",
+          fontSize = 11.5.sp,
+          color = TextMuted,
+          maxLines = 1
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        // Pickup Instruction or Refresh Bar
+        when {
+          isPickedUp -> {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = null,
+                tint = Color(0xFF16A34A),
+                modifier = Modifier.size(14.dp)
+              )
+              Spacer(Modifier.width(4.dp))
+              Text(
+                text = "Order verified & collected",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF16A34A)
+              )
+            }
+          }
+          isReady -> {
+            Text(
+              text = "Show this QR at counter for instant pickup!",
+              fontSize = 11.5.sp,
+              fontWeight = FontWeight.ExtraBold,
+              color = Color(0xFF15803D),
+              lineHeight = 15.sp
+            )
+          }
+          else -> {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = "Single-use dynamic token",
+                fontSize = 11.sp,
+                color = TextMuted
+              )
+
+              // Rotate / Refresh QR button
+              Row(
+                modifier = Modifier
+                  .clip(RoundedCornerShape(6.dp))
+                  .clickable(enabled = !isRotating) { onRefreshQr() }
+                  .padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                if (isRotating) {
+                  CircularProgressIndicator(
+                    modifier = Modifier.size(12.dp),
+                    strokeWidth = 1.5.dp,
+                    color = Color(0xFFEA580C)
+                  )
+                } else {
+                  Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Rotate QR",
+                    tint = Color(0xFFEA580C),
+                    modifier = Modifier.size(14.dp)
+                  )
+                  Spacer(Modifier.width(3.dp))
+                  Text(
+                    text = "Refresh",
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFEA580C)
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

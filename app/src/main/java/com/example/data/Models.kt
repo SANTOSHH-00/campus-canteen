@@ -17,18 +17,21 @@ enum class PopularBadge(val displayName: String) {
   POPULAR("POPULAR"),
 }
 
-enum class MenuSortOption(val displayName: String) {
-  RECOMMENDED("Recommended"),
-  PRICE_LOW_TO_HIGH("Price: Low to High"),
-  PRICE_HIGH_TO_LOW("Price: High to Low"),
-  FASTEST_PREP("Fastest Prep Time"),
-  TOP_RATED("Highest Rated (4.0+ ★)"),
+enum class MenuSortOption(val displayName: String, val shortLabel: String = displayName) {
+  RECOMMENDED("Recommended", "Recommended"),
+  PRICE_LOW_TO_HIGH("Price: Low to High", "Price ↑"),
+  PRICE_HIGH_TO_LOW("Price: High to Low", "Price ↓"),
+  RATING_HIGH_TO_LOW("Rating: High to Low", "Rating ★"),
+  NEWEST_FIRST("Newest First", "Newest"),
+  POPULAR("Popular Items", "Popular"),
+  FASTEST_PREP("Fastest Prep Time", "Fast Prep"),
+  TOP_RATED("Highest Rated (4.0+ ★)", "Top Rated"),
 }
 
 enum class MenuDietaryFilter(val displayName: String) {
   ALL("All Items"),
-  VEG_ONLY("Pure Veg"),
-  NON_VEG("Non-Veg"),
+  VEG_ONLY("Vegetarian"),
+  NON_VEG("Non-Vegetarian"),
 }
 
 
@@ -56,6 +59,9 @@ data class FoodItem(
   val isFavorite: Boolean = false,
   val isChefPick: Boolean = false,
   val dailyOrdersToday: Int = 0,
+  val isAvailable: Boolean = true,
+  val isVeg: Boolean = true,
+  val createdAt: Long = 0L,
 ) {
   val popularBadge: PopularBadge
     get() = when {

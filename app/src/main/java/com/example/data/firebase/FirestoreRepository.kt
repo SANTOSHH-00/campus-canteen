@@ -104,6 +104,14 @@ open class FirestoreRepository(
     return mongoRepo.updateOrderStatus(orderId, status)
   }
 
+  open suspend fun getOrderQr(orderId: String): Result<com.example.data.api.OrderQrResponseDto> {
+    return mongoRepo.getOrderQr(orderId)
+  }
+
+  open suspend fun verifyQrCode(token: String, ownerToken: String? = null): Result<com.example.data.api.VerifyQrResponseDto> {
+    return mongoRepo.verifyQrCode(token, ownerToken)
+  }
+
   // ── 6. Notifications ────────────────────────────────────────────────────────
   fun observeUserNotifications(userId: String): Flow<List<NotificationDocument>> {
     return mongoRepo.observeUserNotifications(userId)

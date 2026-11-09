@@ -9,6 +9,9 @@ import com.example.data.firebase.OrderDocument
 import com.example.data.firebase.OrderItemDocument
 import com.example.data.firebase.OwnerDocument
 import com.example.data.firebase.UserDocument
+import com.example.data.session.SessionManager
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -49,6 +52,21 @@ class MongoRepository(
 
     suspend fun getOrder(orderId: String): Result<MongoOrderDto> =
       defaultInstance.getOrder(orderId)
+
+    suspend fun getOrderQr(orderId: String): Result<OrderQrResponseDto> =
+      defaultInstance.getOrderQr(orderId)
+
+    suspend fun getOrderBarcode(orderId: String): Result<OrderBarcodeResponseDto> =
+      defaultInstance.getOrderBarcode(orderId)
+
+    suspend fun verifyQrCode(token: String, ownerToken: String? = null): Result<VerifyQrResponseDto> =
+      defaultInstance.verifyQrCode(token, ownerToken)
+
+    suspend fun verifyBarcode(token: String, ownerToken: String? = null): Result<VerifyBarcodeResponseDto> =
+      defaultInstance.verifyBarcode(token, ownerToken)
+
+    suspend fun confirmPickup(tokenOrOrderId: String, ownerToken: String? = null): Result<ConfirmPickupResponseDto> =
+      defaultInstance.confirmPickup(tokenOrOrderId, ownerToken)
 
     suspend fun getUserFavorites(uid: String): Result<List<String>> =
       defaultInstance.getUserFavorites(uid)
@@ -360,6 +378,135 @@ class MongoRepository(
         }
       }
     }.onFailure { Log.e(TAG, "updateOrderStatus error: ${it.message}") }
+  }
+
+  suspend fun getOrderQr(orderId: String): Result<OrderQrResponseDto> {
+    return runCatching {
+      val res = apiService.getOrderQr(orderId)
+      if (res.isSuccessful && res.body() != null) {
+        res.body()!!
+      } else {
+        val errBody = res.errorBody()?.string() ?: ""
+        val errMsg = try {
+          val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+          val adapter = moshi.adapter(OrderQrResponseDto::class.java)
+          adapter.fromJson(errBody)?.error ?: "Failed to retrieve order QR: ${res.code()}"
+        } catch (_: Exception) {
+          "Failed to retrieve order QR: ${res.code()}"
+        }
+        throw Exception(errMsg)
+      }
+    }.onFailure { Log.e(TAG, "getOrderQr error: ${it.message}") }
+  }
+
+  suspend fun verifyQrCode(token: String, ownerToken: String? = null): Result<VerifyQrResponseDto> {
+    return runCatching {
+      val ownerPrefToken: String? = SessionManager.getOwnerToken().ifBlank { null }
+      val effectiveToken: String? = ownerToken?.ifBlank { null } ?: ownerPrefToken
+      val authHeader: String? = if (!effectiveToken.isNullOrBlank()) {
+        if (effectiveToken.startsWith("Bearer ")) effectiveToken else "Bearer $effectiveToken"
+      } else null
+      val res = apiService.verifyQr(VerifyQrRequestDto(token = token.trim()), authHeader = authHeader)
+      if (res.isSuccessful && res.body() != null) {
+        val body = res.body()!!
+        val updatedOrder = body.order
+        if (updatedOrder != null) {
+          val doc = updatedOrder.toDocument()
+          cachedOrderDetails[doc.orderId] = doc
+          cachedCanteenOrders.forEach { (canteen, list) ->
+            cachedCanteenOrders[canteen] = list.map { if (it.orderId == doc.orderId) doc else it }
+          }
+        }
+        body
+      } else {
+        val errBody = res.errorBody()?.string() ?: ""
+        var parsedError: VerifyQrResponseDto? = null
+        try {
+          val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+          val adapter = moshi.adapter(VerifyQrResponseDto::class.java)
+          parsedError = adapter.fromJson(errBody)
+        } catch (_: Exception) {}
+        val errMsg = parsedError?.error ?: parsedError?.message ?: "Verification failed: ${res.code()}"
+        throw Exception(errMsg)
+      }
+    }.onFailure { Log.e(TAG, "verifyQrCode error: ${it.message}") }
+  }
+
+  suspend fun getOrderBarcode(orderId: String): Result<OrderBarcodeResponseDto> {
+    return runCatching {
+      val res = apiService.getOrderBarcode(orderId)
+      if (res.isSuccessful && res.body() != null) {
+        res.body()!!
+      } else {
+        val errBody = res.errorBody()?.string() ?: ""
+        val errMsg = try {
+          val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+          val adapter = moshi.adapter(OrderBarcodeResponseDto::class.java)
+          adapter.fromJson(errBody)?.error ?: "Failed to retrieve order barcode: ${res.code()}"
+        } catch (_: Exception) {
+          "Failed to retrieve order barcode: ${res.code()}"
+        }
+        throw Exception(errMsg)
+      }
+    }.onFailure { Log.e(TAG, "getOrderBarcode error: ${it.message}") }
+  }
+
+  suspend fun verifyBarcode(token: String, ownerToken: String? = null): Result<VerifyBarcodeResponseDto> {
+    return runCatching {
+      val ownerPrefToken: String? = SessionManager.getOwnerToken().ifBlank { null }
+      val effectiveToken: String? = ownerToken?.ifBlank { null } ?: ownerPrefToken
+      val authHeader: String? = if (!effectiveToken.isNullOrBlank()) {
+        if (effectiveToken.startsWith("Bearer ")) effectiveToken else "Bearer $effectiveToken"
+      } else null
+      val res = apiService.verifyBarcode(VerifyBarcodeRequestDto(token = token.trim()), authHeader = authHeader)
+      if (res.isSuccessful && res.body() != null) {
+        res.body()!!
+      } else {
+        val errBody = res.errorBody()?.string() ?: ""
+        var parsedError: VerifyBarcodeResponseDto? = null
+        try {
+          val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+          val adapter = moshi.adapter(VerifyBarcodeResponseDto::class.java)
+          parsedError = adapter.fromJson(errBody)
+        } catch (_: Exception) {}
+        val errMsg = parsedError?.error ?: parsedError?.message ?: "Verification failed: ${res.code()}"
+        throw Exception(errMsg)
+      }
+    }.onFailure { Log.e(TAG, "verifyBarcode error: ${it.message}") }
+  }
+
+  suspend fun confirmPickup(tokenOrOrderId: String, ownerToken: String? = null): Result<ConfirmPickupResponseDto> {
+    return runCatching {
+      val ownerPrefToken: String? = SessionManager.getOwnerToken().ifBlank { null }
+      val effectiveToken: String? = ownerToken?.ifBlank { null } ?: ownerPrefToken
+      val authHeader: String? = if (!effectiveToken.isNullOrBlank()) {
+        if (effectiveToken.startsWith("Bearer ")) effectiveToken else "Bearer $effectiveToken"
+      } else null
+      val clean = tokenOrOrderId.trim()
+      val res = apiService.confirmPickup(ConfirmPickupRequestDto(token = clean, orderId = clean), authHeader = authHeader)
+      if (res.isSuccessful && res.body() != null) {
+        val body = res.body()!!
+        val updatedOrder = body.order
+        if (updatedOrder != null) {
+          val doc = updatedOrder.toDocument()
+          cachedOrderDetails[doc.orderId] = doc
+          cachedCanteenOrders.forEach { (canteen, list) ->
+            cachedCanteenOrders[canteen] = list.map { if (it.orderId == doc.orderId) doc else it }
+          }
+        }
+        body
+      } else {
+        val errBody = res.errorBody()?.string() ?: ""
+        var parsedError: ConfirmPickupResponseDto? = null
+        try {
+          val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+          val adapter = moshi.adapter(ConfirmPickupResponseDto::class.java)
+          parsedError = adapter.fromJson(errBody)
+        } catch (_: Exception) {}
+        val errMsg = parsedError?.error ?: parsedError?.message ?: "Pickup confirmation failed: ${res.code()}"
+        throw Exception(errMsg)
+      }
+    }.onFailure { Log.e(TAG, "confirmPickup error: ${it.message}") }
   }
 
   suspend fun getCanteenQueue(canteenId: String): Result<CanteenQueueDto> {

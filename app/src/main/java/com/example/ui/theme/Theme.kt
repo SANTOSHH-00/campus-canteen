@@ -14,7 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme =
   darkColorScheme(
-    primary = DeepSaffron,
+    primary = DeliveryOrange,
     onPrimary = PureWhite,
     secondary = GoldenYellow,
     tertiary = MintFresh,
@@ -26,7 +26,7 @@ private val DarkColorScheme =
 
 private val LightColorScheme =
   lightColorScheme(
-    primary = DeepSaffron,
+    primary = DeliveryOrange,
     onPrimary = PureWhite,
     secondary = GoldenYellow,
     tertiary = MintFresh,
@@ -36,33 +36,33 @@ private val LightColorScheme =
     onSurface = TextDark,
   )
 
-/** Warm cream-to-off-white gradient for onboarding page backgrounds. */
+/** Clean off-white gradient for onboarding & screen backgrounds. */
 val WarmPageGradient: Brush =
   Brush.verticalGradient(
-    colors = listOf(WarmCream, Color(0xFFEDE8DF)),
+    colors = listOf(Color(0xFFFFFFFF), WarmCream),
   )
 
-/** Soft cream radial gradient for Slide 1 illustration backdrop. */
+/** Soft amber radial gradient for Slide 1 backdrop. */
 val SaffronRadialGradient: Brush =
   Brush.radialGradient(
-    colors = listOf(Color(0xFFF5F0E8), Color(0xFFFAF7F2)),
+    colors = listOf(Color(0xFFFFF7ED), Color(0xFFF8FAFC)),
   )
 
-/** Soft cream radial gradient for Slide 2 illustration backdrop. */
+/** Soft indigo-violet radial gradient for Slide 2 backdrop. */
 val PurpleRadialGradient: Brush =
   Brush.radialGradient(
-    colors = listOf(Color(0xFFF5F0E8), Color(0xFFFAF7F2)),
+    colors = listOf(Color(0xFFF5F3FF), Color(0xFFF8FAFC)),
   )
 
-/** Soft cream radial gradient for Slide 3 illustration backdrop. */
+/** Soft emerald radial gradient for Slide 3 backdrop. */
 val MintRadialGradient: Brush =
   Brush.radialGradient(
-    colors = listOf(Color(0xFFF5F0E8), Color(0xFFFAF7F2)),
+    colors = listOf(Color(0xFFECFDF5), Color(0xFFF8FAFC)),
   )
 
 @Composable
 fun MyApplicationTheme(
-  darkTheme: Boolean = false, // Keep warm light theme as default
+  darkTheme: Boolean = false, // Keep clean modern light theme as default
   dynamicColor: Boolean = false,
   content: @Composable () -> Unit,
 ) {

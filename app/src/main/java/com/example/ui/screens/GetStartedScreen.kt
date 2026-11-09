@@ -29,8 +29,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -438,7 +438,7 @@ fun GetStartedScreen(
           ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
               Icon(
-                imageVector = Icons.Default.Logout,
+                imageVector = Icons.AutoMirrored.Filled.Logout,
                 contentDescription = "Log Out",
                 tint = TextDark,
                 modifier = Modifier.size(14.dp),

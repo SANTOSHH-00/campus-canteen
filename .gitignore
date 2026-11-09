@@ -20,4 +20,6 @@ local.properties
 *.env
 node_modules/
 server/node_modules/
+.vscode/
+.idea/deploymentTargetSelector.xml
 debug.keystore

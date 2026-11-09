@@ -107,6 +107,32 @@ app.use('/api/owners/admin/login', authLimiter);
 app.use('/api/owners/admin/register', authLimiter);
 app.use('/api/owners/admin/resend-otp', authLimiter);
 
+// 3. Order Verification & Barcode Scanning Rate Limiter (Protects against brute-force token scanning)
+const verifyLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 300, // Generous 300 scans per 10 minutes per owner/IP during lunch rush
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { keyGeneratorIpFallback: false },
+  keyGenerator: (req) => {
+    const authHeader = req.headers['authorization'];
+    if (authHeader) return `verify_${authHeader.slice(-24)}`;
+    return req.ip || req.connection?.remoteAddress || 'unknown';
+  },
+  message: { error: 'Too many verification attempts. Please wait a minute before scanning again.' },
+  skip: (req) => {
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    if (isDev || isLocalOrPrivateIp(ip)) return true;
+    return false;
+  },
+});
+app.use('/api/owner/orders/verify-barcode', verifyLimiter);
+app.use('/api/owners/orders/verify-barcode', verifyLimiter);
+app.use('/api/owner/orders/confirm-pickup', verifyLimiter);
+app.use('/api/owners/orders/confirm-pickup', verifyLimiter);
+app.use('/api/owner/orders/verify-qr', verifyLimiter);
+app.use('/api/owners/orders/verify-qr', verifyLimiter);
+
 // Google Play Mandatory Compliance Pages
 app.get('/privacy-policy', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/privacy-policy.html'));

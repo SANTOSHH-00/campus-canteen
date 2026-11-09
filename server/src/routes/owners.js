@@ -8,6 +8,12 @@ const Owner = require('../models/Owner');
 const User = require('../models/User');
 const Canteen = require('../models/Canteen');
 const OtpVerification = require('../models/OtpVerification');
+const Order = require('../models/Order');
+const OrderVerification = require('../models/OrderVerification');
+const { hashVerificationToken } = require('../services/qrVerificationService');
+const { broadcastOrderStatus, broadcastQueueUpdate } = require('../services/socketService');
+const { sendPushToUser } = require('../services/fcmService');
+const { formatIstDateTime, formatIstTime } = require('../utils/timeHelper');
 const { sendOwnerOTP, sendAdminPortalOTP } = require('../services/emailService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'quickbite-super-secure-jwt-secret-key-2026';
@@ -275,6 +281,81 @@ function requireAdminAuth(req, res, next) {
   }
 }
 
+// ── Middleware: Verify Owner JWT Token & Authoritative Canteen Allocation ─────
+async function requireOwnerAuth(req, res, next) {
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7).trim()
+    : (req.headers['x-owner-token'] || req.query.token || '').trim();
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      code: 'UNAUTHORIZED',
+      error: 'Unauthorized: Canteen owner authentication required. Please sign in.',
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded) {
+      return res.status(401).json({
+        success: false,
+        code: 'UNAUTHORIZED',
+        error: 'Invalid authentication session.',
+      });
+    }
+
+    // Lookup owner record in MongoDB to verify active status and authoritative canteen assignment
+    let owner = null;
+    if (decoded.email) {
+      owner = await Owner.findOne({ email: decoded.email.trim().toLowerCase() }).lean();
+    }
+    if (!owner && decoded.uid) {
+      owner = await Owner.findOne({ uid: decoded.uid }).lean();
+    }
+
+    if (!owner) {
+      return res.status(403).json({
+        success: false,
+        code: 'FORBIDDEN',
+        error: 'Access denied: No active canteen owner account found for this session.',
+      });
+    }
+
+    if (!owner.role || owner.role.toLowerCase() !== 'owner') {
+      return res.status(403).json({
+        success: false,
+        code: 'FORBIDDEN',
+        error: 'Access denied: This account does not possess canteen owner privileges.',
+      });
+    }
+
+    const canteenId = (owner.canteenId || decoded.canteenId || '').trim();
+    if (!owner.canteenAssigned || !canteenId) {
+      return res.status(403).json({
+        success: false,
+        code: 'NO_CANTEEN_ASSIGNED',
+        error: 'Access Denied: Your account is registered, but no canteen has been allocated to you yet. Please contact administration.',
+      });
+    }
+
+    req.owner = {
+      uid: owner.uid || decoded.uid,
+      email: owner.email,
+      name: owner.name,
+      canteenId: canteenId,
+    };
+    next();
+  } catch (err) {
+    return res.status(401).json({
+      success: false,
+      code: 'SESSION_EXPIRED',
+      error: 'Session expired or invalid authentication token. Please sign in again.',
+    });
+  }
+}
+
 // ── POST /api/owners/admin/register (Admin Registration -> Sends 6-digit OTP) ─
 router.post('/admin/register', async (req, res) => {
   try {
@@ -353,6 +434,7 @@ router.post('/admin/register', async (req, res) => {
       message: 'A 6-digit security code has been sent to your email to verify your administrator registration.',
       email: trimmedEmail,
       mode: 'register',
+      ...(process.env.NODE_ENV !== 'production' ? { devOtp: rawOtp } : {})
     });
   } catch (err) {
     console.error('[AdminAuth] Registration error:', err);
@@ -537,6 +619,7 @@ router.post('/admin/login', async (req, res) => {
       name: adminAccount.name || 'Administrator',
       role: 'admin',
       mode: 'login',
+      ...(process.env.NODE_ENV !== 'production' ? { devOtp: rawOtp } : {})
     });
   } catch (err) {
     console.error('[AdminAuth] Login error:', err);
@@ -697,6 +780,7 @@ router.post('/admin/resend-otp', async (req, res) => {
       success: true,
       message: 'A fresh verification code has been dispatched to your registered email.',
       email: trimmedEmail,
+      ...(process.env.NODE_ENV !== 'production' ? { devOtp: rawOtp } : {})
     });
   } catch (err) {
     console.error('[AdminAuth] Resend OTP error:', err);
@@ -879,6 +963,582 @@ router.delete('/:uid', requireAdminAuth, async (req, res) => {
     res.json({ success: true, message: `Owner ${deleted.email} successfully deleted.` });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/owner/orders/verify-qr - Dynamic QR Code Order Pickup Verification ─────
+router.post('/orders/verify-qr', requireOwnerAuth, async (req, res) => {
+  try {
+    const { token } = req.body || {};
+    if (!token || typeof token !== 'string' || !token.trim()) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_INPUT',
+        error: 'Verification QR token is required.',
+      });
+    }
+
+    const cleanToken = token.trim();
+    const tokenHash = hashVerificationToken(cleanToken);
+
+    // 1. Locate verification record by hashed token or fallback directly by Order ID / Token Number
+    const verification = await OrderVerification.findOne({ tokenHash });
+    let order = null;
+
+    if (!verification) {
+      order = await findOrderByTokenOrId(cleanToken);
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          code: 'INVALID_QR',
+          error: 'Invalid QR code. Verification record or order ID not found.',
+        });
+      }
+
+      // Check canteen allocation
+      if (order.canteenId && req.owner.canteenId && order.canteenId !== req.owner.canteenId) {
+        const orderCanteen = await Canteen.findOne({ id: order.canteenId }).select('name').lean();
+        const orderCanteenName = orderCanteen?.name || order.canteenId;
+        return res.status(403).json({
+          success: false,
+          code: 'WRONG_CANTEEN',
+          error: `Wrong canteen: This order belongs to ${orderCanteenName}. You are only authorized to verify orders for your assigned canteen.`,
+        });
+      }
+
+      if (order.status === 'CANCELLED') {
+        return res.status(400).json({
+          success: false,
+          code: 'ORDER_CANCELLED',
+          error: 'This order has been cancelled and cannot be picked up.',
+        });
+      }
+
+      if (order.status === 'PICKED_UP' || order.status === 'COMPLETED') {
+        return res.status(400).json({
+          success: false,
+          code: 'ALREADY_REDEEMED',
+          error: 'This order has already been marked as picked up.',
+        });
+      }
+
+      // Mark as PICKED_UP
+      const now = new Date();
+      const nowLocal = formatIstDateTime(now);
+      order.status = 'PICKED_UP';
+      order.pickedUpAt = now;
+      order.pickedUpAtLocal = nowLocal;
+      order.completedAt = now;
+      order.completedAtLocal = nowLocal;
+      order.verifiedByOwnerId = req.owner.uid;
+      if (!order.statusHistory) order.statusHistory = [];
+      order.statusHistory.push({
+        status: 'PICKED_UP',
+        timestamp: now,
+        timestampLocal: nowLocal,
+      });
+      await order.save();
+
+      try {
+        broadcastOrderStatus(order);
+        broadcastQueueUpdate(order.canteenId);
+        if (order.studentId && order.studentId !== 'student_guest') {
+          sendPushToUser(order.studentId, {
+            title: `Order #${order.tokenNumber || order.orderId} Picked Up!`,
+            body: 'Your order has been verified and picked up. Enjoy your meal!',
+            data: { orderId: order.orderId, type: 'ORDER_PICKED_UP', status: 'PICKED_UP' },
+          }).catch(() => {});
+        }
+      } catch (realtimeErr) {
+        console.warn('[OwnerVerification] Direct QR realtime broadcast warning:', realtimeErr.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        code: 'VERIFIED_SUCCESS',
+        message: 'Order verified and redeemed successfully via Order ID QR.',
+        order: {
+          orderId: order.orderId,
+          tokenNumber: order.tokenNumber,
+          studentName: order.studentName,
+          studentPhone: order.studentPhone,
+          canteenId: order.canteenId,
+          pickupCanteenName: order.pickupCanteenName,
+          pickupCounter: order.pickupCounter,
+          totalAmount: order.totalAmount,
+          items: order.items,
+          status: 'PICKED_UP',
+          pickedUpAt: now,
+          pickedUpAtLocal: nowLocal,
+        },
+        verification: {
+          verifiedAt: now,
+          verifiedBy: req.owner.uid,
+        },
+      });
+    }
+
+    // 2. Check if already used/redeemed
+    if (verification.status === 'REDEEMED') {
+      return res.status(400).json({
+        success: false,
+        code: 'ALREADY_REDEEMED',
+        error: `This QR code has already been redeemed${verification.usedAt ? ` at ${formatIstTime(verification.usedAt)}` : ''}.`,
+      });
+    }
+
+    // 3. Check if verification was cancelled
+    if (verification.status === 'CANCELLED') {
+      return res.status(400).json({
+        success: false,
+        code: 'ORDER_CANCELLED',
+        error: 'Cancelled order. This order has been cancelled.',
+      });
+    }
+
+    // 4. Validate expiration (explicit date validation, never relying solely on TTL)
+    const now = new Date();
+    if (now > new Date(verification.expiresAt) || verification.status === 'EXPIRED') {
+      if (verification.status === 'ACTIVE') {
+        await OrderVerification.updateOne({ _id: verification._id }, { $set: { status: 'EXPIRED' } }).catch(() => {});
+      }
+      return res.status(400).json({
+        success: false,
+        code: 'EXPIRED_QR',
+        error: 'This QR code has expired. Please ask the customer to refresh their order screen to get a new code.',
+      });
+    }
+
+    // 5. Verify canteen allocation strictly from authenticated owner account
+    if (verification.canteenId !== req.owner.canteenId) {
+      const orderCanteen = await Canteen.findOne({ id: verification.canteenId }).select('name').lean();
+      const orderCanteenName = orderCanteen?.name || verification.canteenId;
+      return res.status(403).json({
+        success: false,
+        code: 'WRONG_CANTEEN',
+        error: `Wrong canteen: This order belongs to ${orderCanteenName}. You are only authorized to verify orders for your assigned canteen.`,
+      });
+    }
+
+    // 6. Fetch associated order
+    const order = await Order.findOne({ orderId: verification.orderId });
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        code: 'ORDER_NOT_FOUND',
+        error: 'Associated order was not found in database.',
+      });
+    }
+
+    // 7. Validate Order Status: Must be in READY state
+    if (order.status === 'CANCELLED') {
+      return res.status(400).json({
+        success: false,
+        code: 'ORDER_CANCELLED',
+        error: 'This order has been cancelled and cannot be picked up.',
+      });
+    }
+
+    if (order.status === 'PICKED_UP' || order.status === 'COMPLETED') {
+      return res.status(400).json({
+        success: false,
+        code: 'ALREADY_REDEEMED',
+        error: 'This order has already been marked as picked up.',
+      });
+    }
+
+    if (order.status !== 'READY') {
+      return res.status(400).json({
+        success: false,
+        code: 'ORDER_NOT_READY',
+        error: `Order not ready. Current status is "${order.status}". Orders must be in READY state before pickup verification.`,
+        currentStatus: order.status,
+      });
+    }
+
+    // 8. Atomic conditional redemption (prevents race condition / simultaneous scans)
+    const redeemedVerification = await OrderVerification.findOneAndUpdate(
+      {
+        _id: verification._id,
+        status: 'ACTIVE',
+        expiresAt: { $gt: now },
+      },
+      {
+        $set: {
+          status: 'REDEEMED',
+          usedAt: now,
+          verifiedBy: req.owner.uid,
+        },
+      },
+      { new: true }
+    );
+
+    if (!redeemedVerification) {
+      return res.status(409).json({
+        success: false,
+        code: 'CONCURRENT_REDEEM',
+        error: 'Concurrent redemption detected. This QR code was just redeemed by another device or request.',
+      });
+    }
+
+    // 9. Update Order status to PICKED_UP with server-authoritative timestamps
+    const nowLocal = formatIstDateTime(now);
+    order.status = 'PICKED_UP';
+    order.pickedUpAt = now;
+    order.pickedUpAtLocal = nowLocal;
+    order.completedAt = now;
+    order.completedAtLocal = nowLocal;
+    order.verifiedByOwnerId = req.owner.uid;
+    if (!order.statusHistory) order.statusHistory = [];
+    order.statusHistory.push({
+      status: 'PICKED_UP',
+      timestamp: now,
+      timestampLocal: nowLocal,
+    });
+    await order.save();
+
+    // 10. Real-time updates & notifications
+    try {
+      broadcastOrderStatus(order);
+      broadcastQueueUpdate(order.canteenId);
+      if (order.studentId && order.studentId !== 'student_guest') {
+        sendPushToUser(order.studentId, {
+          title: `Order #${order.tokenNumber || order.orderId} Picked Up!`,
+          body: 'Your order has been verified and picked up. Enjoy your meal!',
+          data: { orderId: order.orderId, type: 'ORDER_PICKED_UP', status: 'PICKED_UP' },
+        }).catch(() => {});
+      }
+    } catch (realtimeErr) {
+      console.warn('[OwnerVerification] Realtime broadcast warning:', realtimeErr.message);
+    }
+
+    // 11. Return structured success response
+    return res.status(200).json({
+      success: true,
+      code: 'VERIFIED_SUCCESS',
+      message: 'Order verified and redeemed successfully.',
+      order: {
+        orderId: order.orderId,
+        tokenNumber: order.tokenNumber,
+        studentName: order.studentName,
+        studentPhone: order.studentPhone,
+        canteenId: order.canteenId,
+        pickupCanteenName: order.pickupCanteenName,
+        pickupCounter: order.pickupCounter,
+        totalAmount: order.totalAmount,
+        items: order.items,
+        status: 'PICKED_UP',
+        pickedUpAt: now,
+        pickedUpAtLocal: nowLocal,
+      },
+      verification: {
+        verifiedAt: now,
+        verifiedBy: req.owner.uid,
+      },
+    });
+  } catch (err) {
+    console.error('[OwnerVerification] Unexpected error:', err);
+    return res.status(500).json({
+      success: false,
+      code: 'SERVER_ERROR',
+      error: 'An unexpected internal error occurred during order verification.',
+    });
+  }
+});
+
+/**
+ * Helper to find an order by verification token (Code 128 barcode or QR token hash or orderId)
+ */
+async function findOrderByTokenOrId(token) {
+  if (!token || typeof token !== 'string') return null;
+  const clean = token.trim();
+
+  // 1. Direct match on verificationToken
+  let order = await Order.findOne({ verificationToken: clean });
+  if (order) return order;
+
+  // 2. Check OrderVerification by SHA-256 hash (backward compatibility for QR tokens)
+  const tokenHash = hashVerificationToken(clean);
+  const verification = await OrderVerification.findOne({ tokenHash });
+  if (verification) {
+    order = await Order.findOne({ orderId: verification.orderId });
+    if (order) return order;
+  }
+
+  // 3. Fallback match by orderId
+  order = await Order.findOne({ orderId: clean });
+  if (order) return order;
+
+  // 4. Fallback match by token number candidates
+  const rawNum = clean.replace(/^[^0-9]+/g, '').trim();
+  if (rawNum) {
+    order = await Order.findOne({ tokenNumber: { $in: [clean, rawNum, `#${rawNum}`, `#Q${rawNum}`, `Q${rawNum}`] } }).sort({ createdAt: -1 });
+  }
+  return order;
+}
+
+// ── POST /api/owner/orders/verify-barcode - Step 1: Secure Barcode Inspection & Validation ──
+router.post('/orders/verify-barcode', requireOwnerAuth, async (req, res) => {
+  try {
+    const { token } = req.body || {};
+    if (!token || typeof token !== 'string' || !token.trim()) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_BARCODE',
+        error: 'This barcode is invalid. Please scan a valid Quick Bite order barcode.',
+      });
+    }
+
+    const cleanToken = token.trim();
+    const order = await findOrderByTokenOrId(cleanToken);
+
+    // Condition 1 & 2: Does the barcode exist in the database and belong to an actual order?
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        code: 'INVALID_BARCODE',
+        error: 'This barcode is invalid. Please scan a valid Quick Bite order barcode.',
+      });
+    }
+
+    // Condition 3: Is the order associated with the currently authenticated canteen owner?
+    if (order.canteenId !== req.owner.canteenId) {
+      return res.status(403).json({
+        success: false,
+        code: 'WRONG_OWNER',
+        error: 'This order does not belong to your canteen.',
+        orderCanteenId: order.canteenId,
+        ownerCanteenId: req.owner.canteenId,
+      });
+    }
+
+    // Condition 4: Has the order already been collected?
+    if (order.status === 'PICKED_UP' || order.status === 'COMPLETED' || order.barcodeStatus === 'USED') {
+      return res.status(400).json({
+        success: false,
+        code: 'ALREADY_COLLECTED',
+        error: 'This order has already been collected.',
+        collectedAt: order.collectedAt || order.pickedUpAt,
+        collectedAtLocal: order.pickedUpAtLocal || order.completedAtLocal,
+      });
+    }
+
+    // Condition 5: Is the barcode valid, active, and not cancelled/expired?
+    if (order.status === 'CANCELLED' || order.barcodeStatus === 'CANCELLED') {
+      return res.status(400).json({
+        success: false,
+        code: 'ORDER_CANCELLED',
+        error: 'This order has been cancelled.',
+      });
+    }
+
+    const now = new Date();
+    if (order.expiresAt && now > new Date(order.expiresAt)) {
+      return res.status(400).json({
+        success: false,
+        code: 'EXPIRED_BARCODE',
+        error: 'This barcode has expired. Please contact the canteen owner.',
+      });
+    }
+
+    // Condition 6: Is the order eligible for collection? (Must be in READY / Ready for Pickup state)
+    if (order.status !== 'READY') {
+      return res.status(400).json({
+        success: false,
+        code: 'ORDER_NOT_READY',
+        error: 'This order is not ready for collection yet.',
+        currentStatus: order.status,
+      });
+    }
+
+    // All conditions verified successfully! Return Green Success structured payload
+    const orderDate = order.orderDate || formatIstDate(order.orderPlacedAt || order.createdAt);
+    const orderTime = order.orderTime || formatIstTime(order.orderPlacedAt || order.createdAt);
+
+    return res.status(200).json({
+      success: true,
+      code: 'VERIFIED_SUCCESS',
+      message: 'ORDER VERIFIED SUCCESSFULLY',
+      order: {
+        orderId: order.orderId,
+        tokenNumber: order.tokenNumber,
+        studentName: order.studentName || 'Student',
+        studentPhone: order.studentPhone || '',
+        items: (order.items || []).map(it => ({
+          itemId: it.itemId,
+          name: it.name,
+          quantity: it.quantity,
+          price: it.price,
+          selectedOption: it.selectedOption || null,
+        })),
+        totalAmount: order.totalAmount,
+        createdAt: order.createdAt,
+        orderDate: orderDate,
+        orderTime: orderTime,
+        orderPlacedAtLocal: order.orderPlacedAtLocal || `${orderDate}, ${orderTime}`,
+        status: order.status,
+        canteenId: order.canteenId,
+        pickupCounter: order.pickupCounter || 'Counter 1',
+        verificationToken: order.verificationToken || cleanToken,
+      },
+    });
+  } catch (err) {
+    console.error('[OwnerBarcodeVerify] Unexpected error:', err);
+    return res.status(500).json({
+      success: false,
+      code: 'SERVER_ERROR',
+      error: 'Unable to verify the order. Please check your internet connection and try again.',
+    });
+  }
+});
+
+// ── POST /api/owner/orders/confirm-pickup - Step 2: Atomic Pickup Confirmation ──────────────
+router.post('/orders/confirm-pickup', requireOwnerAuth, async (req, res) => {
+  try {
+    const { token, orderId } = req.body || {};
+    const lookupKey = (token || orderId || '').trim();
+
+    if (!lookupKey) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_BARCODE',
+        error: 'This barcode is invalid. Please scan a valid Quick Bite order barcode.',
+      });
+    }
+
+    // 1. Initial lookup to verify ownership & existing state
+    const existingOrder = await findOrderByTokenOrId(lookupKey);
+    if (!existingOrder) {
+      return res.status(404).json({
+        success: false,
+        code: 'INVALID_BARCODE',
+        error: 'This barcode is invalid. Please scan a valid Quick Bite order barcode.',
+      });
+    }
+
+    if (existingOrder.canteenId !== req.owner.canteenId) {
+      return res.status(403).json({
+        success: false,
+        code: 'WRONG_OWNER',
+        error: 'This order does not belong to your canteen.',
+      });
+    }
+
+    if (existingOrder.status === 'PICKED_UP' || existingOrder.status === 'COMPLETED' || existingOrder.barcodeStatus === 'USED') {
+      return res.status(400).json({
+        success: false,
+        code: 'ALREADY_COLLECTED',
+        error: 'This order has already been collected.',
+      });
+    }
+
+    if (existingOrder.status !== 'READY') {
+      return res.status(400).json({
+        success: false,
+        code: 'ORDER_NOT_READY',
+        error: 'This order is not ready for collection yet.',
+        currentStatus: existingOrder.status,
+      });
+    }
+
+    // 2. Atomic MongoDB update (strict condition: status MUST be READY, barcodeStatus != USED)
+    // Prevents two simultaneous scans from confirming the same order (race condition safeguard)
+    const now = new Date();
+    const nowLocal = formatIstDateTime(now);
+
+    const updatedOrder = await Order.findOneAndUpdate(
+      {
+        orderId: existingOrder.orderId,
+        canteenId: req.owner.canteenId,
+        status: 'READY',
+        barcodeStatus: { $ne: 'USED' },
+      },
+      {
+        $set: {
+          status: 'PICKED_UP',
+          barcodeStatus: 'USED',
+          usedAt: now,
+          collectedAt: now,
+          collectedBy: req.owner.uid,
+          pickedUpAt: now,
+          pickedUpAtLocal: nowLocal,
+          completedAt: now,
+          completedAtLocal: nowLocal,
+          verifiedByOwnerId: req.owner.uid,
+        },
+        $push: {
+          statusHistory: {
+            status: 'PICKED_UP',
+            timestamp: now,
+            timestampLocal: nowLocal,
+          },
+        },
+      },
+      { new: true }
+    );
+
+    if (!updatedOrder) {
+      // If atomic update matched 0 documents, it was just confirmed by another concurrent request
+      return res.status(409).json({
+        success: false,
+        code: 'ALREADY_COLLECTED',
+        error: 'This order has already been collected.',
+      });
+    }
+
+    // Mark OrderVerification as REDEEMED if exists
+    try {
+      await OrderVerification.updateMany(
+        { orderId: updatedOrder.orderId, status: 'ACTIVE' },
+        {
+          $set: {
+            status: 'REDEEMED',
+            usedAt: now,
+            verifiedBy: req.owner.uid,
+          },
+        }
+      );
+    } catch (vErr) {
+      console.warn('[ConfirmPickup] OrderVerification sync warning:', vErr.message);
+    }
+
+    // 3. Real-time WebSocket Broadcast & Push Notification
+    try {
+      broadcastOrderStatus(updatedOrder);
+      broadcastQueueUpdate(updatedOrder.canteenId);
+      if (updatedOrder.studentId && updatedOrder.studentId !== 'student_guest') {
+        sendPushToUser(updatedOrder.studentId, {
+          title: `Order #${updatedOrder.tokenNumber || updatedOrder.orderId} Collected!`,
+          body: 'Your order has been verified and successfully collected. Enjoy your meal!',
+          data: { orderId: updatedOrder.orderId, type: 'ORDER_COLLECTED', status: 'PICKED_UP' },
+        }).catch(() => {});
+      }
+    } catch (rtErr) {
+      console.warn('[ConfirmPickup] Realtime broadcast warning:', rtErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      code: 'COLLECTED_SUCCESS',
+      message: 'Order Successfully Collected',
+      order: {
+        orderId: updatedOrder.orderId,
+        tokenNumber: updatedOrder.tokenNumber,
+        studentName: updatedOrder.studentName,
+        status: updatedOrder.status,
+        totalAmount: updatedOrder.totalAmount,
+        collectedAt: now,
+        collectedAtLocal: nowLocal,
+        collectedBy: req.owner.uid,
+      },
+    });
+  } catch (err) {
+    console.error('[ConfirmPickup] Unexpected error:', err);
+    return res.status(500).json({
+      success: false,
+      code: 'SERVER_ERROR',
+      error: 'Unable to verify the order. Please check your internet connection and try again.',
+    });
   }
 });
 

@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Remove
@@ -55,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.font.FontWeight
@@ -65,6 +68,7 @@ import com.example.data.OrderRecord
 import com.example.ui.components.FoodImagePlaceholder
 import com.example.ui.components.PickupTimePickerSheet
 import com.example.ui.state.CanteenAppState
+import com.example.util.BarcodeGenerator
 import com.example.util.NetworkUtils
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
@@ -759,8 +763,13 @@ fun CartScreen(
       }
     }
 
-    // Success Order Token Dialog
+    // Success Order Token & Pickup QR Dialog
     newlyPlacedOrder?.let { order ->
+      val qrTarget = order.id.ifBlank { order.tokenNumber }
+      val orderQrBitmap = remember(qrTarget) {
+        BarcodeGenerator.generateQrCode(qrTarget, sizePx = 400)
+      }
+
       AlertDialog(
         onDismissRequest = {
           newlyPlacedOrder = null
@@ -772,9 +781,9 @@ fun CartScreen(
               imageVector = Icons.Default.CheckCircle,
               contentDescription = null,
               tint = OpenGreen,
-              modifier = Modifier.size(52.dp),
+              modifier = Modifier.size(48.dp),
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
               text = "Order Placed Successfully!",
               fontWeight = FontWeight.ExtraBold,
@@ -786,7 +795,7 @@ fun CartScreen(
         text = {
           Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
             Text(
-              text = "Show this token at the counter:",
+              text = "Show this QR code or token at the counter:",
               fontSize = 12.sp,
               color = TextMuted,
             )
@@ -796,17 +805,45 @@ fun CartScreen(
                 .clip(RoundedCornerShape(16.dp))
                 .background(DeliveryOrangeLight)
                 .border(2.dp, DeliveryOrange, RoundedCornerShape(16.dp))
-                .padding(horizontal = 30.dp, vertical = 12.dp),
+                .padding(horizontal = 24.dp, vertical = 10.dp),
               contentAlignment = Alignment.Center,
             ) {
               Text(
                 text = "TOKEN #${order.tokenNumber}",
-                fontSize = 26.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = DeliveryOrange,
                 letterSpacing = 1.sp,
               )
             }
+
+            // ── Generated Pickup QR Code on Order ID ──
+            if (orderQrBitmap != null) {
+              Spacer(modifier = Modifier.height(12.dp))
+              Box(
+                modifier = Modifier
+                  .size(150.dp)
+                  .clip(RoundedCornerShape(14.dp))
+                  .background(PureWhite)
+                  .border(1.5.dp, BorderGray, RoundedCornerShape(14.dp))
+                  .padding(8.dp),
+                contentAlignment = Alignment.Center,
+              ) {
+                Image(
+                  bitmap = orderQrBitmap.asImageBitmap(),
+                  contentDescription = "Pickup QR Code for Order ID ${order.id}",
+                  modifier = Modifier.fillMaxSize(),
+                )
+              }
+              Spacer(modifier = Modifier.height(4.dp))
+              Text(
+                text = "Order ID: ${order.id}",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextMuted,
+              )
+            }
+
             Spacer(modifier = Modifier.height(10.dp))
             Box(
               modifier = Modifier
@@ -833,23 +870,47 @@ fun CartScreen(
                 )
               }
             }
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
               text = "Estimated Ready: ${order.estimatedReadyTime}",
-              fontSize = 13.sp,
+              fontSize = 12.5.sp,
               fontWeight = FontWeight.Bold,
               color = BlackPrimary,
             )
           }
         },
         confirmButton = {
+          Button(
+            onClick = {
+              val current = order
+              newlyPlacedOrder = null
+              appState.selectedOrderForTracking = current
+            },
+            colors = ButtonDefaults.buttonColors(
+              containerColor = DeliveryOrange,
+              contentColor = PureWhite,
+            ),
+            shape = RoundedCornerShape(12.dp),
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(
+                imageVector = Icons.Default.QrCode,
+                contentDescription = null,
+                modifier = Modifier.size(15.dp)
+              )
+              Spacer(Modifier.width(6.dp))
+              Text("View QR & Track Order", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
+          }
+        },
+        dismissButton = {
           TextButton(
             onClick = {
               newlyPlacedOrder = null
               onNavigateToTab(BottomNavTab.ORDERS)
             },
           ) {
-            Text("Track in Orders", fontWeight = FontWeight.Bold, color = DeliveryOrange)
+            Text("Go to Orders", color = TextMuted, fontWeight = FontWeight.SemiBold)
           }
         },
         containerColor = PureWhite,

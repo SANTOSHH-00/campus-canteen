@@ -192,6 +192,9 @@ open class OwnerRepository(
       val res = mongoRepo.ownerVerifyOtp(trimmedEmail, trimmedCode)
       if (res.isSuccess) {
         val authSuccess = res.getOrThrow()
+        if (authSuccess.token.isNotBlank()) {
+          SessionManager.saveOwnerToken(authSuccess.token)
+        }
         val ownerDto = authSuccess.owner
         if (ownerDto != null) {
           val doc = OwnerDocument(

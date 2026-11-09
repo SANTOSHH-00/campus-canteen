@@ -107,7 +107,7 @@ fun ProfileScreen(
   Box(
     modifier = modifier
       .fillMaxSize()
-      .background(Color(0xFFFCF8F5))
+      .background(WarmCream)
       .statusBarsPadding()
   ) {
     Column(

@@ -279,6 +279,8 @@ data class MongoItemDto(
   @Json(name = "customizationTitle") val customizationTitle: String = "",
   @Json(name = "customizationOptions") val customizationOptions: List<String> = emptyList(),
   @Json(name = "addons") val addons: List<MongoAddonDto> = emptyList(),
+  @Json(name = "isVeg") val isVeg: Boolean? = null,
+  @Json(name = "createdAt") val createdAt: String? = null,
 ) {
   fun toFoodItem(): FoodItem {
     val normalized = category.trim().uppercase().replace(" ", "_")
@@ -287,6 +289,15 @@ data class MongoItemDto(
     } catch (e: Exception) {
       FoodCategory.QUICK_ORDER
     }
+    val actualVeg = isVeg ?: run {
+      val nonVeg = listOf("chicken", "egg", "fish", "mutton", "meat", "pork", "beef", "prawn", "seafood", "wings", "nugget")
+      !nonVeg.any { name.contains(it, ignoreCase = true) || description.contains(it, ignoreCase = true) }
+    }
+    val createdEpoch = try {
+      if (!createdAt.isNullOrBlank()) {
+        java.time.Instant.parse(createdAt).toEpochMilli()
+      } else 0L
+    } catch (_: Exception) { 0L }
     return FoodItem(
       id = id,
       name = name,
@@ -302,6 +313,9 @@ data class MongoItemDto(
       customizationTitle = customizationTitle.ifBlank { "Bread Type" },
       customizationOptions = customizationOptions,
       addons = addons.map { com.example.data.FoodAddon(it.name, it.price) },
+      isAvailable = available,
+      isVeg = actualVeg,
+      createdAt = createdEpoch,
     )
   }
 }
@@ -343,22 +357,32 @@ data class MongoOrderDto(
   @Json(name = "confirmedAtLocal") val confirmedAtLocal: String? = null,
   @Json(name = "preparingAtLocal") val preparingAtLocal: String? = null,
   @Json(name = "readyAtLocal") val readyAtLocal: String? = null,
+  @Json(name = "pickedUpAtLocal") val pickedUpAtLocal: String? = null,
   @Json(name = "completedAtLocal") val completedAtLocal: String? = null,
   @Json(name = "cancelledAtLocal") val cancelledAtLocal: String? = null,
   @Json(name = "orderPlacedAt") val orderPlacedAt: String? = null,
   @Json(name = "confirmedAt") val confirmedAt: String? = null,
   @Json(name = "preparingAt") val preparingAt: String? = null,
   @Json(name = "readyAt") val readyAt: String? = null,
+  @Json(name = "pickedUpAt") val pickedUpAt: String? = null,
   @Json(name = "completedAt") val completedAt: String? = null,
   @Json(name = "cancelledAt") val cancelledAt: String? = null,
   @Json(name = "createdAt") val createdAt: String? = null,
+  @Json(name = "qrDataUrl") val qrDataUrl: String? = null,
+  @Json(name = "verificationToken") val verificationToken: String? = null,
+  @Json(name = "barcodeFormat") val barcodeFormat: String? = "CODE128",
+  @Json(name = "barcodeStatus") val barcodeStatus: String? = "ACTIVE",
+  @Json(name = "barcodeDataUrl") val barcodeDataUrl: String? = null,
+  @Json(name = "collectedAt") val collectedAt: String? = null,
+  @Json(name = "collectedBy") val collectedBy: String? = null,
+  @Json(name = "verificationExpiresAt") val verificationExpiresAt: String? = null,
   @Json(name = "statusHistory") val statusHistory: List<StatusHistoryDto> = emptyList(),
 ) {
   fun toOrderRecord(): OrderRecord {
     val parsedStatus = when (status.uppercase()) {
       "NEW" -> OrderStatus.NEW
       "READY" -> OrderStatus.READY
-      "COMPLETED" -> OrderStatus.COMPLETED
+      "COMPLETED", "PICKED_UP" -> OrderStatus.COMPLETED
       else -> OrderStatus.PREPARING
     }
 
@@ -764,6 +788,106 @@ data class OrderQueuePositionDto(
 data class UserFavoritesResponseDto(
   @Json(name = "favorites") val favorites: List<String> = emptyList(),
 )
+
+// ── QR Code Verification Models ─────────────────────────────────────────────
+
+@JsonClass(generateAdapter = true)
+data class OrderQrResponseDto(
+  @Json(name = "success") val success: Boolean = false,
+  @Json(name = "code") val code: String? = null,
+  @Json(name = "message") val message: String? = null,
+  @Json(name = "orderId") val orderId: String? = null,
+  @Json(name = "tokenNumber") val tokenNumber: String? = null,
+  @Json(name = "canteenId") val canteenId: String? = null,
+  @Json(name = "pickupCanteenName") val pickupCanteenName: String? = null,
+  @Json(name = "pickupCounter") val pickupCounter: String? = null,
+  @Json(name = "status") val status: String? = null,
+  @Json(name = "qrDataUrl") val qrDataUrl: String? = null,
+  @Json(name = "rawToken") val rawToken: String? = null,
+  @Json(name = "expiresAt") val expiresAt: String? = null,
+  @Json(name = "validityMinutes") val validityMinutes: Int? = null,
+  @Json(name = "error") val error: String? = null,
+  @Json(name = "pickedUpAt") val pickedUpAt: String? = null,
+  @Json(name = "pickedUpAtLocal") val pickedUpAtLocal: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class VerifyQrRequestDto(
+  @Json(name = "token") val token: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class VerifyQrResponseDto(
+  @Json(name = "success") val success: Boolean = false,
+  @Json(name = "code") val code: String? = null,
+  @Json(name = "message") val message: String? = null,
+  @Json(name = "order") val order: MongoOrderDto? = null,
+  @Json(name = "verification") val verification: Map<String, @JvmSuppressWildcards Any?>? = null,
+  @Json(name = "error") val error: String? = null,
+  @Json(name = "currentStatus") val currentStatus: String? = null,
+)
+
+// ── Code 128 Barcode Verification Models ───────────────────────────────────
+
+@JsonClass(generateAdapter = true)
+data class OrderBarcodeResponseDto(
+  @Json(name = "success") val success: Boolean = false,
+  @Json(name = "code") val code: String? = null,
+  @Json(name = "message") val message: String? = null,
+  @Json(name = "orderId") val orderId: String? = null,
+  @Json(name = "tokenNumber") val tokenNumber: String? = null,
+  @Json(name = "verificationToken") val verificationToken: String? = null,
+  @Json(name = "barcodeFormat") val barcodeFormat: String? = "CODE128",
+  @Json(name = "barcodeStatus") val barcodeStatus: String? = "ACTIVE",
+  @Json(name = "barcodeDataUrl") val barcodeDataUrl: String? = null,
+  @Json(name = "status") val status: String? = null,
+  @Json(name = "orderDate") val orderDate: String? = null,
+  @Json(name = "orderTime") val orderTime: String? = null,
+  @Json(name = "orderPlacedAtLocal") val orderPlacedAtLocal: String? = null,
+  @Json(name = "items") val items: List<MongoOrderItemDto> = emptyList(),
+  @Json(name = "totalAmount") val totalAmount: Double = 0.0,
+  @Json(name = "canteenId") val canteenId: String? = null,
+  @Json(name = "pickupCanteenName") val pickupCanteenName: String? = null,
+  @Json(name = "pickupCounter") val pickupCounter: String? = null,
+  @Json(name = "instruction") val instruction: String? = "Show this barcode to the canteen owner when collecting your order.",
+  @Json(name = "collectedAt") val collectedAt: String? = null,
+  @Json(name = "collectedAtLocal") val collectedAtLocal: String? = null,
+  @Json(name = "collectedBy") val collectedBy: String? = null,
+  @Json(name = "error") val error: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class VerifyBarcodeRequestDto(
+  @Json(name = "token") val token: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class VerifyBarcodeResponseDto(
+  @Json(name = "success") val success: Boolean = false,
+  @Json(name = "code") val code: String? = null,
+  @Json(name = "message") val message: String? = null,
+  @Json(name = "order") val order: MongoOrderDto? = null,
+  @Json(name = "error") val error: String? = null,
+  @Json(name = "currentStatus") val currentStatus: String? = null,
+  @Json(name = "collectedAt") val collectedAt: String? = null,
+  @Json(name = "collectedAtLocal") val collectedAtLocal: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ConfirmPickupRequestDto(
+  @Json(name = "token") val token: String? = null,
+  @Json(name = "orderId") val orderId: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ConfirmPickupResponseDto(
+  @Json(name = "success") val success: Boolean = false,
+  @Json(name = "code") val code: String? = null,
+  @Json(name = "message") val message: String? = null,
+  @Json(name = "order") val order: MongoOrderDto? = null,
+  @Json(name = "error") val error: String? = null,
+)
+
 
 
 

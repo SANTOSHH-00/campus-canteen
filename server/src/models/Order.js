@@ -55,6 +55,7 @@ const orderSchema = new mongoose.Schema(
     confirmedAtLocal: { type: String, default: '' },
     preparingAtLocal: { type: String, default: '' },
     readyAtLocal: { type: String, default: '' },
+    pickedUpAtLocal: { type: String, default: '' },
     completedAtLocal: { type: String, default: '' },
     cancelledAtLocal: { type: String, default: '' },
     // Server-authoritative status event timestamps aligned with local campus time
@@ -62,8 +63,51 @@ const orderSchema = new mongoose.Schema(
     confirmedAt: { type: Date, default: null },
     preparingAt: { type: Date, default: null },
     readyAt: { type: Date, default: null },
+    pickedUpAt: { type: Date, default: null },
     completedAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
+    verifiedByOwnerId: { type: String, default: null },
+    // Barcode Verification & Pickup Fields
+    verificationToken: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
+    barcodeFormat: {
+      type: String,
+      default: 'CODE128',
+    },
+    barcodeStatus: {
+      type: String,
+      enum: ['ACTIVE', 'USED', 'EXPIRED', 'CANCELLED'],
+      default: 'ACTIVE',
+      index: true,
+    },
+    barcodeDataUrl: {
+      type: String,
+      default: '',
+    },
+    generatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    expiresAt: {
+      type: Date,
+      default: null,
+    },
+    usedAt: {
+      type: Date,
+      default: null,
+    },
+    collectedAt: {
+      type: Date,
+      default: null,
+    },
+    collectedBy: {
+      type: String,
+      default: null,
+    },
     statusHistory: { type: [statusHistorySchema], default: [] },
   },
   { timestamps: true }
@@ -74,5 +118,7 @@ orderSchema.index({ canteenId: 1, status: 1, orderPlacedAt: 1, createdAt: 1, ord
 orderSchema.index({ canteenId: 1, status: 1, createdAt: -1 });
 orderSchema.index({ studentId: 1, createdAt: -1 });
 orderSchema.index({ tokenNumber: 1, canteenId: 1 });
+orderSchema.index({ verificationToken: 1, barcodeStatus: 1 });
+orderSchema.index({ canteenId: 1, verificationToken: 1 });
 
 module.exports = mongoose.model('Order', orderSchema);

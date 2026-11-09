@@ -104,7 +104,6 @@ fun StudentProfileDrawer(
   onLogout: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  var showTimeDialog by remember { mutableStateOf(false) }
   var showLogoutConfirm by remember { mutableStateOf(false) }
   var showLoginSheet by remember { mutableStateOf(false) }
   var activeDialogTitle by remember { mutableStateOf<String?>(null) }
@@ -243,32 +242,6 @@ fun StudentProfileDrawer(
                   fontWeight = FontWeight.SemiBold,
                   color = BlackPrimary.copy(alpha = 0.7f),
                 )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // Compact Break Timing Chip
-                Row(
-                  verticalAlignment = Alignment.CenterVertically,
-                  modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF2C2C30))
-                    .clickable { showTimeDialog = true }
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                ) {
-                  Icon(
-                    imageVector = Icons.Default.AccessTime,
-                    contentDescription = "Break Time",
-                    tint = DrawerAmber,
-                    modifier = Modifier.size(13.dp),
-                  )
-                  Spacer(modifier = Modifier.width(5.dp))
-                  Text(
-                    text = "${appState.breakStartTime} – ${appState.breakEndTime}",
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PureWhite,
-                  )
-                }
               }
             }
 
@@ -403,19 +376,6 @@ fun StudentProfileDrawer(
         }
       }
     }
-  }
-
-  // ── Minimal Break Clock Dialog ─────────────────────────────────────────────
-  if (showTimeDialog) {
-    MinimalBreakClockDialog(
-      initialStart = appState.breakStartTime,
-      initialEnd = appState.breakEndTime,
-      onDismiss = { showTimeDialog = false },
-      onConfirm = { start, end, minLeft ->
-        appState.updateBreakSchedule(start, end, minLeft)
-        showTimeDialog = false
-      },
-    )
   }
 
   // ── Info / Sheet Dialog for Drawer Options ─────────────────────────────────

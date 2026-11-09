@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.RestaurantMenu
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -112,11 +113,11 @@ import com.example.ui.state.CanteenAppState
 import java.util.Calendar
 
 // ── PRIVATE THEME TOKENS ──────────────────────────────────────────────────────
-private val OrangeAccent = Color(0xFFFF5200)
-private val AmberBrand = Color(0xFFEBA53D)
+private val OrangeAccent = Color(0xFFF59E0B)
+private val AmberBrand = Color(0xFFF59E0B)
 private val CardBackground = Color(0xFFFFFFFF)
 private val PageBackground = WarmCream
-private val SelectedNavBg = Color(0xFFFFF0E8)
+private val SelectedNavBg = Color(0xFFFEF3C7)
 
 // ── NAV ITEM MODEL ────────────────────────────────────────────────────────────
 private data class NavItem(
@@ -152,6 +153,7 @@ fun OwnerDashboardScreen(
     var drawerOpen by remember { mutableStateOf(false) }
     var selectedNavItem by remember { mutableStateOf("Dashboard") }
     var showCloseReasonDialog by remember { mutableStateOf(false) }
+    var showBarcodeScanner by remember { mutableStateOf(false) }
     var selectedReason by remember { mutableStateOf("Break") }
     var customReason by remember { mutableStateOf("") }
 
@@ -224,6 +226,7 @@ fun OwnerDashboardScreen(
             is DashboardUiState.Ready -> {
                 val navItems = listOf(
                     NavItem("Dashboard", Icons.Default.Home, tag = "nav_dashboard"),
+                    NavItem("SCAN & VERIFY ORDER", Icons.Default.QrCodeScanner, tag = "nav_scan_order"),
                     NavItem("Menu Management", Icons.Default.RestaurantMenu, tag = "nav_menu_mgmt"),
                     NavItem("Customers", Icons.Default.Group, tag = "nav_customers"),
                     NavItem("Discounts & Offers", Icons.Default.LocalOffer, tag = "nav_discounts"),
@@ -243,6 +246,7 @@ fun OwnerDashboardScreen(
                                 selectedNavItem = "Profile"
                                 drawerOpen = false
                             },
+                            onScanQrClick = { showBarcodeScanner = true },
                         )
                     }
 
@@ -273,6 +277,10 @@ fun OwnerDashboardScreen(
                                     selectedNavItem = item
                                     drawerOpen = false
                                     when (item) {
+                                        "SCAN & VERIFY ORDER", "Scan Pickup QR" -> {
+                                            selectedNavItem = "Dashboard"
+                                            showBarcodeScanner = true
+                                        }
                                         "Menu Management" -> onNavigateToManageItems()
                                         else -> {}
                                     }
@@ -315,6 +323,7 @@ fun OwnerDashboardScreen(
                                         onAdvanceOrderStatus = { orderId, nextStatus ->
                                             dashboardViewModel.updateOrderStatus(orderId, nextStatus)
                                         },
+                                        onScanQrClick = { showBarcodeScanner = true },
                                     )
                                 }
                             }
@@ -390,6 +399,16 @@ fun OwnerDashboardScreen(
             shape = RoundedCornerShape(20.dp),
         )
     }
+
+    // ── OWNER BARCODE SCANNER MODAL: SCAN & VERIFY ORDER ───────────────────
+    if (showBarcodeScanner) {
+        OwnerBarcodeScannerModal(
+            onDismiss = { showBarcodeScanner = false },
+            onOrderVerified = {
+                dashboardViewModel.refresh()
+            }
+        )
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -401,6 +420,7 @@ fun OwnerTopBar(
     drawerOpen: Boolean = false,
     onHamburgerClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
+    onScanQrClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -452,6 +472,29 @@ fun OwnerTopBar(
             }
 
             Spacer(Modifier.weight(1f))
+
+            // Dedicated QR Scanner button
+            if (onScanQrClick != null) {
+                IconButton(
+                    onClick = onScanQrClick,
+                    modifier = Modifier.testTag("owner_top_scan_qr_button")
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFF5F3FF)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.QrCodeScanner,
+                            contentDescription = "Scan Customer QR",
+                            tint = Color(0xFF7C3AED),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
 
             // Notification bell with alert dot
             IconButton(onClick = {}) {
@@ -716,6 +759,7 @@ private fun OwnerDashboardBody(
     onNavigateToOrders: () -> Unit,
     onToggleCanteen: () -> Unit,
     onAdvanceOrderStatus: (String, String) -> Unit,
+    onScanQrClick: () -> Unit = {},
 ) {
     val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val greeting = when {
@@ -771,8 +815,18 @@ private fun OwnerDashboardBody(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            QuickDashboardAction(
+                label = "Scan & Verify",
+                icon = Icons.Default.QrCodeScanner,
+                backgroundColor = Color(0xFFF5F3FF),
+                iconColor = Color(0xFF7C3AED),
+                borderColor = Color(0xFFEDE9FE),
+                modifier = Modifier.weight(1f),
+                testTag = "quick_action_scan_barcode",
+                onClick = onScanQrClick,
+            )
             QuickDashboardAction(
                 label = "Add Item",
                 icon = Icons.Default.Add,

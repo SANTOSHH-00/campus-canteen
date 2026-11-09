@@ -289,8 +289,14 @@ class CanteenAppState(val context: android.content.Context? = null) {
     studentOrdersJob = null
     currentUser = null
     orders.clear()
+    clearCart()
+    favoriteItemIds.clear()
+    try {
+      SessionManager.saveFavoriteItemIds(emptySet())
+    } catch (_: Exception) {}
     SessionManager.clearStudentSession()
     SessionManager.clearActiveOrderTracking()
+    dismissCartNotification()
     context?.let { com.example.data.service.OrderStatusNotificationService.stop(it) }
   }
 
@@ -558,6 +564,7 @@ class CanteenAppState(val context: android.content.Context? = null) {
   }
 
   fun addToCart(item: FoodItem) {
+    if (!item.isAvailable) return
     val existing = cartItems.indexOfFirst { it.foodItem.id == item.id && it.selectedOption == null && it.selectedAddons.isEmpty() }
     if (existing >= 0) {
       val current = cartItems[existing]
@@ -575,6 +582,7 @@ class CanteenAppState(val context: android.content.Context? = null) {
     selectedOption: String?,
     selectedAddons: List<FoodAddon>,
   ) {
+    if (!item.isAvailable) return
     val existing = cartItems.indexOfFirst {
       it.foodItem.id == item.id &&
         it.selectedOption == selectedOption &&
@@ -648,31 +656,36 @@ class CanteenAppState(val context: android.content.Context? = null) {
   // Category filter state for MenuScreen (e.g. set by Quick Order 'See All')
   var selectedMenuCategory by mutableStateOf<FoodCategory?>(null)
 
-  // Full-screen right-sliding filter drawer state
+  // Menu filter and sorting state
   var isMenuFilterOpen by mutableStateOf(false)
+  var isMenuSortOpen by mutableStateOf(false)
   var menuFilterSort by mutableStateOf(MenuSortOption.RECOMMENDED)
   var menuFilterDietary by mutableStateOf(MenuDietaryFilter.ALL)
   var menuFilterMaxMinutes by mutableStateOf<Int?>(null)
+  var menuFilterMinPrice by mutableStateOf<Int?>(null)
   var menuFilterMaxPrice by mutableStateOf<Int?>(null)
   var menuFilterMinRating by mutableStateOf<Double?>(null)
+  var menuFilterAvailableOnly by mutableStateOf(false)
 
   val isAnyMenuFilterActive: Boolean
     get() = selectedMenuCategory != null ||
             menuFilterDietary != MenuDietaryFilter.ALL ||
             menuFilterSort != MenuSortOption.RECOMMENDED ||
             menuFilterMaxMinutes != null ||
+            menuFilterMinPrice != null ||
             menuFilterMaxPrice != null ||
-            menuFilterMinRating != null
+            menuFilterMinRating != null ||
+            menuFilterAvailableOnly
 
   val activeMenuFilterCount: Int
     get() {
       var count = 0
       if (selectedMenuCategory != null) count++
       if (menuFilterDietary != MenuDietaryFilter.ALL) count++
-      if (menuFilterSort != MenuSortOption.RECOMMENDED) count++
-      if (menuFilterMaxMinutes != null) count++
-      if (menuFilterMaxPrice != null) count++
+      if (menuFilterAvailableOnly) count++
+      if (menuFilterMinPrice != null || menuFilterMaxPrice != null) count++
       if (menuFilterMinRating != null) count++
+      if (menuFilterMaxMinutes != null) count++
       return count
     }
 
@@ -681,8 +694,10 @@ class CanteenAppState(val context: android.content.Context? = null) {
     menuFilterDietary = MenuDietaryFilter.ALL
     menuFilterSort = MenuSortOption.RECOMMENDED
     menuFilterMaxMinutes = null
+    menuFilterMinPrice = null
     menuFilterMaxPrice = null
     menuFilterMinRating = null
+    menuFilterAvailableOnly = false
   }
 
   // YOUR USUAL Banner state & computation

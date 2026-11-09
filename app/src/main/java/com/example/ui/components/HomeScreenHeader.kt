@@ -16,17 +16,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,22 +33,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.state.CanteenAppState
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
-import com.example.ui.theme.BreakCardBg
-import com.example.ui.theme.DeliveryOrange
 import com.example.ui.theme.GoldenAmber
-import com.example.ui.theme.OpenGreen
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.TextDark
 import com.example.ui.theme.TextMuted
 
+/**
+ * Modern Top Bar for the Home Screen:
+ * Displays the navigation drawer icon, QuickBite branding logo,
+ * interactive Canteen location pill, and notifications bell with badge.
+ * Designed with a flat, clean, premium aesthetic without unnecessary borders or shadows.
+ */
 @Composable
-fun HomeScreenHeader(
-  userName: String = "Alex",
+fun HomeScreenTopBar(
   appState: CanteenAppState,
   onProfileClick: () -> Unit = {},
   onNotificationClick: () -> Unit = {},
@@ -60,136 +59,97 @@ fun HomeScreenHeader(
 ) {
   var showCanteenSelectorSheet by remember { mutableStateOf(false) }
 
-  Column(
-    modifier = modifier.fillMaxWidth()
+  Row(
+    modifier = modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalAlignment = Alignment.CenterVertically,
   ) {
-    // ── Row 1: Staggered Menu Icon (Image 3) + App Brand & Logo + Location & Bell ───
+    // Top Left: Staggered Menu Icon + App Brand Logo + QuickBite Name
     Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      // Top Left: 3-half design staggered icon + Design Logo + QuickBite Name
+      StaggeredMenuIcon(
+        onClick = onProfileClick,
+        tint = BlackPrimary,
+      )
+      Spacer(modifier = Modifier.width(8.dp))
+      QuickBiteLogoIcon(modifier = Modifier.size(34.dp))
+      Spacer(modifier = Modifier.width(8.dp))
+      Text(
+        text = "QuickBite",
+        fontSize = 24.sp,
+        fontWeight = FontWeight.Black,
+        color = BlackPrimary,
+        letterSpacing = (-0.5).sp,
+      )
+    }
+
+    // Top Right: Location Pill + Notification Bell
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      // Interactive Block Canteen Location Dropdown / Pill
       Row(
+        modifier = Modifier
+          .clip(RoundedCornerShape(20.dp))
+          .background(PureWhite)
+          .border(1.2.dp, BorderGray.copy(alpha = 0.8f), RoundedCornerShape(20.dp))
+          .clickable { showCanteenSelectorSheet = true }
+          .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        StaggeredMenuIcon(
-          onClick = onProfileClick,
-          tint = BlackPrimary,
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        QuickBiteLogoIcon(modifier = Modifier.size(34.dp))
-        Spacer(modifier = Modifier.width(8.dp))
+        Text(appState.selectedCanteen.icon, fontSize = 14.sp)
+        Spacer(modifier = Modifier.width(5.dp))
         Text(
-          text = "QuickBite",
-          fontSize = 26.sp,
-          fontWeight = FontWeight.Black,
-          color = BlackPrimary,
-          letterSpacing = (-0.5).sp,
+          text = appState.selectedCanteen.betweenBlocks,
+          fontSize = 13.sp,
+          fontWeight = FontWeight.ExtraBold,
+          color = TextDark,
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Icon(
+          imageVector = if (showCanteenSelectorSheet) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+          contentDescription = "Select Canteen",
+          tint = TextDark,
+          modifier = Modifier.size(18.dp),
         )
       }
 
-      // Top Right: Location Pill (Image 3) + Notification Bell
-      Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-      ) {
-        // Interactive Block Canteen Location Dropdown / Pill
-        Row(
-          modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(PureWhite)
-            .border(1.2.dp, BorderGray.copy(alpha = 0.8f), RoundedCornerShape(20.dp))
-            .clickable { showCanteenSelectorSheet = true }
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-          verticalAlignment = Alignment.CenterVertically,
+      // Bell Icon with unread count badge
+      Box(contentAlignment = Alignment.Center) {
+        IconButton(
+          onClick = onNotificationClick,
+          modifier = Modifier.size(42.dp),
         ) {
-          Text(appState.selectedCanteen.icon, fontSize = 14.sp)
-          Spacer(modifier = Modifier.width(5.dp))
-          Text(
-            text = appState.selectedCanteen.betweenBlocks,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = TextDark,
-          )
-          Spacer(modifier = Modifier.width(4.dp))
           Icon(
-            imageVector = if (showCanteenSelectorSheet) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
-            contentDescription = "Select Canteen",
-            tint = TextDark,
-            modifier = Modifier.size(18.dp),
+            imageVector = Icons.Default.NotificationsNone,
+            contentDescription = "Notifications",
+            tint = BlackPrimary,
+            modifier = Modifier.size(26.dp),
           )
         }
-
-        // Bell Icon with unread count badge
-        Box(contentAlignment = Alignment.Center) {
-          IconButton(
-            onClick = onNotificationClick,
-            modifier = Modifier.size(42.dp),
+        val unreadCount = appState.notifications.count { it.isUnread }
+        if (unreadCount > 0) {
+          Box(
+            modifier = Modifier
+              .align(Alignment.TopEnd)
+              .padding(top = 4.dp, end = 4.dp)
+              .size(if (unreadCount > 9) 18.dp else 16.dp)
+              .clip(CircleShape)
+              .background(GoldenAmber),
+            contentAlignment = Alignment.Center,
           ) {
-            Icon(
-              imageVector = Icons.Default.NotificationsNone,
-              contentDescription = "Notifications",
-              tint = BlackPrimary,
-              modifier = Modifier.size(26.dp),
+            Text(
+              text = if (unreadCount > 9) "9+" else unreadCount.toString(),
+              fontSize = 9.5.sp,
+              fontWeight = FontWeight.Bold,
+              color = PureWhite,
             )
           }
-          val unreadCount = appState.notifications.count { it.isUnread }
-          if (unreadCount > 0) {
-            Box(
-              modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 4.dp, end = 4.dp)
-                .size(if (unreadCount > 9) 18.dp else 16.dp)
-                .clip(CircleShape)
-                .background(DeliveryOrange),
-              contentAlignment = Alignment.Center,
-            ) {
-              Text(
-                text = if (unreadCount > 9) "9+" else unreadCount.toString(),
-                fontSize = 9.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = PureWhite,
-              )
-            }
-          }
         }
       }
     }
-
-    Spacer(modifier = Modifier.height(10.dp))
-
-    val timeGreeting = remember {
-      val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-      when {
-        hour < 12 -> "Good Morning"
-        hour < 17 -> "Good Afternoon"
-        else -> "Good Evening"
-      }
-    }
-
-    val greeting = if (userName.isBlank() || userName.equals("Guest", ignoreCase = true)) {
-      "Welcome to QuickBite 👋"
-    } else {
-      "$timeGreeting, $userName 👋"
-    }
-
-    Text(
-      text = greeting,
-      fontSize = 24.sp,
-      fontWeight = FontWeight.ExtraBold,
-      color = BlackPrimary,
-      letterSpacing = (-0.3).sp,
-    )
-
-    Spacer(modifier = Modifier.height(2.dp))
-
-    Text(
-      text = "What would you like to eat today?",
-      fontSize = 13.sp,
-      fontWeight = FontWeight.Medium,
-      color = TextMuted,
-    )
   }
 
   // Intermediate Block Canteen Selector Sheet
@@ -209,8 +169,111 @@ fun HomeScreenHeader(
 }
 
 /**
+ * Redesigned Home Greeting Section:
+ * Features clear visual hierarchy, prominent student name typography,
+ * dynamic local-time greetings (Good Morning / Good Afternoon / Good Evening),
+ * and completely seamless background integration without box-like borders or horizontal lines.
+ */
+@Composable
+fun HomeGreetingSection(
+  userName: String = "Alex",
+  modifier: Modifier = Modifier,
+) {
+  val timeGreeting = remember {
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    when {
+      hour < 12 -> "Good Morning"
+      hour < 17 -> "Good Afternoon"
+      else -> "Good Evening"
+    }
+  }
+
+  val isGuest = userName.isBlank() || userName.equals("Guest", ignoreCase = true)
+  val salutation = if (isGuest) "Welcome," else "$timeGreeting,"
+  val studentName = if (isGuest) "Food Lover" else userName.trim()
+
+  Column(
+    modifier = modifier.fillMaxWidth(),
+    verticalArrangement = Arrangement.spacedBy(1.dp),
+  ) {
+    // ── 1. Salutation: Dynamic time greeting in elegant muted slate ────
+    Text(
+      text = salutation,
+      fontSize = 15.sp,
+      fontWeight = FontWeight.SemiBold,
+      color = TextMuted,
+      letterSpacing = 0.2.sp,
+      lineHeight = 20.sp,
+    )
+
+    // ── 2. Prominent Student Name with friendly wave emoji ─────────────
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      modifier = Modifier.fillMaxWidth(),
+    ) {
+      Text(
+        text = studentName,
+        fontSize = 26.sp,
+        fontWeight = FontWeight.Black,
+        color = BlackPrimary,
+        letterSpacing = (-0.5).sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(1f, fill = false),
+      )
+      Spacer(modifier = Modifier.width(6.dp))
+      Text(
+        text = "👋",
+        fontSize = 22.sp,
+      )
+    }
+
+    // ── 3. Subtitle: Contextual Guidance ──────────────────────────────
+    Text(
+      text = "What would you like to eat today?",
+      fontSize = 13.5.sp,
+      fontWeight = FontWeight.Medium,
+      color = TextMuted,
+      letterSpacing = 0.1.sp,
+      modifier = Modifier.padding(top = 2.dp),
+    )
+  }
+}
+
+/**
+ * Legacy & backwards-compatible HomeScreenHeader.
+ * Composes HomeScreenTopBar and optional HomeGreetingSection together.
+ */
+@Composable
+fun HomeScreenHeader(
+  userName: String = "Alex",
+  appState: CanteenAppState,
+  onProfileClick: () -> Unit = {},
+  onNotificationClick: () -> Unit = {},
+  includeGreeting: Boolean = true,
+  modifier: Modifier = Modifier,
+) {
+  Column(
+    modifier = modifier.fillMaxWidth()
+  ) {
+    HomeScreenTopBar(
+      appState = appState,
+      onProfileClick = onProfileClick,
+      onNotificationClick = onNotificationClick,
+    )
+
+    if (includeGreeting) {
+      Spacer(modifier = Modifier.height(10.dp))
+      HomeGreetingSection(
+        userName = userName,
+      )
+    }
+  }
+}
+
+/**
  * Modern design logo icon beside QuickBite app name:
- * Stylish squircle with flame-orange gradient and bite/food glyph.
+ * Stylish squircle with obsidian slate fill and food glyph.
  */
 @Composable
 fun QuickBiteLogoIcon(
@@ -231,5 +294,3 @@ fun QuickBiteLogoIcon(
     )
   }
 }
-
-

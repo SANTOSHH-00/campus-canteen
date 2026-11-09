@@ -36,6 +36,24 @@ interface QuickbiteApiService {
   @POST("owner/resend-otp")
   suspend fun ownerResendOtp(@Body body: OwnerResendOtpRequestDto): Response<SimpleMessageResponseDto>
 
+  @POST("owner/orders/verify-qr")
+  suspend fun verifyQr(
+    @Body body: VerifyQrRequestDto,
+    @retrofit2.http.Header("Authorization") authHeader: String? = null,
+  ): Response<VerifyQrResponseDto>
+
+  @POST("owner/orders/verify-barcode")
+  suspend fun verifyBarcode(
+    @Body body: VerifyBarcodeRequestDto,
+    @retrofit2.http.Header("Authorization") authHeader: String? = null,
+  ): Response<VerifyBarcodeResponseDto>
+
+  @POST("owner/orders/confirm-pickup")
+  suspend fun confirmPickup(
+    @Body body: ConfirmPickupRequestDto,
+    @retrofit2.http.Header("Authorization") authHeader: String? = null,
+  ): Response<ConfirmPickupResponseDto>
+
   // ── Canteens ──────────────────────────────────────────────────────────────
   @GET("canteens")
   suspend fun getCanteens(): Response<List<MongoCanteenDto>>
@@ -113,6 +131,12 @@ interface QuickbiteApiService {
 
   @GET("orders/{id}/queue")
   suspend fun getOrderQueuePosition(@Path("id") id: String): Response<OrderQueuePositionDto>
+
+  @GET("orders/{id}/qr")
+  suspend fun getOrderQr(@Path("id") id: String): Response<OrderQrResponseDto>
+
+  @GET("orders/{id}/barcode")
+  suspend fun getOrderBarcode(@Path("id") id: String): Response<OrderBarcodeResponseDto>
 
   @PATCH("orders/{id}/status")
   suspend fun updateOrderStatus(

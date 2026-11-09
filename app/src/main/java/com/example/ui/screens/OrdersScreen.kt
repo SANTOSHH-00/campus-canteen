@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Storefront
@@ -101,7 +102,7 @@ private val BadgeReadyBg = Color(0xFFF0FDF4)
 private val BadgePickedUpBg = Color(0xFFEFF6FF)
 private val BluePickedUp = Color(0xFF2563EB)
 private val PageBackground = WarmCream
-private val CardBorderColor = Color(0xFFE5DFD5)
+private val CardBorderColor = Color(0xFFE2E8F0)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1119,36 +1120,68 @@ private fun CustomerOrderCard(
 
         Row(
           verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          Icon(
-            imageVector = when {
-              isReady -> Icons.Default.CheckCircle
-              isPickedUp -> Icons.Default.ShoppingBag
-              else -> Icons.Default.AccessTime
-            },
-            contentDescription = null,
-            tint = when {
-              isReady -> GreenReady
-              isPickedUp -> Color(0xFF6B7280)
-              else -> DrawerAmber
-            },
-            modifier = Modifier.size(15.dp),
-          )
-          Spacer(Modifier.width(5.dp))
-          Text(
-            text = when {
-              isReady -> "Ready"
-              isPickedUp -> "Picked Up"
-              else -> "Preparing"
-            },
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = when {
-              isReady -> GreenReady
-              isPickedUp -> Color(0xFF6B7280)
-              else -> DrawerAmber
-            },
-          )
+          // Dedicated Pickup QR badge
+          Box(
+            modifier = Modifier
+              .clip(RoundedCornerShape(8.dp))
+              .background(Color(0xFFFFF7ED))
+              .border(1.dp, Color(0xFFFDBA74), RoundedCornerShape(8.dp))
+              .clickable { onClick() }
+              .padding(horizontal = 7.dp, vertical = 3.dp),
+            contentAlignment = Alignment.Center
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(
+                imageVector = Icons.Default.QrCode,
+                contentDescription = "View QR",
+                tint = Color(0xFFEA580C),
+                modifier = Modifier.size(13.dp)
+              )
+              Spacer(Modifier.width(3.dp))
+              Text(
+                text = "QR",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFFEA580C)
+              )
+            }
+          }
+
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Icon(
+              imageVector = when {
+                isReady -> Icons.Default.CheckCircle
+                isPickedUp -> Icons.Default.ShoppingBag
+                else -> Icons.Default.AccessTime
+              },
+              contentDescription = null,
+              tint = when {
+                isReady -> GreenReady
+                isPickedUp -> Color(0xFF6B7280)
+                else -> DrawerAmber
+              },
+              modifier = Modifier.size(15.dp),
+            )
+            Spacer(Modifier.width(5.dp))
+            Text(
+              text = when {
+                isReady -> "Ready"
+                isPickedUp -> "Picked Up"
+                else -> "Preparing"
+              },
+              fontSize = 13.sp,
+              fontWeight = FontWeight.Bold,
+              color = when {
+                isReady -> GreenReady
+                isPickedUp -> Color(0xFF6B7280)
+                else -> DrawerAmber
+              },
+            )
+          }
         }
       }
 
