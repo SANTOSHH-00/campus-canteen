@@ -64,8 +64,9 @@ import com.example.ui.theme.WarmCream
 private val AmberBrand = DrawerAmber
 private val AmberBorder = DrawerAmberDark
 private val AmberBgSoft = DrawerAmberLight
-private val SelectedCardBg = PureWhite
-private val BorderMuted = BorderGray
+private val CardBg = Color(0xFFEFE2CD)
+private val SelectedCardBg = DrawerAmberLight
+private val BorderMuted = Color(0xFFDFCFB7)
 private val DarkTitle = BlackPrimary
 private val SubtitleGray = TextMuted
 private val StatusGreen = Color(0xFF10B981)
@@ -127,7 +128,7 @@ fun BlockCanteenSelectorSheet(
               .width(42.dp)
               .height(4.5.dp)
               .clip(RoundedCornerShape(3.dp))
-              .background(Color(0xFFE5E7EB)),
+              .background(Color(0xFFD6C6AA)),
           )
 
           Spacer(modifier = Modifier.height(16.dp))
@@ -275,7 +276,7 @@ private fun CanteenCardItem(
         color = if (isSelected) AmberBorder else BorderMuted,
         shape = RoundedCornerShape(16.dp),
       )
-      .background(if (isSelected) SelectedCardBg else PureWhite)
+      .background(if (isSelected) SelectedCardBg else CardBg)
       .clickable { onClick() }
       .padding(12.dp),
   ) {
@@ -298,7 +299,7 @@ private fun CanteenCardItem(
           )
           .border(
             width = if (isSelected) 2.dp else 1.2.dp,
-            color = if (isSelected) AmberBorder else Color(0xFFE5E7EB),
+            color = if (isSelected) AmberBorder else Color(0xFFDECDB3),
             shape = CircleShape,
           ),
         contentAlignment = Alignment.Center,

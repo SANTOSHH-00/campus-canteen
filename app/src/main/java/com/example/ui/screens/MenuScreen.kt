@@ -41,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -315,241 +316,220 @@ fun MenuScreen(
           Column {
             Text(
               text = "Menu: ${currentCanteen.name}",
-              fontSize = 22.sp,
+              fontSize = 20.sp,
               fontWeight = FontWeight.ExtraBold,
               color = BlackPrimary,
             )
             Text(
               text = if (sortedItems.isNotEmpty()) "${sortedItems.size} dishes available" else "Explore dishes",
-              fontSize = 12.sp,
+              fontSize = 11.5.sp,
               fontWeight = FontWeight.Medium,
               color = TextMuted,
             )
           }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // ── Modern Search Bar ──────────────────────────────────────────────
-        Box(
-          modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(PureWhite)
-            .border(1.dp, BorderGray.copy(alpha = 0.7f), RoundedCornerShape(24.dp))
-            .padding(horizontal = 14.dp),
-          contentAlignment = Alignment.CenterStart,
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(),
-          ) {
-            Icon(
-              imageVector = Icons.Default.Search,
-              contentDescription = "Search",
-              tint = DrawerAmber,
-              modifier = Modifier.size(20.dp),
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            BasicTextField(
-              value = searchQuery,
-              onValueChange = { searchQuery = it },
-              singleLine = true,
-              textStyle = TextStyle(fontSize = 13.5.sp, color = TextDark, fontWeight = FontWeight.Medium),
-              decorationBox = { innerTextField ->
-                if (searchQuery.isEmpty()) {
-                  Text(
-                    text = "Search for your favourite food...",
-                    fontSize = 13.sp,
-                    color = Color(0xFFAAAAAA),
-                  )
-                }
-                innerTextField()
-              },
-              modifier = Modifier.weight(1f),
-            )
-            if (searchQuery.isNotEmpty()) {
-              Box(
-                modifier = Modifier
-                  .size(22.dp)
-                  .clip(CircleShape)
-                  .background(SoftGray)
-                  .clickable { searchQuery = "" },
-                contentAlignment = Alignment.Center,
-              ) {
-                Icon(
-                  imageVector = Icons.Default.Close,
-                  contentDescription = "Clear",
-                  tint = TextDark,
-                  modifier = Modifier.size(14.dp),
-                )
-              }
-            }
-          }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // ── Controls Row: Filter Button, Sort Button, Clear All ─────────────
+        // ── Single Compact Row: Modern Search Bar + Filter Button (Minimal Screen Space) ──
         Row(
           modifier = Modifier.fillMaxWidth(),
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          // Filter Button
+          // Compact Search Input with Theme Integrated Palette
           Box(
             modifier = Modifier
-              .height(36.dp)
-              .clip(RoundedCornerShape(18.dp))
-              .background(if (appState.activeMenuFilterCount > 0) DrawerAmber else PureWhite)
+              .weight(1f)
+              .height(42.dp)
+              .clip(RoundedCornerShape(21.dp))
+              .background(Color(0xFFEFE2CD))
+              .border(1.dp, Color(0xFFDFCFB7), RoundedCornerShape(21.dp))
+              .padding(horizontal = 12.dp),
+            contentAlignment = Alignment.CenterStart,
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Search",
+                tint = DrawerAmber,
+                modifier = Modifier.size(18.dp),
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              BasicTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                singleLine = true,
+                textStyle = TextStyle(fontSize = 13.sp, color = TextDark, fontWeight = FontWeight.Medium),
+                decorationBox = { innerTextField ->
+                  if (searchQuery.isEmpty()) {
+                    Text(
+                      text = "Search dishes, drinks...",
+                      fontSize = 12.5.sp,
+                      color = TextMuted.copy(alpha = 0.8f),
+                    )
+                  }
+                  innerTextField()
+                },
+                modifier = Modifier.weight(1f),
+              )
+              if (searchQuery.isNotEmpty()) {
+                Box(
+                  modifier = Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFDFCFB7))
+                    .clickable { searchQuery = "" },
+                  contentAlignment = Alignment.Center,
+                ) {
+                  Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Clear",
+                    tint = TextDark,
+                    modifier = Modifier.size(12.dp),
+                  )
+                }
+              }
+            }
+          }
+
+          // Compact Filter Pill Button
+          val hasActiveFilters = appState.activeMenuFilterCount > 0
+          Box(
+            modifier = Modifier
+              .height(42.dp)
+              .clip(RoundedCornerShape(21.dp))
+              .background(if (hasActiveFilters) BlackPrimary else Color(0xFFEFE2CD))
               .border(
                 1.dp,
-                if (appState.activeMenuFilterCount > 0) DrawerAmberDark else BorderGray,
-                RoundedCornerShape(18.dp)
+                if (hasActiveFilters) BlackPrimary else Color(0xFFDFCFB7),
+                RoundedCornerShape(21.dp),
               )
               .clickable { appState.isMenuFilterOpen = true }
-              .padding(horizontal = 12.dp),
+              .padding(horizontal = 14.dp),
             contentAlignment = Alignment.Center,
           ) {
             Row(
               verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
               Icon(
                 imageVector = Icons.Default.Tune,
                 contentDescription = "Filter",
-                tint = if (appState.activeMenuFilterCount > 0) PureWhite else BlackPrimary,
+                tint = if (hasActiveFilters) PureWhite else BlackPrimary,
                 modifier = Modifier.size(16.dp),
               )
               Text(
                 text = "Filters",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (appState.activeMenuFilterCount > 0) PureWhite else BlackPrimary,
+                color = if (hasActiveFilters) PureWhite else BlackPrimary,
               )
-              if (appState.activeMenuFilterCount > 0) {
+              if (hasActiveFilters) {
                 Box(
                   modifier = Modifier
                     .size(18.dp)
                     .clip(CircleShape)
-                    .background(PureWhite),
+                    .background(DrawerAmber),
                   contentAlignment = Alignment.Center,
                 ) {
                   Text(
                     text = "${appState.activeMenuFilterCount}",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = DrawerAmberDark,
+                    color = PureWhite,
                   )
                 }
               }
             }
           }
-
-          // Sort Button
-          Box(
-            modifier = Modifier
-              .height(36.dp)
-              .clip(RoundedCornerShape(18.dp))
-              .background(PureWhite)
-              .border(1.dp, BorderGray, RoundedCornerShape(18.dp))
-              .clickable { appState.isMenuSortOpen = true }
-              .padding(horizontal = 12.dp),
-            contentAlignment = Alignment.Center,
-          ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-              Icon(
-                imageVector = Icons.AutoMirrored.Filled.Sort,
-                contentDescription = "Sort",
-                tint = BlackPrimary,
-                modifier = Modifier.size(16.dp),
-              )
-              Text(
-                text = "Sort: ${activeSort.shortLabel}",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = BlackPrimary,
-              )
-            }
-          }
-
-          Spacer(modifier = Modifier.weight(1f))
-
-          if (appState.isAnyMenuFilterActive || searchQuery.isNotEmpty()) {
-            Text(
-              text = "Clear all",
-              fontSize = 12.sp,
-              fontWeight = FontWeight.Bold,
-              color = DrawerAmber,
-              modifier = Modifier
-                .clickable {
-                  searchQuery = ""
-                  appState.resetAllMenuFilters()
-                }
-                .padding(horizontal = 6.dp, vertical = 4.dp),
-            )
-          }
         }
 
-        // ── Active Filter Chips Row (Completely omitted CategoryTabs bar) ────
-        if (appState.isAnyMenuFilterActive) {
-          Spacer(modifier = Modifier.height(8.dp))
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            if (activeCategory != null) {
-              val catLabel = when (activeCategory) {
-                FoodCategory.BREAKFAST -> "Breakfast"
-                FoodCategory.HEALTHY_BREAKFAST -> "Healthy Breakfast"
-                FoodCategory.LUNCH -> "Lunch"
-                FoodCategory.BEVERAGES -> "Beverages"
-                FoodCategory.SNACKS -> "Snacks"
-                FoodCategory.QUICK_ORDER -> "Quick Order"
-                FoodCategory.POPULAR -> "Popular"
-                FoodCategory.READY_UNDER_10 -> "Ready < 10m"
-              }
-              ActiveFilterChip(label = catLabel, onRemove = { appState.selectedMenuCategory = null })
-            }
+        Spacer(modifier = Modifier.height(8.dp))
 
-            if (activeDietary != MenuDietaryFilter.ALL) {
-              ActiveFilterChip(label = activeDietary.displayName, onRemove = { appState.menuFilterDietary = MenuDietaryFilter.ALL })
-            }
+        // ── Minimal Quick Filter Pills Row (Logical Natural Order, Minimal Screen Space) ──
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          // 1. Sort Pill (Dropdown indicator)
+          val isSortActive = activeSort != MenuSortOption.RECOMMENDED
+          QuickFilterPill(
+            label = if (isSortActive) activeSort.shortLabel else "Sort",
+            leadingIcon = Icons.AutoMirrored.Filled.Sort,
+            trailingIcon = Icons.Default.ArrowDropDown,
+            isSelected = isSortActive,
+            onClick = { appState.isMenuSortOpen = true },
+          )
 
-            if (activeAvailableOnly) {
-              ActiveFilterChip(label = "In Stock Only", onRemove = { appState.menuFilterAvailableOnly = false })
-            }
+          // 2. Vegetarian Pill
+          val isVegActive = activeDietary == MenuDietaryFilter.VEG_ONLY
+          QuickFilterPill(
+            label = "Veg",
+            isSelected = isVegActive,
+            onClick = {
+              appState.menuFilterDietary = if (isVegActive) MenuDietaryFilter.ALL else MenuDietaryFilter.VEG_ONLY
+            },
+          )
 
-            if (activeMinPrice != null || activeMaxPrice != null) {
-              val priceLabel = when {
-                activeMinPrice != null && activeMaxPrice != null -> "₹$activeMinPrice - ₹$activeMaxPrice"
-                activeMaxPrice != null -> "Under ₹$activeMaxPrice"
-                else -> "Above ₹$activeMinPrice"
-              }
-              ActiveFilterChip(label = priceLabel, onRemove = {
-                appState.menuFilterMinPrice = null
-                appState.menuFilterMaxPrice = null
-              })
-            }
+          // 3. Non-Vegetarian Pill
+          val isNonVegActive = activeDietary == MenuDietaryFilter.NON_VEG
+          QuickFilterPill(
+            label = "Non-Veg",
+            isSelected = isNonVegActive,
+            onClick = {
+              appState.menuFilterDietary = if (isNonVegActive) MenuDietaryFilter.ALL else MenuDietaryFilter.NON_VEG
+            },
+          )
 
-            if (activeMinRating != null) {
-              ActiveFilterChip(label = "$activeMinRating+ ★", onRemove = { appState.menuFilterMinRating = null })
-            }
+          // 4. Rating 4.0+ Pill
+          val isRatingActive = activeMinRating != null && activeMinRating >= 4.0
+          QuickFilterPill(
+            label = "4.0+ ★",
+            isSelected = isRatingActive,
+            onClick = {
+              appState.menuFilterMinRating = if (isRatingActive) null else 4.0
+            },
+          )
 
-            if (activeMaxMinutes != null) {
-              ActiveFilterChip(label = "< $activeMaxMinutes min", onRemove = { appState.menuFilterMaxMinutes = null })
-            }
+          // 5. Under ₹100 Pill
+          val isPriceActive = activeMaxPrice == 100
+          QuickFilterPill(
+            label = "Under ₹100",
+            isSelected = isPriceActive,
+            onClick = {
+              appState.menuFilterMaxPrice = if (isPriceActive) null else 100
+            },
+          )
 
-            if (activeSort != MenuSortOption.RECOMMENDED) {
-              ActiveFilterChip(label = activeSort.shortLabel, onRemove = { appState.menuFilterSort = MenuSortOption.RECOMMENDED })
-            }
+          // 6. In Stock Pill
+          val isStockActive = activeAvailableOnly
+          QuickFilterPill(
+            label = "In Stock",
+            isSelected = isStockActive,
+            onClick = {
+              appState.menuFilterAvailableOnly = !isStockActive
+            },
+          )
+
+          // 7. Reset / Clear All Pill (visible when any filter or query is active)
+          if (appState.isAnyMenuFilterActive || searchQuery.isNotEmpty()) {
+            QuickFilterPill(
+              label = "Clear",
+              leadingIcon = Icons.Default.Close,
+              isSelected = false,
+              isDestructive = true,
+              onClick = {
+                searchQuery = ""
+                appState.resetAllMenuFilters()
+              },
+            )
           }
         }
       }
@@ -726,6 +706,74 @@ fun MenuScreen(
 }
 
 /**
+ * Modern Quick Filter Pill for minimal screen space & fast single-tap actions
+ */
+@Composable
+private fun QuickFilterPill(
+  label: String,
+  leadingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+  trailingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+  isSelected: Boolean = false,
+  isDestructive: Boolean = false,
+  onClick: () -> Unit,
+) {
+  val bg = when {
+    isSelected -> BlackPrimary
+    isDestructive -> Color(0xFFFDE8E8)
+    else -> Color(0xFFEFE2CD)
+  }
+  val borderColor = when {
+    isSelected -> BlackPrimary
+    isDestructive -> Color(0xFFF8B4B4)
+    else -> Color(0xFFDFCFB7)
+  }
+  val contentColor = when {
+    isSelected -> PureWhite
+    isDestructive -> Color(0xFFC81E1E)
+    else -> BlackPrimary
+  }
+
+  Box(
+    modifier = Modifier
+      .height(32.dp)
+      .clip(RoundedCornerShape(16.dp))
+      .background(bg)
+      .border(1.dp, borderColor, RoundedCornerShape(16.dp))
+      .clickable { onClick() }
+      .padding(horizontal = 10.dp),
+    contentAlignment = Alignment.Center,
+  ) {
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+      if (leadingIcon != null) {
+        Icon(
+          imageVector = leadingIcon,
+          contentDescription = null,
+          tint = contentColor,
+          modifier = Modifier.size(13.dp),
+        )
+      }
+      Text(
+        text = label,
+        fontSize = 11.5.sp,
+        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+        color = contentColor,
+      )
+      if (trailingIcon != null) {
+        Icon(
+          imageVector = trailingIcon,
+          contentDescription = null,
+          tint = contentColor,
+          modifier = Modifier.size(15.dp),
+        )
+      }
+    }
+  }
+}
+
+/**
  * Clean active filter chip with quick dismiss cross
  */
 @Composable
@@ -788,7 +836,7 @@ private fun SortBottomSheet(
           indication = null,
         ) { /* Consume click so sheet doesn't close */ },
       shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-      colors = CardDefaults.cardColors(containerColor = PureWhite),
+      colors = CardDefaults.cardColors(containerColor = WarmCream),
     ) {
       Column(
         modifier = Modifier
@@ -801,7 +849,7 @@ private fun SortBottomSheet(
           modifier = Modifier
             .size(width = 36.dp, height = 4.dp)
             .clip(RoundedCornerShape(2.dp))
-            .background(BorderGray)
+            .background(Color(0xFFD6C6AA))
             .align(Alignment.CenterHorizontally),
         )
 
@@ -834,7 +882,7 @@ private fun SortBottomSheet(
             modifier = Modifier
               .size(32.dp)
               .clip(CircleShape)
-              .background(SoftGray)
+              .background(Color(0xFFEFE2CD))
               .clickable { onDismiss() },
             contentAlignment = Alignment.Center,
           ) {
@@ -1300,7 +1348,8 @@ private fun FilterFullScreenPanel(
       modifier = Modifier
         .fillMaxWidth()
         .shadow(8.dp)
-        .background(PureWhite)
+        .background(WarmCream)
+        .border(1.dp, Color(0xFFDFCFB7))
         .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
       Row(
@@ -1314,8 +1363,8 @@ private fun FilterFullScreenPanel(
             .weight(1f)
             .height(48.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFFF5F2EC))
-            .border(1.dp, BorderGray, RoundedCornerShape(14.dp))
+            .background(Color(0xFFEFE2CD))
+            .border(1.dp, Color(0xFFDFCFB7), RoundedCornerShape(14.dp))
             .clickable {
               draftCategory = null
               draftDietary = MenuDietaryFilter.ALL
@@ -1423,10 +1472,10 @@ private fun FilterOptionPill(
   Box(
     modifier = modifier
       .clip(RoundedCornerShape(20.dp))
-      .background(if (isSelected) BlackPrimary else Color(0xFFF5F2EC))
+      .background(if (isSelected) BlackPrimary else Color(0xFFEFE2CD))
       .border(
         1.dp,
-        if (isSelected) BlackPrimary else BorderGray.copy(alpha = 0.6f),
+        if (isSelected) BlackPrimary else Color(0xFFDFCFB7),
         RoundedCornerShape(20.dp),
       )
       .clickable { onClick() }
@@ -1456,10 +1505,10 @@ private fun DietaryOptionCard(
   Box(
     modifier = modifier
       .clip(RoundedCornerShape(14.dp))
-      .background(if (isSelected) BlackPrimary else Color(0xFFF5F2EC))
+      .background(if (isSelected) BlackPrimary else Color(0xFFEFE2CD))
       .border(
         1.5.dp,
-        if (isSelected) BlackPrimary else BorderGray.copy(alpha = 0.6f),
+        if (isSelected) BlackPrimary else Color(0xFFDFCFB7),
         RoundedCornerShape(14.dp),
       )
       .clickable { onClick() }
@@ -1642,32 +1691,23 @@ private fun MenuItemGridCard(
             .fillMaxWidth()
             .padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 4.dp),
         ) {
-          // Dietary Badge & Prep Time Row
+          // Prep Time Row
           Row(
-            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
           ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              DietaryBadge(isVeg = isVeg)
-            }
-
-            // Prep Time
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Icon(
-                imageVector = Icons.Default.AccessTime,
-                contentDescription = null,
-                tint = TextMuted,
-                modifier = Modifier.size(11.dp),
-              )
-              Spacer(modifier = Modifier.width(3.dp))
-              Text(
-                text = foodItem.prepTime.ifBlank { "${foodItem.prepMinutes}m" },
-                fontSize = 10.5.sp,
-                fontWeight = FontWeight.Medium,
-                color = TextMuted,
-              )
-            }
+            Icon(
+              imageVector = Icons.Default.AccessTime,
+              contentDescription = null,
+              tint = TextMuted,
+              modifier = Modifier.size(11.dp),
+            )
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+              text = foodItem.prepTime.ifBlank { "${foodItem.prepMinutes}m" },
+              fontSize = 10.5.sp,
+              fontWeight = FontWeight.Medium,
+              color = TextMuted,
+            )
           }
 
           Spacer(modifier = Modifier.height(4.dp))

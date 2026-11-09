@@ -27,7 +27,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Storefront
@@ -1120,39 +1119,8 @@ private fun CustomerOrderCard(
 
         Row(
           verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          // Dedicated Pickup QR badge
-          Box(
-            modifier = Modifier
-              .clip(RoundedCornerShape(8.dp))
-              .background(Color(0xFFFFF7ED))
-              .border(1.dp, Color(0xFFFDBA74), RoundedCornerShape(8.dp))
-              .clickable { onClick() }
-              .padding(horizontal = 7.dp, vertical = 3.dp),
-            contentAlignment = Alignment.Center
-          ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Icon(
-                imageVector = Icons.Default.QrCode,
-                contentDescription = "View QR",
-                tint = Color(0xFFEA580C),
-                modifier = Modifier.size(13.dp)
-              )
-              Spacer(Modifier.width(3.dp))
-              Text(
-                text = "QR",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFFEA580C)
-              )
-            }
-          }
-
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            Icon(
+          Icon(
               imageVector = when {
                 isReady -> Icons.Default.CheckCircle
                 isPickedUp -> Icons.Default.ShoppingBag
@@ -1183,7 +1151,6 @@ private fun CustomerOrderCard(
             )
           }
         }
-      }
 
       Spacer(Modifier.height(14.dp))
 
