@@ -63,6 +63,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Tune
 import com.example.ui.components.FeaturedSpecialBannerCard
 import com.example.ui.components.HomeGreetingSection
+import com.example.ui.components.SuggestProductSheet
 import com.example.ui.components.HomeScreenHeader
 import com.example.ui.components.HomeScreenTopBar
 import com.example.ui.components.ModernNotificationsSheet
@@ -98,6 +99,7 @@ fun HomeScreen(
   val listState = rememberLazyListState()
   var showNotificationsDialog by remember { mutableStateOf(false) }
   var showQuickFilterDialog by remember { mutableStateOf(false) }
+  var showSuggestProductSheet by remember { mutableStateOf(false) }
 
   val currentCanteen = appState.selectedCanteen
 
@@ -430,10 +432,26 @@ fun HomeScreen(
         }
       }
 
+      item(key = "suggest_product_section") {
+        SuggestProductSection(
+          onSuggestClick = { showSuggestProductSheet = true },
+        )
+      }
+
       item(key = "bottom_space") {
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
       }
     }
+  }
+
+  // Suggest Product Sheet (Canteen-Specific Owner Routing with 3-Day Rate Limit)
+  if (showSuggestProductSheet) {
+    SuggestProductSheet(
+      canteenId = currentCanteen.id,
+      canteenName = currentCanteen.name,
+      appState = appState,
+      onDismiss = { showSuggestProductSheet = false },
+    )
   }
 
   // Modern Notifications Bottom Sheet (Smooth slide-in-up transition)
@@ -629,4 +647,66 @@ private fun QuickOrderFilterDialog(
     containerColor = PureWhite,
     shape = RoundedCornerShape(22.dp),
   )
+}
+
+/**
+ * Suggest a Product section at the bottom of Home screen scrolling content
+ * matching Reference Image 1:
+ * - Bold muted headline: "didn't find\nwhat you were\nlooking for?"
+ * - Friendly subtitle: "Suggest something & we'll look into it"
+ * - Rounded white button with pink accent text: "Suggest a Product"
+ */
+@Composable
+private fun SuggestProductSection(
+  onSuggestClick: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Box(
+    modifier = modifier
+      .fillMaxWidth()
+      .padding(horizontal = 14.dp, vertical = 10.dp)
+      .clip(RoundedCornerShape(20.dp))
+      .background(PureWhite)
+      .border(1.dp, BorderGray.copy(alpha = 0.7f), RoundedCornerShape(20.dp))
+      .padding(horizontal = 20.dp, vertical = 22.dp),
+  ) {
+    Column {
+      Text(
+        text = "didn't find\nwhat you were\nlooking for?",
+        fontSize = 24.sp,
+        fontWeight = FontWeight.Bold,
+        color = Color(0xFFB0B0B0),
+        lineHeight = 30.sp,
+      )
+
+      Spacer(modifier = Modifier.height(10.dp))
+
+      Text(
+        text = "Suggest something & we'll look into it",
+        fontSize = 13.5.sp,
+        fontWeight = FontWeight.Normal,
+        color = Color(0xFF9E9E9E),
+      )
+
+      Spacer(modifier = Modifier.height(18.dp))
+
+      Surface(
+        modifier = Modifier
+          .clip(RoundedCornerShape(8.dp))
+          .clickable { onSuggestClick() },
+        shape = RoundedCornerShape(8.dp),
+        color = PureWhite,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E7EB)),
+        shadowElevation = 0.dp,
+      ) {
+        Text(
+          text = "Suggest a Product",
+          fontSize = 14.sp,
+          fontWeight = FontWeight.Bold,
+          color = Color(0xFFFA2E67),
+          modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+        )
+      }
+    }
+  }
 }

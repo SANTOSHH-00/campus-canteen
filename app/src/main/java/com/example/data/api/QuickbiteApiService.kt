@@ -11,6 +11,7 @@ import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.Path
+import retrofit2.http.Query
 import retrofit2.http.Streaming
 
 interface QuickbiteApiService {
@@ -217,12 +218,20 @@ interface QuickbiteApiService {
   suspend fun streamAiMessage(
     @Body body: AiChatRequestDto,
     @retrofit2.http.Header("Authorization") authHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Id") studentIdHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Reg") studentRegHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Email") studentEmailHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Name") studentNameHeader: String? = null,
   ): Response<ResponseBody>
 
   @POST("ai/chat")
   suspend fun sendAiMessage(
     @Body body: AiChatRequestDto,
     @retrofit2.http.Header("Authorization") authHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Id") studentIdHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Reg") studentRegHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Email") studentEmailHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Name") studentNameHeader: String? = null,
   ): Response<AiChatResponseDto>
 
   @GET("ai/suggestions")
@@ -233,5 +242,39 @@ interface QuickbiteApiService {
     @Body body: AiFeedbackRequestDto,
     @retrofit2.http.Header("Authorization") authHeader: String? = null,
   ): Response<AiFeedbackResponseDto>
+
+  // ── Product Suggestions & Canteen Routing ─────────────────────────────────
+  @POST("suggestions")
+  suspend fun submitProductSuggestion(
+    @Body body: CreateSuggestionRequestDto,
+    @retrofit2.http.Header("Authorization") authHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Id") studentIdHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Reg") studentRegHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Email") studentEmailHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Name") studentNameHeader: String? = null,
+  ): Response<CreateSuggestionResponseDto>
+
+  @GET("suggestions/eligibility")
+  suspend fun checkSuggestionEligibility(
+    @Query("canteenId") canteenId: String,
+    @retrofit2.http.Header("Authorization") authHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Id") studentIdHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Reg") studentRegHeader: String? = null,
+    @retrofit2.http.Header("X-Student-Email") studentEmailHeader: String? = null,
+  ): Response<SuggestionEligibilityResponseDto>
+
+  @GET("suggestions/owner")
+  suspend fun getOwnerSuggestions(
+    @retrofit2.http.Header("Authorization") authHeader: String? = null,
+    @retrofit2.http.Header("x-owner-token") ownerToken: String? = null,
+  ): Response<OwnerSuggestionsResponseDto>
+
+  @PATCH("suggestions/owner/{suggestionId}/status")
+  suspend fun updateSuggestionStatus(
+    @Path("suggestionId") suggestionId: String,
+    @Body body: UpdateSuggestionStatusRequestDto,
+    @retrofit2.http.Header("Authorization") authHeader: String? = null,
+    @retrofit2.http.Header("x-owner-token") ownerToken: String? = null,
+  ): Response<ResponseBody>
 }
 

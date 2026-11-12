@@ -15,10 +15,13 @@ const JWT_SECRET = process.env.JWT_SECRET || 'quickbite-super-secure-jwt-secret-
 
 /**
  * Extracts and verifies authenticated student from request.
+ * Reads JWT token if present, and extracts studentId, studentEmail, registrationNumber, and name.
  */
 function extractStudent(req) {
   let studentId = null;
   let studentEmail = '';
+  let registrationNumber = '';
+  let studentName = '';
 
   const authHeader = req.headers['authorization'];
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -27,16 +30,28 @@ function extractStudent(req) {
       const decoded = jwt.verify(token, JWT_SECRET);
       studentId = decoded.uid;
       studentEmail = decoded.email || '';
+      registrationNumber = decoded.registrationNumber || '';
+      studentName = decoded.name || '';
     } catch (e) {
       // Token invalid / expired
     }
   }
 
-  if (!studentId) {
-    studentId = req.headers['x-student-id'] || req.body?.studentId || 'guest_student';
+  // Fallback to explicit client headers or body fields
+  if (!studentId || studentId === 'guest_student') {
+    studentId = req.headers['x-student-id'] || req.headers['x-student-reg'] || req.body?.studentId || 'guest_student';
+  }
+  if (!studentEmail) {
+    studentEmail = req.headers['x-student-email'] || req.body?.studentEmail || '';
+  }
+  if (!registrationNumber) {
+    registrationNumber = req.headers['x-student-reg'] || req.body?.registrationNumber || req.body?.studentRegNumber || '';
+  }
+  if (!studentName) {
+    studentName = req.headers['x-student-name'] || req.body?.studentName || '';
   }
 
-  return { studentId, studentEmail };
+  return { studentId, studentEmail, registrationNumber, studentName };
 }
 
 /**
@@ -60,12 +75,15 @@ async function handleChatStream(req, res) {
     res.setHeader('X-Accel-Buffering', 'no'); // Disable proxy buffering (Nginx, Render)
     if (res.flushHeaders) res.flushHeaders();
 
-    const { studentId } = extractStudent(req);
+    const { studentId, studentEmail, registrationNumber, studentName } = extractStudent(req);
 
     // 1. Build verified MongoDB facts (fast parallel + cached)
     const contextStartTime = Date.now();
-    const { contextText, recommendedItems, activeOrders, trackedOrder } = await buildAiContext({
+    const { contextText, recommendedItems, activeOrders, trackedOrder, greetingData } = await buildAiContext({
       studentId,
+      studentEmail,
+      registrationNumber,
+      studentName,
       message: message.trim(),
       selectedCanteenId: canteenId || '',
     });
@@ -80,6 +98,7 @@ async function handleChatStream(req, res) {
       recommendedItems,
       activeOrders: activeOrders || [],
       trackedOrder: trackedOrder || null,
+      greetingData: greetingData || null,
       contextDurationMs: contextDuration,
     };
     res.write(`data: ${JSON.stringify(metaPayload)}\n\n`);
@@ -142,11 +161,14 @@ async function handleChat(req, res) {
       });
     }
 
-    const { studentId } = extractStudent(req);
+    const { studentId, studentEmail, registrationNumber, studentName } = extractStudent(req);
 
     // 1. Retrieve verified MongoDB facts & candidate menu items & tracking details
-    const { contextText, recommendedItems, activeOrders, trackedOrder } = await buildAiContext({
+    const { contextText, recommendedItems, activeOrders, trackedOrder, greetingData } = await buildAiContext({
       studentId,
+      studentEmail,
+      registrationNumber,
+      studentName,
       message: message.trim(),
       selectedCanteenId: canteenId || '',
     });
@@ -175,6 +197,7 @@ async function handleChat(req, res) {
       hasActiveOrders: activeOrders && activeOrders.length > 0,
       trackedOrder: trackedOrder || null,
       activeOrders: activeOrders || [],
+      greetingData: greetingData || null,
       durationMs,
     });
   } catch (err) {

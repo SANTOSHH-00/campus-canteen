@@ -228,6 +228,7 @@ fun OwnerDashboardScreen(
                     NavItem("Dashboard", Icons.Default.Home, tag = "nav_dashboard"),
                     NavItem("SCAN & VERIFY ORDER", Icons.Default.QrCodeScanner, tag = "nav_scan_order"),
                     NavItem("Menu Management", Icons.Default.RestaurantMenu, tag = "nav_menu_mgmt"),
+                    NavItem("Product Suggestions", Icons.Default.Fastfood, tag = "nav_suggestions"),
                     NavItem("Customers", Icons.Default.Group, tag = "nav_customers"),
                     NavItem("Discounts & Offers", Icons.Default.LocalOffer, tag = "nav_discounts"),
                     NavItem("Settings", Icons.Default.Settings, tag = "nav_settings"),
@@ -237,7 +238,7 @@ fun OwnerDashboardScreen(
                 Column(Modifier.fillMaxSize().background(PageBackground)) {
 
                     // ── TOP BAR (Shown on Dashboard or when drawer is open; hidden when screen has a back arrow)
-                    val showConstantTopBar = drawerOpen || (selectedNavItem != "Profile" && selectedNavItem != "Customers")
+                    val showConstantTopBar = drawerOpen || (selectedNavItem != "Profile" && selectedNavItem != "Customers" && selectedNavItem != "Product Suggestions")
                     if (showConstantTopBar) {
                         OwnerTopBar(
                             drawerOpen = drawerOpen,
@@ -307,6 +308,12 @@ fun OwnerDashboardScreen(
                                 "Customers" -> {
                                     OwnerCustomersScreen(
                                         orders = ownerOrders.ifEmpty { state.recentOrders },
+                                        onBack = { selectedNavItem = "Dashboard" },
+                                    )
+                                }
+                                "Product Suggestions" -> {
+                                    OwnerSuggestionsScreen(
+                                        owner = state.owner,
                                         onBack = { selectedNavItem = "Dashboard" },
                                     )
                                 }

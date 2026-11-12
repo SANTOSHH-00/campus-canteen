@@ -240,6 +240,7 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/ai', require('./routes/aiRoutes'));
+app.use('/api/suggestions', require('./routes/suggestions'));
 
 // 404 handler for unmatched routes
 app.use((req, res) => {

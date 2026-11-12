@@ -62,11 +62,11 @@ import com.example.ui.theme.WarmCream
 
 // ── QuickBite Theme Palette ──────────────────────────────────────────────────
 private val AmberBrand = DrawerAmber
-private val AmberBorder = DrawerAmberDark
+private val AmberBorder = DrawerAmber
 private val AmberBgSoft = DrawerAmberLight
-private val CardBg = Color(0xFFEFE2CD)
-private val SelectedCardBg = DrawerAmberLight
-private val BorderMuted = Color(0xFFDFCFB7)
+private val CardBg = PureWhite
+private val SelectedCardBg = PureWhite
+private val BorderMuted = BorderGray.copy(alpha = 0.7f)
 private val DarkTitle = BlackPrimary
 private val SubtitleGray = TextMuted
 private val StatusGreen = Color(0xFF10B981)
@@ -128,7 +128,7 @@ fun BlockCanteenSelectorSheet(
               .width(42.dp)
               .height(4.5.dp)
               .clip(RoundedCornerShape(3.dp))
-              .background(Color(0xFFD6C6AA)),
+              .background(BorderGray.copy(alpha = 0.9f)),
           )
 
           Spacer(modifier = Modifier.height(16.dp))
@@ -199,11 +199,17 @@ fun BlockCanteenSelectorSheet(
             Row(
               modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(18.dp))
+                .background(PureWhite)
+                .border(
+                  width = 1.dp,
+                  color = BorderGray.copy(alpha = 0.7f),
+                  shape = RoundedCornerShape(18.dp),
+                )
                 .clickable {
                   Toast.makeText(context, "Location features will be enabled in a future update", Toast.LENGTH_SHORT).show()
                 }
-                .padding(vertical = 12.dp, horizontal = 4.dp),
+                .padding(vertical = 14.dp, horizontal = 16.dp),
               verticalAlignment = Alignment.CenterVertically,
             ) {
               Box(
@@ -267,18 +273,22 @@ private fun CanteenCardItem(
   isSelected: Boolean,
   onClick: () -> Unit,
 ) {
+  val cardBackground = if (isSelected) DrawerAmber.copy(alpha = 0.08f) else PureWhite
+  val borderColor = if (isSelected) DrawerAmber else BorderGray.copy(alpha = 0.7f)
+  val borderWidth = if (isSelected) 2.dp else 1.dp
+
   Box(
     modifier = Modifier
       .fillMaxWidth()
-      .clip(RoundedCornerShape(16.dp))
+      .clip(RoundedCornerShape(18.dp))
+      .background(cardBackground)
       .border(
-        width = if (isSelected) 1.8.dp else 1.dp,
-        color = if (isSelected) AmberBorder else BorderMuted,
-        shape = RoundedCornerShape(16.dp),
+        width = borderWidth,
+        color = borderColor,
+        shape = RoundedCornerShape(18.dp),
       )
-      .background(if (isSelected) SelectedCardBg else CardBg)
       .clickable { onClick() }
-      .padding(12.dp),
+      .padding(14.dp),
   ) {
     Row(
       modifier = Modifier.fillMaxWidth(),
@@ -298,8 +308,8 @@ private fun CanteenCardItem(
             )
           )
           .border(
-            width = if (isSelected) 2.dp else 1.2.dp,
-            color = if (isSelected) AmberBorder else Color(0xFFDECDB3),
+            width = if (isSelected) 2.dp else 1.dp,
+            color = if (isSelected) DrawerAmber else BorderGray.copy(alpha = 0.5f),
             shape = CircleShape,
           ),
         contentAlignment = Alignment.Center,

@@ -1542,4 +1542,5 @@ router.post('/orders/confirm-pickup', requireOwnerAuth, async (req, res) => {
   }
 });
 
+router.requireOwnerAuth = requireOwnerAuth;
 module.exports = router;

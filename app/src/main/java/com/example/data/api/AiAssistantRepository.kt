@@ -68,8 +68,12 @@ class AiAssistantRepository(
     val cleanPrompt = message.trim()
     val token = SessionManager.getStudentToken()
     val authHeader = if (token.isNotBlank()) "Bearer $token" else null
-    val studentSession = SessionManager.getUserSession()
-    val studentId = studentSession?.uid
+    val studentProfile = SessionManager.getStudentSession()
+    val userDoc = SessionManager.getUserSession()
+    val reg = studentProfile?.registrationNumber?.ifBlank { null } ?: userDoc?.registrationNumber?.ifBlank { null }
+    val email = studentProfile?.email?.ifBlank { null } ?: userDoc?.email?.ifBlank { null }
+    val name = studentProfile?.name?.ifBlank { null } ?: userDoc?.name?.ifBlank { null }
+    val effectiveStudentId = reg ?: email ?: userDoc?.uid ?: "student_guest"
 
     val historyDtos = conversationHistory.takeLast(4).map {
       AiChatMessageDto(
@@ -82,10 +86,17 @@ class AiAssistantRepository(
       message = cleanPrompt,
       canteenId = canteenId,
       conversationHistory = historyDtos,
-      studentId = studentId,
+      studentId = effectiveStudentId,
     )
 
-    val response = apiService.streamAiMessage(request, authHeader)
+    val response = apiService.streamAiMessage(
+      body = request,
+      authHeader = authHeader,
+      studentIdHeader = effectiveStudentId,
+      studentRegHeader = reg,
+      studentEmailHeader = email,
+      studentNameHeader = name,
+    )
     if (!response.isSuccessful || response.body() == null) {
       val errBody = response.errorBody()?.string() ?: ""
       emit(AiStreamEvent.Error(errBody.ifBlank { "HTTP ${response.code()}" }, response.code()))
@@ -184,8 +195,12 @@ class AiAssistantRepository(
     return try {
       val token = SessionManager.getStudentToken()
       val authHeader = if (token.isNotBlank()) "Bearer $token" else null
-      val studentSession = SessionManager.getUserSession()
-      val studentId = studentSession?.uid
+      val studentProfile = SessionManager.getStudentSession()
+      val userDoc = SessionManager.getUserSession()
+      val reg = studentProfile?.registrationNumber?.ifBlank { null } ?: userDoc?.registrationNumber?.ifBlank { null }
+      val email = studentProfile?.email?.ifBlank { null } ?: userDoc?.email?.ifBlank { null }
+      val name = studentProfile?.name?.ifBlank { null } ?: userDoc?.name?.ifBlank { null }
+      val effectiveStudentId = reg ?: email ?: userDoc?.uid ?: "student_guest"
 
       val historyDtos = conversationHistory.takeLast(4).map {
         AiChatMessageDto(
@@ -198,10 +213,17 @@ class AiAssistantRepository(
         message = cleanPrompt,
         canteenId = canteenId,
         conversationHistory = historyDtos,
-        studentId = studentId,
+        studentId = effectiveStudentId,
       )
 
-      val response = apiService.sendAiMessage(request, authHeader)
+      val response = apiService.sendAiMessage(
+        body = request,
+        authHeader = authHeader,
+        studentIdHeader = effectiveStudentId,
+        studentRegHeader = reg,
+        studentEmailHeader = email,
+        studentNameHeader = name,
+      )
 
       if (response.isSuccessful && response.body() != null) {
         Result.success(response.body()!!)

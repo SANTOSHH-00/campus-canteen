@@ -2,7 +2,7 @@
  * Gemini Service for QuickBite – MunchMate
  * Ultra-fast response streaming (< 5 seconds target, first chunk in 1-2s),
  * model fallback cascade, strict timeouts, zero branding leak, authoritative accuracy,
- * and robust multi-turn alternation.
+ * personalised greetings, and robust multi-turn alternation.
  */
 
 const crypto = require('crypto');
@@ -10,7 +10,6 @@ const crypto = require('crypto');
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 // Preferred production models based on verified Google Gemini API availability:
-// Note: gemini-3.5-flash and gemini-flash-latest have high availability and low latency (< 2-3s)
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 const FALLBACK_MODELS = [
   'gemini-3.5-flash',
@@ -28,17 +27,29 @@ STRICT OPERATIONAL RULES:
 1. Identity: You are MunchMate by QuickBite. Never refer to yourself as Gemini, Google AI, or any other LLM.
 2. 100% Data Accuracy: Base all food items, prices, canteen names, order statuses, and estimated times STRICTLY on the verified application data in the context.
 3. Zero Hallucination: NEVER invent food items, prices, order IDs, payment status, or pickup times. If data is not provided, state that you don't have that information.
-4. Multi-turn Context & Follow-ups:
+4. Personalised Greetings:
+   - When the student sends a greeting (e.g. "Hi", "Hello", "Hey", "Good morning", "Good afternoon", "Good evening"):
+     Respond with a warm, personalised greeting using the student's first name and appropriate time greeting:
+     * Morning: "Good morning [First Name]! Hope you're having a great day. What can I help you with?"
+     * Afternoon: "Good afternoon [First Name]! How can I help you?"
+     * Evening: "Good evening [First Name]! What can I help you with?"
+     * Casual: "Hi [First Name]! How can I help you today?" or "Hello [First Name]! What can I help you with?"
+   - For follow-up questions during an ongoing conversation, do NOT repeat greetings unnecessarily. Answer directly and naturally.
+5. Order Tracking Flow:
+   - Look at the "ACTIVE ORDERS FOR THIS STUDENT" section in the verified data.
+   - If active orders exist:
+     * Report the exact status explanation given in the verified data.
+     * For "NEW", "WAITING", "PLACED", or "PENDING": state "Your order #[orderId] is currently waiting for the canteen to accept it."
+     * For "CONFIRMED", "ACCEPTED", or "PREPARING": state "Your order #[orderId] has been accepted and is currently being prepared by the canteen."
+     * For "READY" or "READY_FOR_PICKUP": state "Your order #[orderId] is ready for pickup! Show your token #[tokenNumber] at the counter."
+     * When the student has multiple active orders, summarize them and ask which specific order they want to track.
+   - If the student has NO active orders in the database, say: "You don't have any active orders right now."
+6. Multi-turn Context & Follow-ups:
    - Understand follow-up questions referencing previous answers (e.g., "is it spicy?", "which one is cheapest?", "tell me more about the first item").
    - Maintain conversational context while strictly adhering to verified facts.
-5. Order Tracking Flow:
-   - When the student has 1 active order, report the exact order ID, current status, payment status, and estimated ready time directly.
-   - When the student has multiple active orders, summarize them and ask which specific order they want to track.
-   - If an order is READY: state "Your order #[orderId] is ready for pickup! Show your pickup token or barcode at the counter."
-   - If the student has NO active orders, say: "You don't have any active orders right now."
-6. Security & Privacy:
+7. Security & Privacy:
    - You only have access to the authenticated student's data. If an order ID belongs to someone else or is invalid, say: "For privacy and security, I can only provide details for your own orders."
-7. Tone & Style:
+8. Tone & Style:
    - Friendly, warm, concise, and helpful. Avoid verbose essays. Answer directly with clarity.`;
 
 /**
@@ -115,13 +126,6 @@ ${userMessage}`;
 /**
  * Streams AI response chunk-by-chunk using Gemini streamGenerateContent (SSE).
  * First token appears in 1-2 seconds.
- * 
- * @param {Object} params
- * @param {string} params.userMessage
- * @param {string} params.verifiedContext
- * @param {Array} params.conversationHistory
- * @param {Function} params.onChunk - Called with string chunk as received
- * @returns {Promise<{reply: string, modelUsed: string}>}
  */
 async function streamAiResponse({ userMessage, verifiedContext, conversationHistory = [], onChunk }) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -129,7 +133,6 @@ async function streamAiResponse({ userMessage, verifiedContext, conversationHist
   if (!apiKey || apiKey.trim() === '' || apiKey === 'your-gemini-api-key') {
     console.warn('[GeminiService] GEMINI_API_KEY not configured. Streaming deterministic fallback.');
     const fallbackText = generateFallbackResponse(userMessage, verifiedContext);
-    // Stream fallback in words with small delay
     const words = fallbackText.split(' ');
     for (const w of words) {
       if (onChunk) onChunk(w + ' ');
@@ -212,7 +215,6 @@ async function streamAiResponse({ userMessage, verifiedContext, conversationHist
     }
   }
 
-  // If streaming failed across models, fallback gracefully
   console.warn('[GeminiService] All stream candidates failed. Falling back to deterministic generator.');
   const fallback = generateFallbackResponse(userMessage, verifiedContext);
   if (onChunk) onChunk(fallback);
@@ -283,24 +285,58 @@ async function generateAiResponse({ userMessage, verifiedContext, conversationHi
  * Deterministic fallback generator grounded in verified MongoDB context.
  */
 function generateFallbackResponse(userMessage, verifiedContext) {
-  const msg = (userMessage || '').toLowerCase();
+  const msg = (userMessage || '').toLowerCase().trim();
 
-  if (msg.includes('track') || msg.includes('order') || msg.includes('where') || msg.includes('status')) {
-    if (verifiedContext && verifiedContext.includes('ACTIVE ORDERS FOR THIS STUDENT:')) {
-      const activeMatch = verifiedContext.match(/• Order ID: #([A-Za-z0-9_-]+)[\s\S]*?Status: ([A-Za-z_-]+)[\s\S]*?Total: ₹([0-9.]+)/i);
+  // Extract student first name from verified context if available
+  let firstName = 'there';
+  const nameMatch = verifiedContext.match(/First Name:\s*([A-Za-z0-9_-]+)/i);
+  if (nameMatch && nameMatch[1]) {
+    firstName = nameMatch[1];
+  }
+
+  // Extract time of day greeting
+  let timeGreeting = 'Hello';
+  const greetingMatch = verifiedContext.match(/Local Greeting:\s*"([^"]+)"/i);
+  if (greetingMatch && greetingMatch[1]) {
+    timeGreeting = greetingMatch[1];
+  }
+
+  // 1. GREETING HANDLER
+  const isGreeting = /^(hi|hello|hey|good\s+morning|good\s+afternoon|good\s+evening|gm|morning|evening|afternoon|howdy|sup|what'?s\s+up|namaste)\b/i.test(msg);
+  if (isGreeting) {
+    if (msg.includes('morning')) {
+      return `Good morning ${firstName}! Hope you're having a great day. What can I help you with?`;
+    }
+    if (msg.includes('afternoon')) {
+      return `Good afternoon ${firstName}! How can I help you?`;
+    }
+    if (msg.includes('evening')) {
+      return `Good evening ${firstName}! What can I help you with?`;
+    }
+    if (msg.startsWith('hi')) {
+      return `Hi ${firstName}! How can I help you today?`;
+    }
+    return `Hello ${firstName}! What can I help you with?`;
+  }
+
+  // 2. ORDER TRACKING HANDLER
+  if (msg.includes('track') || msg.includes('order') || msg.includes('where') || msg.includes('status') || msg.includes('ready') || msg.includes('waiting')) {
+    if (verifiedContext && verifiedContext.includes('ACTIVE ORDERS FOR THIS STUDENT')) {
+      const activeMatch = verifiedContext.match(/• Order ID: #([A-Za-z0-9_-]+)[\s\S]*?Status Explanation:\s*([^\n]+)/i);
       if (activeMatch) {
-        const [_, orderId, status, total] = activeMatch;
-        return `Here is your active order: #${orderId} (Status: ${status}, Total: ₹${total}). It is being prepared by the canteen!`;
+        const [_, orderId, statusExplanation] = activeMatch;
+        return statusExplanation;
       }
     }
     return "You don't currently have any active orders. You can explore the menu to place a new order!";
   }
 
+  // 3. MENU RECOMMENDATION HANDLER
   if (msg.includes('recommend') || msg.includes('popular') || msg.includes('tasty') || msg.includes('food')) {
     return "Here are top popular recommendations from our campus canteens! You can tap on any card below to view details and add it to your cart.";
   }
 
-  return "I'm MunchMate, your QuickBite assistant! I can help you check canteen menus, track your orders, or find delicious food on campus. How can I assist you today?";
+  return `I'm MunchMate, your QuickBite assistant! I can help you check canteen menus, track your orders, or find delicious food on campus. How can I assist you today?`;
 }
 
 module.exports = {

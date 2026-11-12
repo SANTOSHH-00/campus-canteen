@@ -97,6 +97,7 @@ import com.example.data.api.AiRecommendedItemDto
 import com.example.data.api.AiTrackedOrderDto
 import com.example.data.api.ChatMessage
 import com.example.data.api.MessageRole
+import com.example.ui.components.MunchMateIcon
 import com.example.ui.state.CanteenAppState
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
@@ -166,6 +167,7 @@ fun AiAssistantScreen(
         // Welcome Screen State
         MunchMateWelcomeContent(
           suggestions = suggestions,
+          appState = appState,
           onSuggestionClick = { prompt ->
             viewModel.sendMessage(
               promptText = prompt,
@@ -289,7 +291,7 @@ private fun MunchMateTopBar(
         Spacer(modifier = Modifier.width(8.dp))
       }
 
-      // MunchMate Identity Icon (Uploaded Fork & Knife Identity)
+      // MunchMate Identity Icon (Native Vector Fork & Knife Artwork)
       Box(
         modifier = Modifier
           .size(40.dp)
@@ -299,12 +301,9 @@ private fun MunchMateTopBar(
           .border(1.5.dp, DrawerAmberLight, CircleShape),
         contentAlignment = Alignment.Center,
       ) {
-        Image(
-          painter = painterResource(id = R.drawable.ic_munchmate),
-          contentDescription = "MunchMate",
-          modifier = Modifier
-            .size(28.dp),
-          contentScale = ContentScale.Fit,
+        MunchMateIcon(
+          modifier = Modifier.size(24.dp),
+          tint = Color(0xFF2E5A44),
         )
       }
 
@@ -376,8 +375,28 @@ private fun MunchMateTopBar(
 @Composable
 private fun MunchMateWelcomeContent(
   suggestions: List<String>,
+  appState: CanteenAppState? = null,
   onSuggestionClick: (String) -> Unit,
 ) {
+  val studentName = appState?.currentUser?.name?.trim() ?: appState?.displayUserName?.trim().orEmpty()
+  val firstName = studentName
+    .split(" ")
+    .firstOrNull { it.isNotBlank() && !it.equals("Guest", ignoreCase = true) }
+
+  val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+  val timeGreeting = when (hour) {
+    in 4..11 -> "Good morning"
+    in 12..16 -> "Good afternoon"
+    in 17..21 -> "Good evening"
+    else -> "Hello"
+  }
+
+  val welcomeGreeting = if (!firstName.isNullOrBlank()) {
+    "$timeGreeting, $firstName!"
+  } else {
+    "$timeGreeting!"
+  }
+
   Column(
     modifier = Modifier
       .fillMaxSize()
@@ -395,30 +414,26 @@ private fun MunchMateWelcomeContent(
         .border(2.dp, DrawerAmberLight, CircleShape),
       contentAlignment = Alignment.Center,
     ) {
-      Image(
-        painter = painterResource(id = R.drawable.ic_munchmate),
-        contentDescription = "MunchMate",
-        modifier = Modifier
-          .size(54.dp)
-          .clip(CircleShape),
-        contentScale = ContentScale.Fit,
+      MunchMateIcon(
+        modifier = Modifier.size(46.dp),
+        tint = Color(0xFF2E5A44),
       )
     }
 
     Spacer(modifier = Modifier.height(16.dp))
 
     Text(
-      text = "MunchMate",
+      text = welcomeGreeting,
       fontSize = 24.sp,
       fontWeight = FontWeight.Black,
       color = BlackPrimary,
       textAlign = TextAlign.Center,
     )
 
-    Spacer(modifier = Modifier.height(4.dp))
+    Spacer(modifier = Modifier.height(6.dp))
 
     Text(
-      text = "MunchMate by QuickBite • Your smart campus food buddy.\nAsk me about food recommendations, canteen menus, or track your live orders in real time!",
+      text = "I'm MunchMate by QuickBite • Your smart campus food buddy.\nAsk me about food recommendations, canteen menus, or track your live orders in real time!",
       fontSize = 13.5.sp,
       fontWeight = FontWeight.Normal,
       color = TextMuted,
@@ -447,13 +462,9 @@ private fun MunchMateWelcomeContent(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
           ) {
-            Image(
-              painter = painterResource(id = R.drawable.ic_munchmate),
-              contentDescription = null,
-              modifier = Modifier
-                .size(16.dp)
-                .clip(CircleShape),
-              contentScale = ContentScale.Fit,
+            MunchMateIcon(
+              modifier = Modifier.size(16.dp),
+              tint = Color(0xFF2E5A44),
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
@@ -509,13 +520,9 @@ private fun ChatBubbleItem(
         modifier = Modifier.fillMaxWidth(0.95f),
       ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-          Image(
-            painter = painterResource(id = R.drawable.ic_munchmate),
-            contentDescription = null,
-            modifier = Modifier
-              .size(16.dp)
-              .clip(CircleShape),
-            contentScale = ContentScale.Fit,
+          MunchMateIcon(
+            modifier = Modifier.size(16.dp),
+            tint = Color(0xFF2E5A44),
           )
           Spacer(modifier = Modifier.width(6.dp))
           Text(
@@ -1142,13 +1149,9 @@ private fun MunchMateThinkingBubble() {
     verticalAlignment = Alignment.CenterVertically,
     modifier = Modifier.padding(start = 4.dp),
   ) {
-    Image(
-      painter = painterResource(id = R.drawable.ic_munchmate),
-      contentDescription = null,
-      modifier = Modifier
-        .size(16.dp)
-        .clip(CircleShape),
-      contentScale = ContentScale.Fit,
+    MunchMateIcon(
+      modifier = Modifier.size(16.dp),
+      tint = Color(0xFF2E5A44),
     )
     Spacer(modifier = Modifier.width(6.dp))
     Box(

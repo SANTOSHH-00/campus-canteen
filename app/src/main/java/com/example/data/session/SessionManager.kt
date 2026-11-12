@@ -63,6 +63,7 @@ object SessionManager {
   fun saveStudentSession(profile: UserProfile) {
     prefs?.edit()?.apply {
       putBoolean(KEY_IS_STUDENT_LOGGED_IN, true)
+      putString(KEY_STUDENT_UID, profile.registrationNumber.ifBlank { profile.email })
       putString(KEY_STUDENT_NAME, profile.name)
       putString(KEY_STUDENT_REG_NUMBER, profile.registrationNumber)
       putString(KEY_STUDENT_DEPARTMENT, profile.department)

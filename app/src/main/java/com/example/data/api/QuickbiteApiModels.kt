@@ -965,6 +965,69 @@ data class AiFeedbackResponseDto(
   @Json(name = "message") val message: String = "",
 )
 
+@JsonClass(generateAdapter = true)
+data class ProductSuggestionDto(
+  @Json(name = "suggestionId") val suggestionId: String = "",
+  @Json(name = "canteenId") val canteenId: String = "",
+  @Json(name = "canteenName") val canteenName: String = "",
+  @Json(name = "studentId") val studentId: String = "",
+  @Json(name = "studentName") val studentName: String = "",
+  @Json(name = "studentEmail") val studentEmail: String = "",
+  @Json(name = "studentRegistration") val studentRegistration: String = "",
+  @Json(name = "ownerId") val ownerId: String? = null,
+  @Json(name = "suggestionText") val suggestionText: String = "",
+  @Json(name = "status") val status: String = "New",
+  @Json(name = "ownerNote") val ownerNote: String = "",
+  @Json(name = "createdAt") val createdAt: String = "",
+  @Json(name = "updatedAt") val updatedAt: String = "",
+)
+
+@JsonClass(generateAdapter = true)
+data class CreateSuggestionRequestDto(
+  @Json(name = "canteenId") val canteenId: String,
+  @Json(name = "canteenName") val canteenName: String = "",
+  @Json(name = "suggestionText") val suggestionText: String,
+  @Json(name = "studentName") val studentName: String = "",
+  @Json(name = "studentId") val studentId: String? = null,
+  @Json(name = "studentEmail") val studentEmail: String? = null,
+  @Json(name = "studentRegistration") val studentRegistration: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class CreateSuggestionResponseDto(
+  @Json(name = "success") val success: Boolean = false,
+  @Json(name = "message") val message: String = "",
+  @Json(name = "suggestion") val suggestion: ProductSuggestionDto? = null,
+  @Json(name = "error") val error: String? = null,
+  @Json(name = "code") val code: String? = null,
+  @Json(name = "remainingHours") val remainingHours: Int? = null,
+  @Json(name = "nextAllowedAt") val nextAllowedAt: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class SuggestionEligibilityResponseDto(
+  @Json(name = "success") val success: Boolean = false,
+  @Json(name = "eligible") val eligible: Boolean = true,
+  @Json(name = "remainingHours") val remainingHours: Int = 0,
+  @Json(name = "nextAllowedAt") val nextAllowedAt: String? = null,
+  @Json(name = "message") val message: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class OwnerSuggestionsResponseDto(
+  @Json(name = "success") val success: Boolean = false,
+  @Json(name = "canteenId") val canteenId: String = "",
+  @Json(name = "count") val count: Int = 0,
+  @Json(name = "suggestions") val suggestions: List<ProductSuggestionDto> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class UpdateSuggestionStatusRequestDto(
+  @Json(name = "status") val status: String,
+  @Json(name = "ownerNote") val ownerNote: String? = null,
+)
+
+
 
 
 

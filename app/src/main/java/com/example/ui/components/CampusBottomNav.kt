@@ -256,13 +256,10 @@ fun CampusBottomNav(
             .semantics { contentDescription = "Open MunchMate AI Assistant" },
           contentAlignment = Alignment.Center,
         ) {
-          // Exact original Fork and Knife MunchMate Logo
-          Image(
-            painter = painterResource(id = R.drawable.ic_munchmate),
-            contentDescription = "MunchMate",
-            modifier = Modifier
-              .size(28.dp),
-            contentScale = ContentScale.Fit,
+          // Exact recreated Fork and Knife MunchMate Vector Icon
+          MunchMateIcon(
+            modifier = Modifier.size(24.dp),
+            tint = Color(0xFF2E5A44),
           )
         }
       }
