@@ -6,6 +6,7 @@ const orderItemSchema = new mongoose.Schema(
     name: { type: String, required: true },
     price: { type: Number, required: true },
     quantity: { type: Number, required: true, default: 1 },
+    subtotal: { type: Number, default: 0 },
     prepMinutes: { type: Number, default: 7 },
     selectedOption: { type: String, default: null },
     selectedAddons: { type: [String], default: [] },
@@ -18,6 +19,8 @@ const statusHistorySchema = new mongoose.Schema(
     status: { type: String, required: true },
     timestamp: { type: Date, default: Date.now },
     timestampLocal: { type: String, default: '' },
+    changedBy: { type: String, default: 'SYSTEM' },
+    changedByRole: { type: String, default: 'SYSTEM' },
   },
   { _id: false }
 );

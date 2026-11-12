@@ -58,11 +58,19 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -92,6 +100,7 @@ import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
 import com.example.ui.theme.CardSurface
 import com.example.ui.theme.DeliveryOrange
+import com.example.ui.theme.DeliveryOrangeLight
 import com.example.ui.theme.DrawerAmber
 import com.example.ui.theme.DrawerAmberDark
 import com.example.ui.theme.PureWhite
@@ -99,6 +108,7 @@ import com.example.ui.theme.RatingStarYellow
 import com.example.ui.theme.SoftGray
 import com.example.ui.theme.TextDark
 import com.example.ui.theme.TextMuted
+import com.example.ui.theme.TextSecondary
 import com.example.ui.theme.WarmCream
 
 private data class CategoryTabItem(
@@ -331,200 +341,139 @@ fun MenuScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // ── Single Compact Row: Modern Search Bar + Filter Button (Minimal Screen Space) ──
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        // ── Full-Width Clean Modern Search Input ──
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(PureWhite)
+            .border(1.dp, BorderGray, RoundedCornerShape(20.dp))
+            .padding(horizontal = 14.dp),
+          contentAlignment = Alignment.CenterStart,
         ) {
-          // Compact Search Input with Theme Integrated Palette
-          Box(
-            modifier = Modifier
-              .weight(1f)
-              .height(42.dp)
-              .clip(RoundedCornerShape(21.dp))
-              .background(Color(0xFFEFE2CD))
-              .border(1.dp, Color(0xFFDFCFB7), RoundedCornerShape(21.dp))
-              .padding(horizontal = 12.dp),
-            contentAlignment = Alignment.CenterStart,
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
           ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              modifier = Modifier.fillMaxWidth(),
-            ) {
-              Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = "Search",
-                tint = DrawerAmber,
-                modifier = Modifier.size(18.dp),
-              )
-              Spacer(modifier = Modifier.width(8.dp))
-              BasicTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                singleLine = true,
-                textStyle = TextStyle(fontSize = 13.sp, color = TextDark, fontWeight = FontWeight.Medium),
-                decorationBox = { innerTextField ->
-                  if (searchQuery.isEmpty()) {
-                    Text(
-                      text = "Search dishes, drinks...",
-                      fontSize = 12.5.sp,
-                      color = TextMuted.copy(alpha = 0.8f),
-                    )
-                  }
-                  innerTextField()
-                },
-                modifier = Modifier.weight(1f),
-              )
-              if (searchQuery.isNotEmpty()) {
-                Box(
-                  modifier = Modifier
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFDFCFB7))
-                    .clickable { searchQuery = "" },
-                  contentAlignment = Alignment.Center,
-                ) {
-                  Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Clear",
-                    tint = TextDark,
-                    modifier = Modifier.size(12.dp),
-                  )
-                }
-              }
-            }
-          }
-
-          // Compact Filter Pill Button
-          val hasActiveFilters = appState.activeMenuFilterCount > 0
-          Box(
-            modifier = Modifier
-              .height(42.dp)
-              .clip(RoundedCornerShape(21.dp))
-              .background(if (hasActiveFilters) BlackPrimary else Color(0xFFEFE2CD))
-              .border(
-                1.dp,
-                if (hasActiveFilters) BlackPrimary else Color(0xFFDFCFB7),
-                RoundedCornerShape(21.dp),
-              )
-              .clickable { appState.isMenuFilterOpen = true }
-              .padding(horizontal = 14.dp),
-            contentAlignment = Alignment.Center,
-          ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-              Icon(
-                imageVector = Icons.Default.Tune,
-                contentDescription = "Filter",
-                tint = if (hasActiveFilters) PureWhite else BlackPrimary,
-                modifier = Modifier.size(16.dp),
-              )
-              Text(
-                text = "Filters",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (hasActiveFilters) PureWhite else BlackPrimary,
-              )
-              if (hasActiveFilters) {
-                Box(
-                  modifier = Modifier
-                    .size(18.dp)
-                    .clip(CircleShape)
-                    .background(DrawerAmber),
-                  contentAlignment = Alignment.Center,
-                ) {
+            Icon(
+              imageVector = Icons.Default.Search,
+              contentDescription = "Search",
+              tint = TextMuted,
+              modifier = Modifier.size(17.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            BasicTextField(
+              value = searchQuery,
+              onValueChange = { searchQuery = it },
+              singleLine = true,
+              textStyle = TextStyle(fontSize = 13.sp, color = TextDark, fontWeight = FontWeight.Medium),
+              decorationBox = { innerTextField ->
+                if (searchQuery.isEmpty()) {
                   Text(
-                    text = "${appState.activeMenuFilterCount}",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = PureWhite,
+                    text = "Search dishes, drinks...",
+                    fontSize = 12.5.sp,
+                    color = TextMuted.copy(alpha = 0.8f),
                   )
                 }
+                innerTextField()
+              },
+              modifier = Modifier.weight(1f),
+            )
+            if (searchQuery.isNotEmpty()) {
+              Box(
+                modifier = Modifier
+                  .size(18.dp)
+                  .clip(CircleShape)
+                  .background(SoftGray)
+                  .clickable { searchQuery = "" },
+                contentAlignment = Alignment.Center,
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Close,
+                  contentDescription = "Clear",
+                  tint = TextDark,
+                  modifier = Modifier.size(11.dp),
+                )
               }
             }
           }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // ── Minimal Quick Filter Pills Row (Logical Natural Order, Minimal Screen Space) ──
+        // ── Compact Filter Row: Filters, Popular, Price, Sort By (Minimal & Professional) ──
+        val isSheetFilterActive = activeCategory != null || activeAvailableOnly || activeMinPrice != null || activeMaxPrice != null
+        val sheetFilterCount = (if (activeCategory != null) 1 else 0) +
+          (if (activeAvailableOnly) 1 else 0) +
+          (if (activeMinPrice != null || activeMaxPrice != null) 1 else 0)
+
+        val isPopularActive = activeSort == MenuSortOption.POPULAR
+        val isPriceActive = activeMinPrice != null || activeMaxPrice != null
+        val isSortActive = activeSort != MenuSortOption.RECOMMENDED && !isPopularActive
+
         Row(
           modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
-          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
           verticalAlignment = Alignment.CenterVertically,
         ) {
-          // 1. Sort Pill (Dropdown indicator)
-          val isSortActive = activeSort != MenuSortOption.RECOMMENDED
-          QuickFilterPill(
-            label = if (isSortActive) activeSort.shortLabel else "Sort",
+          // 1. Filters Chip (opens clean Filter Bottom Sheet)
+          MenuFilterChip(
+            label = if (sheetFilterCount > 0) "Filters ($sheetFilterCount)" else "Filters",
+            leadingIcon = Icons.Default.Tune,
+            isSelected = isSheetFilterActive,
+            onClick = { appState.isMenuFilterOpen = true },
+          )
+
+          // 2. Popular Chip
+          MenuFilterChip(
+            label = "Popular",
+            isSelected = isPopularActive,
+            onClick = {
+              appState.menuFilterSort = if (isPopularActive) MenuSortOption.RECOMMENDED else MenuSortOption.POPULAR
+            },
+          )
+
+          // 3. Price Chip
+          val priceLabel = when {
+            activeMinPrice == null && activeMaxPrice != null -> "Under ₹$activeMaxPrice"
+            activeMinPrice != null && activeMaxPrice != null -> "₹$activeMinPrice - ₹$activeMaxPrice"
+            activeMinPrice != null && activeMaxPrice == null -> "₹$activeMinPrice+"
+            else -> "Price"
+          }
+          MenuFilterChip(
+            label = priceLabel,
+            trailingIcon = if (isPriceActive) Icons.Default.Close else Icons.Default.ArrowDropDown,
+            isSelected = isPriceActive,
+            onClick = {
+              if (isPriceActive) {
+                appState.menuFilterMinPrice = null
+                appState.menuFilterMaxPrice = null
+              } else {
+                appState.menuFilterMaxPrice = 100
+              }
+            },
+          )
+
+          // 4. Sort By Chip (opens clean Sort Bottom Sheet)
+          val sortLabel = if (isSortActive) activeSort.shortLabel else "Sort By"
+          MenuFilterChip(
+            label = sortLabel,
             leadingIcon = Icons.AutoMirrored.Filled.Sort,
             trailingIcon = Icons.Default.ArrowDropDown,
             isSelected = isSortActive,
             onClick = { appState.isMenuSortOpen = true },
           )
 
-          // 2. Vegetarian Pill
-          val isVegActive = activeDietary == MenuDietaryFilter.VEG_ONLY
-          QuickFilterPill(
-            label = "Veg",
-            isSelected = isVegActive,
-            onClick = {
-              appState.menuFilterDietary = if (isVegActive) MenuDietaryFilter.ALL else MenuDietaryFilter.VEG_ONLY
-            },
-          )
-
-          // 3. Non-Vegetarian Pill
-          val isNonVegActive = activeDietary == MenuDietaryFilter.NON_VEG
-          QuickFilterPill(
-            label = "Non-Veg",
-            isSelected = isNonVegActive,
-            onClick = {
-              appState.menuFilterDietary = if (isNonVegActive) MenuDietaryFilter.ALL else MenuDietaryFilter.NON_VEG
-            },
-          )
-
-          // 4. Rating 4.0+ Pill
-          val isRatingActive = activeMinRating != null && activeMinRating >= 4.0
-          QuickFilterPill(
-            label = "4.0+ ★",
-            isSelected = isRatingActive,
-            onClick = {
-              appState.menuFilterMinRating = if (isRatingActive) null else 4.0
-            },
-          )
-
-          // 5. Under ₹100 Pill
-          val isPriceActive = activeMaxPrice == 100
-          QuickFilterPill(
-            label = "Under ₹100",
-            isSelected = isPriceActive,
-            onClick = {
-              appState.menuFilterMaxPrice = if (isPriceActive) null else 100
-            },
-          )
-
-          // 6. In Stock Pill
-          val isStockActive = activeAvailableOnly
-          QuickFilterPill(
-            label = "In Stock",
-            isSelected = isStockActive,
-            onClick = {
-              appState.menuFilterAvailableOnly = !isStockActive
-            },
-          )
-
-          // 7. Reset / Clear All Pill (visible when any filter or query is active)
+          // 5. Clear All Chip (visible when any filter or search is active)
           if (appState.isAnyMenuFilterActive || searchQuery.isNotEmpty()) {
-            QuickFilterPill(
-              label = "Clear",
+            MenuFilterChip(
+              label = "Clear All",
               leadingIcon = Icons.Default.Close,
               isSelected = false,
-              isDestructive = true,
+              isClearAction = true,
               onClick = {
                 searchQuery = ""
                 appState.resetAllMenuFilters()
@@ -677,21 +626,15 @@ fun MenuScreen(
     }
   }
 
-  // ── Full-Screen Right Side Filter Panel (Appears from Right & Occupies Whole Screen) ──
-    AnimatedVisibility(
-      visible = appState.isMenuFilterOpen,
-      enter = slideInHorizontally(initialOffsetX = { fullWidth -> fullWidth }) + fadeIn(),
-      exit = slideOutHorizontally(targetOffsetX = { fullWidth -> fullWidth }) + fadeOut(),
-      modifier = Modifier.fillMaxSize(),
-    ) {
-      FilterFullScreenPanel(
+    // ── Modern Filter Bottom Sheet ──
+    if (appState.isMenuFilterOpen) {
+      FilterBottomSheet(
         appState = appState,
-        matchingItemsCount = sortedItems.size,
-        onClose = { appState.isMenuFilterOpen = false },
+        onDismiss = { appState.isMenuFilterOpen = false },
       )
     }
 
-    // ── Sort Bottom Sheet ──────────────────────────────────────────────────
+    // ── Modern Sort Bottom Sheet ──
     if (appState.isMenuSortOpen) {
       SortBottomSheet(
         currentSort = activeSort,
@@ -706,46 +649,50 @@ fun MenuScreen(
 }
 
 /**
- * Modern Quick Filter Pill for minimal screen space & fast single-tap actions
+ * Modern Compact Filter Chip for MenuScreen
+ * - Uses application's existing theme colours
+ * - Selected: subtle primary-colour background (DeliveryOrangeLight) & primary border (DeliveryOrange)
+ * - Unselected: neutral background (PureWhite) & subtle border (BorderGray)
+ * - Compact height (32.dp) and comfortable pill shape (16.dp)
  */
 @Composable
-private fun QuickFilterPill(
+private fun MenuFilterChip(
   label: String,
-  leadingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
-  trailingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+  leadingIcon: ImageVector? = null,
+  trailingIcon: ImageVector? = null,
   isSelected: Boolean = false,
-  isDestructive: Boolean = false,
+  isClearAction: Boolean = false,
   onClick: () -> Unit,
 ) {
-  val bg = when {
-    isSelected -> BlackPrimary
-    isDestructive -> Color(0xFFFDE8E8)
-    else -> Color(0xFFEFE2CD)
+  val backgroundColor = when {
+    isSelected -> DeliveryOrangeLight
+    isClearAction -> Color(0xFFFDE8E8)
+    else -> PureWhite
   }
   val borderColor = when {
-    isSelected -> BlackPrimary
-    isDestructive -> Color(0xFFF8B4B4)
-    else -> Color(0xFFDFCFB7)
+    isSelected -> DeliveryOrange
+    isClearAction -> Color(0xFFFCA5A5)
+    else -> BorderGray
   }
   val contentColor = when {
-    isSelected -> PureWhite
-    isDestructive -> Color(0xFFC81E1E)
-    else -> BlackPrimary
+    isSelected -> DeliveryOrange
+    isClearAction -> Color(0xFFDC2626)
+    else -> TextSecondary
   }
 
   Box(
     modifier = Modifier
       .height(32.dp)
       .clip(RoundedCornerShape(16.dp))
-      .background(bg)
+      .background(backgroundColor)
       .border(1.dp, borderColor, RoundedCornerShape(16.dp))
       .clickable { onClick() }
-      .padding(horizontal = 10.dp),
+      .padding(horizontal = 11.dp),
     contentAlignment = Alignment.Center,
   ) {
     Row(
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(4.dp),
+      horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
       if (leadingIcon != null) {
         Icon(
@@ -757,8 +704,8 @@ private fun QuickFilterPill(
       }
       Text(
         text = label,
-        fontSize = 11.5.sp,
-        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+        fontSize = 12.sp,
+        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
         color = contentColor,
       )
       if (trailingIcon != null) {
@@ -766,7 +713,7 @@ private fun QuickFilterPill(
           imageVector = trailingIcon,
           contentDescription = null,
           tint = contentColor,
-          modifier = Modifier.size(15.dp),
+          modifier = Modifier.size(14.dp),
         )
       }
     }
@@ -774,696 +721,259 @@ private fun QuickFilterPill(
 }
 
 /**
- * Clean active filter chip with quick dismiss cross
+ * Clean & Professional Filter Bottom Sheet
+ * Keeps only useful filter options for the menu:
+ * 1. Category (Breakfast, Lunch, Snacks, Beverages, Healthy)
+ * 2. Availability (All Items, In Stock Only)
+ * 3. Price Range (All Prices, Under ₹50, ₹50-₹100, ₹100-₹200, Under ₹200)
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ActiveFilterChip(
-  label: String,
-  onRemove: () -> Unit,
-) {
-  Box(
-    modifier = Modifier
-      .clip(RoundedCornerShape(14.dp))
-      .background(PureWhite)
-      .border(1.dp, BorderGray, RoundedCornerShape(14.dp))
-      .padding(start = 10.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
-    contentAlignment = Alignment.Center,
-  ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-      Text(
-        text = label,
-        fontSize = 11.5.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = TextDark,
-      )
-      Spacer(modifier = Modifier.width(4.dp))
-      Icon(
-        imageVector = Icons.Default.Close,
-        contentDescription = "Remove",
-        tint = TextMuted,
-        modifier = Modifier
-          .size(14.dp)
-          .clickable { onRemove() },
-      )
-    }
-  }
-}
-
-/**
- * Modern Sort Bottom Sheet Modal
- */
-@Composable
-private fun SortBottomSheet(
-  currentSort: MenuSortOption,
-  onSortSelected: (MenuSortOption) -> Unit,
+private fun FilterBottomSheet(
+  appState: CanteenAppState,
   onDismiss: () -> Unit,
 ) {
-  Box(
-    modifier = Modifier
-      .fillMaxSize()
-      .background(Color.Black.copy(alpha = 0.5f))
-      .clickable(
-        interactionSource = remember { MutableInteractionSource() },
-        indication = null,
-      ) { onDismiss() },
-    contentAlignment = Alignment.BottomCenter,
+  val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+  var draftCategory by remember(appState.selectedMenuCategory) { mutableStateOf(appState.selectedMenuCategory) }
+  var draftAvailableOnly by remember(appState.menuFilterAvailableOnly) { mutableStateOf(appState.menuFilterAvailableOnly) }
+  var draftMinPrice by remember(appState.menuFilterMinPrice) { mutableStateOf(appState.menuFilterMinPrice) }
+  var draftMaxPrice by remember(appState.menuFilterMaxPrice) { mutableStateOf(appState.menuFilterMaxPrice) }
+
+  val draftActiveCount = (if (draftCategory != null) 1 else 0) +
+    (if (draftAvailableOnly) 1 else 0) +
+    (if (draftMinPrice != null || draftMaxPrice != null) 1 else 0)
+
+  ModalBottomSheet(
+    onDismissRequest = onDismiss,
+    sheetState = sheetState,
+    containerColor = PureWhite,
+    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+    dragHandle = {
+      Box(
+        modifier = Modifier
+          .padding(vertical = 10.dp)
+          .size(width = 36.dp, height = 4.dp)
+          .clip(CircleShape)
+          .background(BorderGray),
+      )
+    },
   ) {
-    Card(
+    Column(
       modifier = Modifier
         .fillMaxWidth()
-        .clickable(
-          interactionSource = remember { MutableInteractionSource() },
-          indication = null,
-        ) { /* Consume click so sheet doesn't close */ },
-      shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-      colors = CardDefaults.cardColors(containerColor = WarmCream),
+        .navigationBarsPadding()
+        .padding(horizontal = 20.dp, vertical = 6.dp),
     ) {
-      Column(
-        modifier = Modifier
-          .fillMaxWidth()
-          .navigationBarsPadding()
-          .padding(top = 12.dp, bottom = 20.dp),
+      // ── Header: Title, Clear All, and Close ──
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
       ) {
-        // Drag handle
-        Box(
-          modifier = Modifier
-            .size(width = 36.dp, height = 4.dp)
-            .clip(RoundedCornerShape(2.dp))
-            .background(Color(0xFFD6C6AA))
-            .align(Alignment.CenterHorizontally),
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(
+            text = "Filters",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark,
+          )
+          if (draftActiveCount > 0) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Box(
+              modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(DeliveryOrangeLight)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+            ) {
+              Text(
+                text = "$draftActiveCount",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = DeliveryOrange,
+              )
+            }
+          }
+        }
 
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-              imageVector = Icons.AutoMirrored.Filled.Sort,
-              contentDescription = null,
-              tint = DrawerAmber,
-              modifier = Modifier.size(20.dp),
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          if (draftActiveCount > 0) {
+            Text(
+              text = "Clear All",
+              fontSize = 13.sp,
+              fontWeight = FontWeight.SemiBold,
+              color = DeliveryOrange,
+              modifier = Modifier
+                .clickable {
+                  draftCategory = null
+                  draftAvailableOnly = false
+                  draftMinPrice = null
+                  draftMaxPrice = null
+                }
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
-              text = "Sort By",
-              fontSize = 18.sp,
-              fontWeight = FontWeight.ExtraBold,
-              color = BlackPrimary,
-            )
           }
 
-          Box(
-            modifier = Modifier
-              .size(32.dp)
-              .clip(CircleShape)
-              .background(Color(0xFFEFE2CD))
-              .clickable { onDismiss() },
-            contentAlignment = Alignment.Center,
+          IconButton(
+            onClick = onDismiss,
+            modifier = Modifier.size(28.dp),
           ) {
             Icon(
               imageVector = Icons.Default.Close,
               contentDescription = "Close",
               tint = TextDark,
-              modifier = Modifier.size(16.dp),
+              modifier = Modifier.size(20.dp),
             )
           }
         }
-
-        Spacer(modifier = Modifier.height(10.dp))
-        HorizontalDivider(color = BorderGray.copy(alpha = 0.5f))
-
-        val sortOptions = listOf(
-          MenuSortOption.RECOMMENDED to "Our top recommended dishes",
-          MenuSortOption.POPULAR to "Most ordered items by students",
-          MenuSortOption.PRICE_LOW_TO_HIGH to "Most budget-friendly dishes first",
-          MenuSortOption.PRICE_HIGH_TO_LOW to "Premium & deluxe dishes first",
-          MenuSortOption.NEWEST_FIRST to "Newest additions to the canteen",
-        )
-
-        Column(modifier = Modifier.fillMaxWidth()) {
-          for ((option, subtitle) in sortOptions) {
-            val isSelected = option == currentSort
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onSortSelected(option) }
-                .background(if (isSelected) DrawerAmber.copy(alpha = 0.08f) else Color.Transparent)
-                .padding(horizontal = 20.dp, vertical = 13.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-              Column(modifier = Modifier.weight(1f)) {
-                Text(
-                  text = option.displayName,
-                  fontSize = 14.sp,
-                  fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
-                  color = if (isSelected) DrawerAmberDark else BlackPrimary,
-                )
-                Text(
-                  text = subtitle,
-                  fontSize = 11.5.sp,
-                  color = TextMuted,
-                )
-              }
-
-              Box(
-                modifier = Modifier
-                  .size(20.dp)
-                  .clip(CircleShape)
-                  .border(
-                    width = if (isSelected) 5.dp else 1.5.dp,
-                    color = if (isSelected) DrawerAmber else BorderGray,
-                    shape = CircleShape,
-                  )
-              )
-            }
-          }
-        }
       }
-    }
-  }
-}
 
-/**
- * Full-Screen Filter Panel sliding from right edge with clean layout and clear sections.
- */
-@Composable
-private fun FilterFullScreenPanel(
-  appState: CanteenAppState,
-  matchingItemsCount: Int,
-  onClose: () -> Unit,
-  modifier: Modifier = Modifier,
-) {
-  // Local working copy of filter states so user can make changes cleanly
-  var draftCategory by remember(appState.selectedMenuCategory) { mutableStateOf(appState.selectedMenuCategory) }
-  var draftDietary by remember(appState.menuFilterDietary) { mutableStateOf(appState.menuFilterDietary) }
-  var draftAvailableOnly by remember(appState.menuFilterAvailableOnly) { mutableStateOf(appState.menuFilterAvailableOnly) }
-  var draftSort by remember(appState.menuFilterSort) { mutableStateOf(appState.menuFilterSort) }
-  var draftMaxMinutes by remember(appState.menuFilterMaxMinutes) { mutableStateOf(appState.menuFilterMaxMinutes) }
-  var draftMinPrice by remember(appState.menuFilterMinPrice) { mutableStateOf(appState.menuFilterMinPrice) }
-  var draftMaxPrice by remember(appState.menuFilterMaxPrice) { mutableStateOf(appState.menuFilterMaxPrice) }
-  var draftMinRating by remember(appState.menuFilterMinRating) { mutableStateOf(appState.menuFilterMinRating) }
+      Spacer(modifier = Modifier.height(14.dp))
+      HorizontalDivider(color = BorderGray.copy(alpha = 0.5f))
+      Spacer(modifier = Modifier.height(16.dp))
 
-  val draftActiveCount = (if (draftCategory != null) 1 else 0) +
-    (if (draftDietary != MenuDietaryFilter.ALL) 1 else 0) +
-    (if (draftAvailableOnly) 1 else 0) +
-    (if (draftSort != MenuSortOption.RECOMMENDED) 1 else 0) +
-    (if (draftMaxMinutes != null) 1 else 0) +
-    (if (draftMinPrice != null || draftMaxPrice != null) 1 else 0) +
-    (if (draftMinRating != null) 1 else 0)
-
-  Column(
-    modifier = modifier
-      .fillMaxSize()
-      .background(PureWhite)
-      .statusBarsPadding()
-      .navigationBarsPadding(),
-  ) {
-    // ── Header Bar ──────────────────────────────────────────────────────────
-    Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 16.dp, vertical = 14.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      // Circular Back / Close Button
-      Box(
+      Column(
         modifier = Modifier
-          .size(38.dp)
-          .clip(CircleShape)
-          .background(SoftGray)
-          .clickable { onClose() },
-        contentAlignment = Alignment.Center,
+          .fillMaxWidth()
+          .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
       ) {
-        Icon(
-          imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-          contentDescription = "Back",
-          tint = BlackPrimary,
-          modifier = Modifier.size(20.dp),
-        )
-      }
-
-      Spacer(modifier = Modifier.width(14.dp))
-
-      Column(modifier = Modifier.weight(1f)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // ── 1. Category ──
+        Column {
           Text(
-            text = "Filters & Sort",
-            fontSize = 19.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = BlackPrimary,
+            text = "Category",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark,
           )
-          if (draftActiveCount > 0) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Box(
-              modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(DrawerAmber.copy(alpha = 0.15f))
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-            ) {
-              Text(
-                text = "$draftActiveCount active",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = DrawerAmber,
-              )
-            }
-          }
-        }
-        Text(
-          text = "Refine dishes by dietary, availability, category & price",
-          fontSize = 11.5.sp,
-          color = TextMuted,
-        )
-      }
-
-      // Reset All Button
-      Text(
-        text = "Reset All",
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Bold,
-        color = if (draftActiveCount > 0) DrawerAmber else TextMuted.copy(alpha = 0.5f),
-        modifier = Modifier
-          .clickable(enabled = draftActiveCount > 0) {
-            draftCategory = null
-            draftDietary = MenuDietaryFilter.ALL
-            draftAvailableOnly = false
-            draftSort = MenuSortOption.RECOMMENDED
-            draftMaxMinutes = null
-            draftMinPrice = null
-            draftMaxPrice = null
-            draftMinRating = null
-          }
-          .padding(8.dp),
-      )
-    }
-
-    HorizontalDivider(color = BorderGray.copy(alpha = 0.6f), thickness = 1.dp)
-
-    // ── Scrollable Structured Filter Sections (Logical Natural Order) ───────
-    Column(
-      modifier = Modifier
-        .weight(1f)
-        .verticalScroll(rememberScrollState())
-        .padding(horizontal = 18.dp, vertical = 14.dp),
-      verticalArrangement = Arrangement.spacedBy(22.dp),
-    ) {
-      // ── Section 1: Dietary Preference ─────────────────────────────────────
-      FilterSection(
-        title = "Dietary Preference",
-        icon = Icons.Default.Fastfood,
-      ) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-          DietaryOptionCard(
-            label = "All Items",
-            isSelected = draftDietary == MenuDietaryFilter.ALL,
-            onClick = { draftDietary = MenuDietaryFilter.ALL },
-            modifier = Modifier.weight(1f),
-          )
-          DietaryOptionCard(
-            label = "Vegetarian",
-            isVeg = true,
-            isSelected = draftDietary == MenuDietaryFilter.VEG_ONLY,
-            onClick = { draftDietary = MenuDietaryFilter.VEG_ONLY },
-            modifier = Modifier.weight(1f),
-          )
-          DietaryOptionCard(
-            label = "Non-Vegetarian",
-            isVeg = false,
-            isSelected = draftDietary == MenuDietaryFilter.NON_VEG,
-            onClick = { draftDietary = MenuDietaryFilter.NON_VEG },
-            modifier = Modifier.weight(1f),
-          )
-        }
-      }
-
-      // ── Section 2: Availability ───────────────────────────────────────────
-      FilterSection(
-        title = "Availability",
-        icon = Icons.Default.Check,
-      ) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-          FilterOptionPill(
-            label = "All Items",
-            isSelected = !draftAvailableOnly,
-            onClick = { draftAvailableOnly = false },
-            modifier = Modifier.weight(1f),
-          )
-          FilterOptionPill(
-            label = "In Stock Only",
-            isSelected = draftAvailableOnly,
-            onClick = { draftAvailableOnly = true },
-            modifier = Modifier.weight(1f),
-          )
-        }
-      }
-
-      // ── Section 3: Food Category ──────────────────────────────────────────
-      FilterSection(
-        title = "Category",
-        icon = Icons.Default.Category,
-      ) {
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-          FilterOptionPill(
-            label = "All Categories",
-            isSelected = draftCategory == null,
-            onClick = { draftCategory = null },
-          )
-          FilterOptionPill(
-            label = "Breakfast",
-            isSelected = draftCategory == FoodCategory.BREAKFAST,
-            onClick = { draftCategory = FoodCategory.BREAKFAST },
-          )
-          FilterOptionPill(
-            label = "Healthy Breakfast",
-            isSelected = draftCategory == FoodCategory.HEALTHY_BREAKFAST,
-            onClick = { draftCategory = FoodCategory.HEALTHY_BREAKFAST },
-          )
-          FilterOptionPill(
-            label = "Lunch",
-            isSelected = draftCategory == FoodCategory.LUNCH,
-            onClick = { draftCategory = FoodCategory.LUNCH },
-          )
-          FilterOptionPill(
-            label = "Beverages",
-            isSelected = draftCategory == FoodCategory.BEVERAGES,
-            onClick = { draftCategory = FoodCategory.BEVERAGES },
-          )
-          FilterOptionPill(
-            label = "Snacks",
-            isSelected = draftCategory == FoodCategory.SNACKS,
-            onClick = { draftCategory = FoodCategory.SNACKS },
-          )
-        }
-      }
-
-      // ── Section 4: Sort By ────────────────────────────────────────────────
-      FilterSection(
-        title = "Sort By",
-        icon = Icons.AutoMirrored.Filled.Sort,
-      ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Spacer(modifier = Modifier.height(10.dp))
           Row(
             modifier = Modifier
               .fillMaxWidth()
               .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
           ) {
-            FilterOptionPill(
-              label = "Recommended",
-              isSelected = draftSort == MenuSortOption.RECOMMENDED,
-              onClick = { draftSort = MenuSortOption.RECOMMENDED },
+            val categories = listOf(
+              null to "All Categories",
+              FoodCategory.BREAKFAST to "Breakfast",
+              FoodCategory.LUNCH to "Lunch",
+              FoodCategory.SNACKS to "Snacks",
+              FoodCategory.BEVERAGES to "Beverages",
+              FoodCategory.HEALTHY_BREAKFAST to "Healthy",
             )
-            FilterOptionPill(
-              label = "Price: Low to High",
-              isSelected = draftSort == MenuSortOption.PRICE_LOW_TO_HIGH,
-              onClick = { draftSort = MenuSortOption.PRICE_LOW_TO_HIGH },
-            )
-            FilterOptionPill(
-              label = "Price: High to Low",
-              isSelected = draftSort == MenuSortOption.PRICE_HIGH_TO_LOW,
-              onClick = { draftSort = MenuSortOption.PRICE_HIGH_TO_LOW },
-            )
-            FilterOptionPill(
-              label = "Highest Rated",
-              isSelected = draftSort == MenuSortOption.TOP_RATED,
-              onClick = { draftSort = MenuSortOption.TOP_RATED },
-            )
-            FilterOptionPill(
-              label = "Fastest Prep",
-              isSelected = draftSort == MenuSortOption.FASTEST_PREP,
-              onClick = { draftSort = MenuSortOption.FASTEST_PREP },
-            )
+            for ((cat, catLabel) in categories) {
+              val isSelected = draftCategory == cat
+              FilterPillChoice(
+                label = catLabel,
+                isSelected = isSelected,
+                onClick = { draftCategory = cat },
+              )
+            }
           }
         }
-      }
 
-      // ── Section 5: Price Range ────────────────────────────────────────────
-      FilterSection(
-        title = "Price Range",
-        icon = Icons.Default.CurrencyRupee,
-      ) {
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-          val isAnyPrice = draftMinPrice == null && draftMaxPrice == null
-          FilterOptionPill(
-            label = "All Prices",
-            isSelected = isAnyPrice,
-            onClick = {
-              draftMinPrice = null
-              draftMaxPrice = null
-            },
-          )
-          FilterOptionPill(
-            label = "Under ₹50",
-            isSelected = draftMinPrice == null && draftMaxPrice == 50,
-            onClick = {
-              draftMinPrice = null
-              draftMaxPrice = 50
-            },
-          )
-          FilterOptionPill(
-            label = "₹50 - ₹100",
-            isSelected = draftMinPrice == 50 && draftMaxPrice == 100,
-            onClick = {
-              draftMinPrice = 50
-              draftMaxPrice = 100
-            },
-          )
-          FilterOptionPill(
-            label = "₹100 - ₹200",
-            isSelected = draftMinPrice == 100 && draftMaxPrice == 200,
-            onClick = {
-              draftMinPrice = 100
-              draftMaxPrice = 200
-            },
-          )
-          FilterOptionPill(
-            label = "Under ₹200",
-            isSelected = draftMinPrice == null && draftMaxPrice == 200,
-            onClick = {
-              draftMinPrice = null
-              draftMaxPrice = 200
-            },
-          )
-        }
-      }
-
-      // ── Section 6: Customer Ratings ───────────────────────────────────────
-      FilterSection(
-        title = "Customer Rating",
-        icon = Icons.Default.Star,
-      ) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-          FilterOptionPill(
-            label = "All Ratings",
-            isSelected = draftMinRating == null,
-            onClick = { draftMinRating = null },
-            modifier = Modifier.weight(1f),
-          )
-          FilterOptionPill(
-            label = "3.5+ Stars ★",
-            isSelected = draftMinRating == 3.5,
-            onClick = { draftMinRating = 3.5 },
-            modifier = Modifier.weight(1f),
-          )
-          FilterOptionPill(
-            label = "4.0+ Stars ★",
-            isSelected = draftMinRating == 4.0,
-            onClick = { draftMinRating = 4.0 },
-            modifier = Modifier.weight(1f),
-          )
-          FilterOptionPill(
-            label = "4.5+ Stars ★",
-            isSelected = draftMinRating == 4.5,
-            onClick = { draftMinRating = 4.5 },
-            modifier = Modifier.weight(1f),
-          )
-        }
-      }
-
-      // ── Section 7: Maximum Preparation Time ───────────────────────────────
-      FilterSection(
-        title = "Preparation Time",
-        icon = Icons.Default.AccessTime,
-      ) {
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-          FilterOptionPill(
-            label = "Any Time",
-            isSelected = draftMaxMinutes == null,
-            onClick = { draftMaxMinutes = null },
-          )
-          FilterOptionPill(
-            label = "< 5 mins",
-            isSelected = draftMaxMinutes == 5,
-            onClick = { draftMaxMinutes = 5 },
-          )
-          FilterOptionPill(
-            label = "< 10 mins",
-            isSelected = draftMaxMinutes == 10,
-            onClick = { draftMaxMinutes = 10 },
-          )
-          FilterOptionPill(
-            label = "< 15 mins",
-            isSelected = draftMaxMinutes == 15,
-            onClick = { draftMaxMinutes = 15 },
-          )
-        }
-      }
-
-      Spacer(modifier = Modifier.height(10.dp))
-    }
-
-    // ── Sticky Bottom Action Bar ─────────────────────────────────────────────
-    Box(
-      modifier = Modifier
-        .fillMaxWidth()
-        .shadow(8.dp)
-        .background(WarmCream)
-        .border(1.dp, Color(0xFFDFCFB7))
-        .padding(horizontal = 16.dp, vertical = 14.dp),
-    ) {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        // Outline Clear Button
-        Box(
-          modifier = Modifier
-            .weight(1f)
-            .height(48.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFFEFE2CD))
-            .border(1.dp, Color(0xFFDFCFB7), RoundedCornerShape(14.dp))
-            .clickable {
-              draftCategory = null
-              draftDietary = MenuDietaryFilter.ALL
-              draftAvailableOnly = false
-              draftSort = MenuSortOption.RECOMMENDED
-              draftMaxMinutes = null
-              draftMinPrice = null
-              draftMaxPrice = null
-              draftMinRating = null
-            },
-          contentAlignment = Alignment.Center,
-        ) {
+        // ── 2. Availability ──
+        Column {
           Text(
-            text = "Clear All",
-            fontSize = 13.5.sp,
+            text = "Availability",
+            fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             color = TextDark,
           )
-        }
-
-        // Apply Filters Button (Decent Sleek Black Primary)
-        Box(
-          modifier = Modifier
-            .weight(1.8f)
-            .height(48.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(BlackPrimary)
-            .clickable {
-              appState.selectedMenuCategory = draftCategory
-              appState.menuFilterDietary = draftDietary
-              appState.menuFilterAvailableOnly = draftAvailableOnly
-              appState.menuFilterSort = draftSort
-              appState.menuFilterMaxMinutes = draftMaxMinutes
-              appState.menuFilterMinPrice = draftMinPrice
-              appState.menuFilterMaxPrice = draftMaxPrice
-              appState.menuFilterMinRating = draftMinRating
-              onClose()
-            },
-          contentAlignment = Alignment.Center,
-        ) {
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-              imageVector = Icons.Default.Check,
-              contentDescription = null,
-              tint = PureWhite,
-              modifier = Modifier.size(17.dp),
+          Spacer(modifier = Modifier.height(10.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+          ) {
+            FilterPillChoice(
+              label = "All Items",
+              isSelected = !draftAvailableOnly,
+              onClick = { draftAvailableOnly = false },
+              modifier = Modifier.weight(1f),
             )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-              text = if (draftActiveCount > 0) "Apply Filters ($draftActiveCount)" else "Apply Filters",
-              fontSize = 13.5.sp,
-              fontWeight = FontWeight.Bold,
-              color = PureWhite,
+            FilterPillChoice(
+              label = "In Stock Only",
+              isSelected = draftAvailableOnly,
+              onClick = { draftAvailableOnly = true },
+              modifier = Modifier.weight(1f),
             )
           }
         }
+
+        // ── 3. Price Range ──
+        Column {
+          Text(
+            text = "Price Range",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark,
+          )
+          Spacer(modifier = Modifier.height(10.dp))
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            val priceOptions = listOf(
+              Triple(null, null, "All Prices"),
+              Triple(null, 50, "Under ₹50"),
+              Triple(50, 100, "₹50 - ₹100"),
+              Triple(100, 200, "₹100 - ₹200"),
+              Triple(null, 200, "Under ₹200"),
+            )
+            for ((min, max, label) in priceOptions) {
+              val isSelected = draftMinPrice == min && draftMaxPrice == max
+              FilterPillChoice(
+                label = label,
+                isSelected = isSelected,
+                onClick = {
+                  draftMinPrice = min
+                  draftMaxPrice = max
+                },
+              )
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
       }
+
+      Spacer(modifier = Modifier.height(14.dp))
+
+      // ── Apply Button ──
+      Button(
+        onClick = {
+          appState.selectedMenuCategory = draftCategory
+          appState.menuFilterAvailableOnly = draftAvailableOnly
+          appState.menuFilterMinPrice = draftMinPrice
+          appState.menuFilterMaxPrice = draftMaxPrice
+          onDismiss()
+        },
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(46.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(
+          containerColor = BlackPrimary,
+          contentColor = PureWhite,
+        ),
+      ) {
+        Text(
+          text = if (draftActiveCount > 0) "Apply Filters ($draftActiveCount)" else "Apply Filters",
+          fontSize = 14.sp,
+          fontWeight = FontWeight.Bold,
+        )
+      }
+
+      Spacer(modifier = Modifier.height(12.dp))
     }
   }
 }
 
-/**
- * Filter Section with Title and Icon
- */
 @Composable
-private fun FilterSection(
-  title: String,
-  icon: ImageVector,
-  content: @Composable () -> Unit,
-) {
-  Column(modifier = Modifier.fillMaxWidth()) {
-    Row(
-      verticalAlignment = Alignment.CenterVertically,
-      modifier = Modifier.padding(bottom = 10.dp),
-    ) {
-      Icon(
-        imageVector = icon,
-        contentDescription = null,
-        tint = DrawerAmber,
-        modifier = Modifier.size(17.dp),
-      )
-      Spacer(modifier = Modifier.width(7.dp))
-      Text(
-        text = title,
-        fontSize = 14.sp,
-        fontWeight = FontWeight.ExtraBold,
-        color = BlackPrimary,
-        letterSpacing = 0.2.sp,
-      )
-    }
-    content()
-  }
-}
-
-/**
- * Modern Filter Option Pill with Sleek Black & Warm Cream Theme
- */
-@Composable
-private fun FilterOptionPill(
+private fun FilterPillChoice(
   label: String,
   isSelected: Boolean,
   onClick: () -> Unit,
@@ -1471,12 +981,12 @@ private fun FilterOptionPill(
 ) {
   Box(
     modifier = modifier
-      .clip(RoundedCornerShape(20.dp))
-      .background(if (isSelected) BlackPrimary else Color(0xFFEFE2CD))
+      .clip(RoundedCornerShape(12.dp))
+      .background(if (isSelected) DeliveryOrangeLight else PureWhite)
       .border(
         1.dp,
-        if (isSelected) BlackPrimary else Color(0xFFDFCFB7),
-        RoundedCornerShape(20.dp),
+        if (isSelected) DeliveryOrange else BorderGray,
+        RoundedCornerShape(12.dp),
       )
       .clickable { onClick() }
       .padding(horizontal = 14.dp, vertical = 9.dp),
@@ -1484,65 +994,121 @@ private fun FilterOptionPill(
   ) {
     Text(
       text = label,
-      fontSize = 12.sp,
+      fontSize = 12.5.sp,
       fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-      color = if (isSelected) PureWhite else TextDark,
+      color = if (isSelected) TextDark else TextSecondary,
     )
   }
 }
 
 /**
- * Dietary Option Card (Veg / Non-Veg / All) with Official Symbol and Theme Palette
+ * Clean & Professional Sorting Bottom Sheet
+ * Simple radio-style selection for:
+ * - Recommended
+ * - Popular
+ * - Price: Low to High
+ * - Price: High to Low
+ * - Recently Added
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DietaryOptionCard(
-  label: String,
-  isSelected: Boolean,
-  onClick: () -> Unit,
-  modifier: Modifier = Modifier,
-  isVeg: Boolean? = null,
+private fun SortBottomSheet(
+  currentSort: MenuSortOption,
+  onSortSelected: (MenuSortOption) -> Unit,
+  onDismiss: () -> Unit,
 ) {
-  Box(
-    modifier = modifier
-      .clip(RoundedCornerShape(14.dp))
-      .background(if (isSelected) BlackPrimary else Color(0xFFEFE2CD))
-      .border(
-        1.5.dp,
-        if (isSelected) BlackPrimary else Color(0xFFDFCFB7),
-        RoundedCornerShape(14.dp),
+  val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+  val sortOptions = listOf(
+    MenuSortOption.RECOMMENDED to "Recommended",
+    MenuSortOption.POPULAR to "Popular",
+    MenuSortOption.PRICE_LOW_TO_HIGH to "Price: Low to High",
+    MenuSortOption.PRICE_HIGH_TO_LOW to "Price: High to Low",
+    MenuSortOption.NEWEST_FIRST to "Recently Added",
+  )
+
+  ModalBottomSheet(
+    onDismissRequest = onDismiss,
+    sheetState = sheetState,
+    containerColor = PureWhite,
+    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+    dragHandle = {
+      Box(
+        modifier = Modifier
+          .padding(vertical = 10.dp)
+          .size(width = 36.dp, height = 4.dp)
+          .clip(CircleShape)
+          .background(BorderGray),
       )
-      .clickable { onClick() }
-      .padding(horizontal = 8.dp, vertical = 10.dp),
-    contentAlignment = Alignment.Center,
+    },
   ) {
-    Row(
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.Center,
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .navigationBarsPadding()
+        .padding(top = 4.dp, bottom = 18.dp),
     ) {
-      if (isVeg != null) {
-        val symbolColor = if (isVeg) Color(0xFF2E7D32) else Color(0xFFC62828)
-        Box(
-          modifier = Modifier
-            .size(13.dp)
-            .border(1.2.dp, symbolColor, RoundedCornerShape(2.dp)),
-          contentAlignment = Alignment.Center,
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 20.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Text(
+          text = "Sort By",
+          fontSize = 18.sp,
+          fontWeight = FontWeight.Bold,
+          color = TextDark,
+        )
+
+        IconButton(
+          onClick = onDismiss,
+          modifier = Modifier.size(28.dp),
         ) {
-          Box(
-            modifier = Modifier
-              .size(6.dp)
-              .clip(CircleShape)
-              .background(symbolColor)
+          Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = "Close",
+            tint = TextDark,
+            modifier = Modifier.size(20.dp),
           )
         }
-        Spacer(modifier = Modifier.width(5.dp))
       }
-      Text(
-        text = label,
-        fontSize = 11.5.sp,
-        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-        color = if (isSelected) PureWhite else TextDark,
-        maxLines = 1,
-      )
+
+      Spacer(modifier = Modifier.height(6.dp))
+      HorizontalDivider(color = BorderGray.copy(alpha = 0.5f))
+      Spacer(modifier = Modifier.height(4.dp))
+
+      Column(modifier = Modifier.fillMaxWidth()) {
+        for ((option, label) in sortOptions) {
+          val isSelected = option == currentSort
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { onSortSelected(option) }
+              .background(if (isSelected) DeliveryOrangeLight.copy(alpha = 0.4f) else Color.Transparent)
+              .padding(horizontal = 20.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+          ) {
+            Text(
+              text = label,
+              fontSize = 14.sp,
+              fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+              color = TextDark,
+            )
+
+            RadioButton(
+              selected = isSelected,
+              onClick = { onSortSelected(option) },
+              colors = RadioButtonDefaults.colors(
+                selectedColor = DeliveryOrange,
+                unselectedColor = BorderGray,
+              ),
+            )
+          }
+        }
+      }
     }
   }
 }

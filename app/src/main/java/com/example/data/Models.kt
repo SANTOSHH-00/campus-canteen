@@ -197,9 +197,11 @@ data class NotificationItem(
 enum class BottomNavTab(val label: String) {
   HOME("Home"),
   MENU("Menu"),
-  CART("Cart"),
   ORDERS("Orders"),
+  AI_ASSISTANT("MunchMate"),
+  CANTEENS("Menu"),
   PROFILE("Profile"),
+  CART("Cart"),
 }
 
 object SampleFoodData {

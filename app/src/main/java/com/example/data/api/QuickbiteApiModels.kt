@@ -888,6 +888,84 @@ data class ConfirmPickupResponseDto(
   @Json(name = "error") val error: String? = null,
 )
 
+// ── Gemini AI Assistant DTOs ──────────────────────────────────────────────────
+@JsonClass(generateAdapter = true)
+data class AiChatMessageDto(
+  @Json(name = "role") val role: String,
+  @Json(name = "content") val content: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class AiChatRequestDto(
+  @Json(name = "message") val message: String,
+  @Json(name = "canteenId") val canteenId: String? = null,
+  @Json(name = "conversationHistory") val conversationHistory: List<AiChatMessageDto>? = null,
+  @Json(name = "studentId") val studentId: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class AiRecommendedItemDto(
+  @Json(name = "id") val id: String = "",
+  @Json(name = "canteenId") val canteenId: String = "",
+  @Json(name = "canteenName") val canteenName: String = "",
+  @Json(name = "name") val name: String = "",
+  @Json(name = "price") val price: Double = 0.0,
+  @Json(name = "category") val category: String = "",
+  @Json(name = "imageUrl") val imageUrl: String = "",
+  @Json(name = "prepTime") val prepTime: String = "",
+  @Json(name = "rating") val rating: Double = 4.5,
+  @Json(name = "available") val available: Boolean = true,
+)
+
+@JsonClass(generateAdapter = true)
+data class AiTrackedOrderDto(
+  @Json(name = "orderId") val orderId: String = "",
+  @Json(name = "tokenNumber") val tokenNumber: String = "",
+  @Json(name = "canteenId") val canteenId: String = "",
+  @Json(name = "canteenName") val canteenName: String = "",
+  @Json(name = "status") val status: String = "",
+  @Json(name = "paymentStatus") val paymentStatus: String = "PAID",
+  @Json(name = "totalAmount") val totalAmount: Double = 0.0,
+  @Json(name = "orderDate") val orderDate: String = "",
+  @Json(name = "estimatedReadyTime") val estimatedReadyTime: String = "",
+  @Json(name = "pickupLocation") val pickupLocation: String = "",
+  @Json(name = "itemsSummary") val itemsSummary: String = "",
+)
+
+@JsonClass(generateAdapter = true)
+data class AiChatResponseDto(
+  @Json(name = "success") val success: Boolean = false,
+  @Json(name = "messageId") val messageId: String? = null,
+  @Json(name = "reply") val reply: String? = null,
+  @Json(name = "suggestions") val suggestions: List<String> = emptyList(),
+  @Json(name = "recommendedItems") val recommendedItems: List<AiRecommendedItemDto> = emptyList(),
+  @Json(name = "hasActiveOrders") val hasActiveOrders: Boolean = false,
+  @Json(name = "trackedOrder") val trackedOrder: AiTrackedOrderDto? = null,
+  @Json(name = "activeOrders") val activeOrders: List<AiTrackedOrderDto> = emptyList(),
+  @Json(name = "error") val error: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class AiSuggestionsResponseDto(
+  @Json(name = "suggestions") val suggestions: List<String> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class AiFeedbackRequestDto(
+  @Json(name = "messageId") val messageId: String,
+  @Json(name = "userQuestion") val userQuestion: String? = null,
+  @Json(name = "assistantResponse") val assistantResponse: String? = null,
+  @Json(name = "feedbackType") val feedbackType: String,
+  @Json(name = "reason") val reason: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class AiFeedbackResponseDto(
+  @Json(name = "success") val success: Boolean = false,
+  @Json(name = "message") val message: String = "",
+)
+
+
 
 
 

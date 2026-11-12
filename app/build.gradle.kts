@@ -85,6 +85,8 @@ secrets {
   ignoreList.add("MONGODB_DB_NAME")
   ignoreList.add("PASSWORD_RESET_URL")
   ignoreList.add("PORT")
+  ignoreList.add("GEMINI_API_KEY")
+  ignoreList.add("GEMINI_MODEL")
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }

@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -57,6 +59,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
@@ -76,6 +81,7 @@ import com.example.ui.theme.CardSurface
 import com.example.ui.theme.DeliveryOrange
 import com.example.ui.theme.DeliveryOrangeLight
 import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.MintFresh
 import com.example.ui.theme.OpenGreen
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.SoftGray
@@ -103,6 +109,7 @@ fun CartScreen(
   modifier: Modifier = Modifier,
 ) {
   var newlyPlacedOrder by remember { mutableStateOf<OrderRecord?>(null) }
+  var orderPlacementError by remember { mutableStateOf<String?>(null) }
   var showLoginPrompt by remember { mutableStateOf(false) }
   var showTimePickerDialog by remember { mutableStateOf(false) }
   var showNetworkErrorDialog by remember { mutableStateOf(false) }
@@ -111,6 +118,33 @@ fun CartScreen(
 
   val selectedCanteenId = appState.selectedCanteen.id
   var cartQueueData by remember { mutableStateOf<CartQueueResponseDto?>(null) }
+
+  val executePlaceOrder: () -> Unit = {
+    if (!appState.isPlacingOrder) {
+      if (!com.example.util.NetworkMonitor.isCurrentlyOnline()) {
+        showNetworkErrorDialog = true
+      } else if (appState.isGuest) {
+        showLoginPrompt = true
+      } else {
+        coroutineScope.launch {
+          appState.isPlacingOrder = true
+          try {
+            val result = appState.placeOrder()
+            if (result.isSuccess) {
+              newlyPlacedOrder = result.getOrNull()
+            } else {
+              orderPlacementError = result.exceptionOrNull()?.localizedMessage
+                ?: "Failed to save order to database. Your cart items are preserved."
+            }
+          } catch (e: Exception) {
+            orderPlacementError = e.localizedMessage ?: "Failed to connect to backend server. Cart items are preserved."
+          } finally {
+            appState.isPlacingOrder = false
+          }
+        }
+      }
+    }
+  }
 
   // Load and refresh item-specific queue data for items currently in cart
   val refreshQueue: () -> Unit = {
@@ -711,25 +745,18 @@ fun CartScreen(
             }
 
             val canPlaceOrder = isCanteenOpen && !appState.isPlacingOrder
+            val buttonBackground = when {
+              !isCanteenOpen -> BorderGray
+              appState.isPlacingOrder -> DrawerAmber.copy(alpha = 0.85f)
+              else -> DrawerAmber
+            }
             Box(
               modifier = Modifier
+                .shadow(elevation = if (canPlaceOrder) 4.dp else 0.dp, shape = RoundedCornerShape(14.dp), spotColor = DrawerAmber.copy(alpha = 0.5f))
                 .clip(RoundedCornerShape(14.dp))
-                .background(if (canPlaceOrder) BlackPrimary else BorderGray)
+                .background(buttonBackground)
                 .clickable(enabled = canPlaceOrder) {
-                  if (!com.example.util.NetworkMonitor.isCurrentlyOnline()) {
-                    showNetworkErrorDialog = true
-                    return@clickable
-                  }
-                  if (appState.isGuest) {
-                    showLoginPrompt = true
-                  } else {
-                    appState.isPlacingOrder = true
-                    try {
-                      newlyPlacedOrder = appState.placeOrder()
-                    } finally {
-                      appState.isPlacingOrder = false
-                    }
-                  }
+                  executePlaceOrder()
                 }
                 .padding(horizontal = 24.dp, vertical = 12.dp),
               contentAlignment = Alignment.Center,
@@ -763,159 +790,226 @@ fun CartScreen(
       }
     }
 
-    // Success Order Token & Pickup QR Dialog
+    // ── Redesigned Clean & Professional Order Placement Success Screen ──
     newlyPlacedOrder?.let { order ->
-      val qrTarget = order.id.ifBlank { order.tokenNumber }
-      val orderQrBitmap = remember(qrTarget) {
-        BarcodeGenerator.generateQrCode(qrTarget, sizePx = 400)
-      }
-
-      AlertDialog(
+      Dialog(
         onDismissRequest = {
           newlyPlacedOrder = null
-          onNavigateToTab(BottomNavTab.ORDERS)
+          onNavigateToTab(BottomNavTab.HOME)
         },
-        title = {
-          Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-            Icon(
-              imageVector = Icons.Default.CheckCircle,
-              contentDescription = null,
-              tint = OpenGreen,
-              modifier = Modifier.size(48.dp),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+      ) {
+        Card(
+          modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .padding(16.dp),
+          shape = RoundedCornerShape(24.dp),
+          colors = CardDefaults.cardColors(containerColor = PureWhite),
+          border = BorderStroke(1.dp, BorderGray.copy(alpha = 0.6f)),
+          elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        ) {
+          Column(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 24.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+          ) {
+            // ── Top Section: Small, simple success checkmark icon ──
+            Box(
+              modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(MintFresh.copy(alpha = 0.12f)),
+              contentAlignment = Alignment.Center,
+            ) {
+              Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = MintFresh,
+                modifier = Modifier.size(24.dp),
+              )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Heading & short supporting message
             Text(
               text = "Order Placed Successfully!",
-              fontWeight = FontWeight.ExtraBold,
               fontSize = 18.sp,
-              color = BlackPrimary,
+              fontWeight = FontWeight.Bold,
+              color = TextDark,
+              textAlign = TextAlign.Center,
             )
-          }
-        },
-        text = {
-          Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+
+            Spacer(modifier = Modifier.height(4.dp))
+
             Text(
-              text = "Show this QR code or token at the counter:",
-              fontSize = 12.sp,
+              text = "Your order has been confirmed.",
+              fontSize = 13.sp,
               color = TextMuted,
+              textAlign = TextAlign.Center,
             )
-            Spacer(modifier = Modifier.height(10.dp))
-            Box(
-              modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(DeliveryOrangeLight)
-                .border(2.dp, DeliveryOrange, RoundedCornerShape(16.dp))
-                .padding(horizontal = 24.dp, vertical = 10.dp),
-              contentAlignment = Alignment.Center,
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // ── Order Information Card ──
+            Card(
+              modifier = Modifier.fillMaxWidth(),
+              shape = RoundedCornerShape(16.dp),
+              colors = CardDefaults.cardColors(containerColor = WarmCream.copy(alpha = 0.45f)),
+              border = BorderStroke(1.dp, BorderGray.copy(alpha = 0.5f)),
             ) {
-              Text(
-                text = "TOKEN #${order.tokenNumber}",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = DeliveryOrange,
-                letterSpacing = 1.sp,
-              )
-            }
-
-            // ── Generated Pickup QR Code on Order ID ──
-            if (orderQrBitmap != null) {
-              Spacer(modifier = Modifier.height(12.dp))
-              Box(
+              Column(
                 modifier = Modifier
-                  .size(150.dp)
-                  .clip(RoundedCornerShape(14.dp))
-                  .background(PureWhite)
-                  .border(1.5.dp, BorderGray, RoundedCornerShape(14.dp))
-                  .padding(8.dp),
-                contentAlignment = Alignment.Center,
+                  .fillMaxWidth()
+                  .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
               ) {
-                Image(
-                  bitmap = orderQrBitmap.asImageBitmap(),
-                  contentDescription = "Pickup QR Code for Order ID ${order.id}",
-                  modifier = Modifier.fillMaxSize(),
-                )
+                // Order Number Prominently
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Text(
+                    text = "Order Number",
+                    fontSize = 12.sp,
+                    color = TextMuted,
+                  )
+                  Text(
+                    text = order.id.ifBlank { "ORD-${order.tokenNumber}" },
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextDark,
+                  )
+                }
+
+                HorizontalDivider(thickness = 0.8.dp, color = BorderGray.copy(alpha = 0.5f))
+
+                // Selected Canteen Name & Pickup Location/Block
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.Top,
+                ) {
+                  Text(
+                    text = "Pickup Location",
+                    fontSize = 12.sp,
+                    color = TextMuted,
+                  )
+                  Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                      text = order.pickupCanteenName.ifBlank { "Campus Canteen" },
+                      fontSize = 13.sp,
+                      fontWeight = FontWeight.SemiBold,
+                      color = TextDark,
+                    )
+                    if (order.pickupLocation.isNotBlank()) {
+                      Text(
+                        text = order.pickupLocation,
+                        fontSize = 11.5.sp,
+                        color = TextMuted,
+                      )
+                    }
+                  }
+                }
+
+                HorizontalDivider(thickness = 0.8.dp, color = BorderGray.copy(alpha = 0.5f))
+
+                // Estimated Preparation / Ready Time
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Text(
+                    text = "Estimated Ready",
+                    fontSize = 12.sp,
+                    color = TextMuted,
+                  )
+                  Text(
+                    text = order.estimatedReadyTime.ifBlank { "10-15 mins" },
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextDark,
+                  )
+                }
+
+                // Pickup Token clearly shown
+                if (order.tokenNumber.isNotBlank()) {
+                  HorizontalDivider(thickness = 0.8.dp, color = BorderGray.copy(alpha = 0.5f))
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                  ) {
+                    Text(
+                      text = "Pickup Token",
+                      fontSize = 12.sp,
+                      color = TextMuted,
+                    )
+                    Box(
+                      modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(DeliveryOrangeLight)
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                      Text(
+                        text = "Token #${order.tokenNumber}",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = DeliveryOrange,
+                      )
+                    }
+                  }
+                }
               }
-              Spacer(modifier = Modifier.height(4.dp))
-              Text(
-                text = "Order ID: ${order.id}",
-                fontSize = 10.5.sp,
-                fontWeight = FontWeight.Medium,
-                color = TextMuted,
-              )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-            Box(
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ── Action Section: Primary "Track Your Order" & Secondary "Back to Home" ──
+            Button(
+              onClick = {
+                val current = order
+                newlyPlacedOrder = null
+                appState.selectedOrderForTracking = current
+              },
               modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(SoftGray)
-                .padding(10.dp),
-              contentAlignment = Alignment.Center,
+                .height(46.dp),
+              colors = ButtonDefaults.buttonColors(
+                containerColor = DeliveryOrange,
+                contentColor = PureWhite,
+              ),
+              shape = RoundedCornerShape(14.dp),
             ) {
-              Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                  text = "📍 Pickup: ${order.pickupCanteenName}",
-                  fontSize = 12.5.sp,
-                  fontWeight = FontWeight.ExtraBold,
-                  color = TextDark,
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                  text = order.pickupLocation,
-                  fontSize = 11.sp,
-                  fontWeight = FontWeight.SemiBold,
-                  color = TextMuted,
-                  textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-              }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-              text = "Estimated Ready: ${order.estimatedReadyTime}",
-              fontSize = 12.5.sp,
-              fontWeight = FontWeight.Bold,
-              color = BlackPrimary,
-            )
-          }
-        },
-        confirmButton = {
-          Button(
-            onClick = {
-              val current = order
-              newlyPlacedOrder = null
-              appState.selectedOrderForTracking = current
-            },
-            colors = ButtonDefaults.buttonColors(
-              containerColor = DeliveryOrange,
-              contentColor = PureWhite,
-            ),
-            shape = RoundedCornerShape(12.dp),
-          ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Icon(
-                imageVector = Icons.Default.QrCode,
-                contentDescription = null,
-                modifier = Modifier.size(15.dp)
+              Text(
+                text = "Track Your Order",
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
               )
-              Spacer(Modifier.width(6.dp))
-              Text("View QR & Track Order", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            TextButton(
+              onClick = {
+                newlyPlacedOrder = null
+                onNavigateToTab(BottomNavTab.HOME)
+              },
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              Text(
+                text = "Back to Home",
+                color = TextMuted,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.5.sp,
+              )
             }
           }
-        },
-        dismissButton = {
-          TextButton(
-            onClick = {
-              newlyPlacedOrder = null
-              onNavigateToTab(BottomNavTab.ORDERS)
-            },
-          ) {
-            Text("Go to Orders", color = TextMuted, fontWeight = FontWeight.SemiBold)
-          }
-        },
-        containerColor = PureWhite,
-        shape = RoundedCornerShape(20.dp),
-      )
+        }
+      }
     }
 
     // Network Issue Dialog (Offline Protection)
@@ -968,15 +1062,11 @@ fun CartScreen(
             onClick = {
               if (NetworkUtils.isOnline(context)) {
                 showNetworkErrorDialog = false
-                if (appState.isGuest) {
-                  showLoginPrompt = true
-                } else {
-                  newlyPlacedOrder = appState.placeOrder()
-                }
+                executePlaceOrder()
               }
             },
             colors = ButtonDefaults.buttonColors(
-              containerColor = BlackPrimary,
+              containerColor = DrawerAmber,
               contentColor = PureWhite,
             ),
             shape = RoundedCornerShape(12.dp),
@@ -1014,15 +1104,77 @@ fun CartScreen(
           onLoginSuccess = { profile ->
             appState.loginUser(profile)
             showLoginPrompt = false
-            if (!NetworkUtils.isOnline(context)) {
-              showNetworkErrorDialog = true
-            } else {
-              newlyPlacedOrder = appState.placeOrder()
-            }
+            executePlaceOrder()
           },
           isSignUpDefault = false,
         )
       }
+    }
+
+    // Critical: Dedicated Database Failure Dialog to prevent false-success messages
+    if (orderPlacementError != null) {
+      AlertDialog(
+        onDismissRequest = { orderPlacementError = null },
+        title = {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.Default.Warning,
+              contentDescription = null,
+              tint = Color(0xFFE53935),
+              modifier = Modifier.size(24.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = "Order Not Saved",
+              fontWeight = FontWeight.Bold,
+              fontSize = 18.sp,
+              color = TextDark,
+            )
+          }
+        },
+        text = {
+          Column {
+            Text(
+              text = "Your order could not be saved to MongoDB database:",
+              fontSize = 14.sp,
+              color = TextDark,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+              text = orderPlacementError ?: "Unknown error",
+              fontSize = 13.sp,
+              fontWeight = FontWeight.SemiBold,
+              color = Color(0xFFE53935),
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+              text = "Your cart items have been kept safe. Please check your internet connection or verify the server status before retrying.",
+              fontSize = 12.sp,
+              color = TextMuted,
+            )
+          }
+        },
+        confirmButton = {
+          Button(
+            onClick = {
+              orderPlacementError = null
+              executePlaceOrder()
+            },
+            colors = ButtonDefaults.buttonColors(
+              containerColor = DrawerAmber,
+              contentColor = PureWhite,
+            ),
+            shape = RoundedCornerShape(10.dp),
+          ) {
+            Text("Retry Now", fontWeight = FontWeight.Bold)
+          }
+        },
+        dismissButton = {
+          TextButton(onClick = { orderPlacementError = null }) {
+            Text("Keep Cart", color = TextMuted, fontWeight = FontWeight.SemiBold)
+          }
+        },
+      )
     }
 
     // Dedicated Food Pickup Arrival Time Picker (Minimal & Student Focused)

@@ -192,7 +192,14 @@ fun StudentProfileDrawer(
 
             // ── 2. Profile Info Section (Matching Image 1 Boy Avatar) ───────
             Row(
-              modifier = Modifier.fillMaxWidth(),
+              modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .clickable {
+                  onClose()
+                  appState.openProfileScreen()
+                }
+                .padding(vertical = 4.dp),
               verticalAlignment = Alignment.CenterVertically,
             ) {
               // Black and white monochrome student profile icon
@@ -255,6 +262,15 @@ fun StudentProfileDrawer(
                 .verticalScroll(rememberScrollState()),
               verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+              DrawerMenuItem(
+                icon = Icons.Filled.Person,
+                title = "My Profile",
+                onClick = {
+                  onClose()
+                  appState.openProfileScreen()
+                },
+              )
+
               DrawerMenuItem(
                 icon = Icons.Outlined.FavoriteBorder,
                 title = "Favorites",

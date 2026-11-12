@@ -1,6 +1,7 @@
 package com.example.data.api
 
 import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -10,6 +11,7 @@ import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.Path
+import retrofit2.http.Streaming
 
 interface QuickbiteApiService {
 
@@ -208,5 +210,28 @@ interface QuickbiteApiService {
     @Path("uid") uid: String,
     @Path("itemId") itemId: String,
   ): Response<UserFavoritesResponseDto>
+
+  // ── AI Assistant (Gemini) ─────────────────────────────────────────────────
+  @Streaming
+  @POST("ai/stream")
+  suspend fun streamAiMessage(
+    @Body body: AiChatRequestDto,
+    @retrofit2.http.Header("Authorization") authHeader: String? = null,
+  ): Response<ResponseBody>
+
+  @POST("ai/chat")
+  suspend fun sendAiMessage(
+    @Body body: AiChatRequestDto,
+    @retrofit2.http.Header("Authorization") authHeader: String? = null,
+  ): Response<AiChatResponseDto>
+
+  @GET("ai/suggestions")
+  suspend fun getAiSuggestions(): Response<AiSuggestionsResponseDto>
+
+  @POST("ai/feedback")
+  suspend fun submitAiFeedback(
+    @Body body: AiFeedbackRequestDto,
+    @retrofit2.http.Header("Authorization") authHeader: String? = null,
+  ): Response<AiFeedbackResponseDto>
 }
 

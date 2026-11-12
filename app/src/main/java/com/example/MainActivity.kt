@@ -17,13 +17,14 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.runtime.collectAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.data.firebase.FirebaseConfig
 import com.example.data.session.SessionManager
-import com.example.ui.components.OfflineBanner
 import com.example.ui.navigation.MessQDestinations
 import com.example.ui.navigation.MessQNavHost
 import com.example.ui.screens.MainScreen
+import com.example.ui.screens.NoInternetScreen
 import com.example.ui.state.rememberCanteenAppState
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.AuthViewModel
@@ -155,18 +156,22 @@ fun AppEntry(
     }
   }
 
-  Box(modifier = Modifier.fillMaxSize()) {
-    MessQNavHost(
-      navController = navController,
-      appState = appState,
-      deepLinkDestination = deepLinkDestination,
-    )
+  val isOnline by com.example.util.NetworkMonitor.isOnline.collectAsState()
 
-    OfflineBanner(
-      modifier = Modifier
-        .align(Alignment.TopCenter)
-        .statusBarsPadding()
-    )
+  Box(modifier = Modifier.fillMaxSize()) {
+    if (!isOnline) {
+      NoInternetScreen(
+        onRetrySuccess = {
+          com.example.util.NetworkMonitor.refreshConnectivity()
+        }
+      )
+    } else {
+      MessQNavHost(
+        navController = navController,
+        appState = appState,
+        deepLinkDestination = deepLinkDestination,
+      )
+    }
   }
 }
 

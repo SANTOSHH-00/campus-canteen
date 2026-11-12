@@ -83,6 +83,9 @@ class AuthRepository(
           displayName = doc.name.ifBlank { doc.email.substringBefore("@") },
         )
         SessionManager.saveUserSession(doc)
+        if (!dto.token.isNullOrBlank()) {
+          SessionManager.saveStudentToken(dto.token)
+        }
         Result.success(doc)
       } else {
         Result.failure(res.exceptionOrNull() ?: Exception("Sign in failed"))
@@ -175,6 +178,9 @@ class AuthRepository(
           displayName = doc.name.ifBlank { doc.email.substringBefore("@") },
         )
         SessionManager.saveUserSession(doc)
+        if (!dto.token.isNullOrBlank()) {
+          SessionManager.saveStudentToken(dto.token)
+        }
         Result.success(doc)
       } else {
         Result.failure(res.exceptionOrNull() ?: Exception("Sign up failed"))

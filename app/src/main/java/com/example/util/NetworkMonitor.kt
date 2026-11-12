@@ -64,6 +64,13 @@ object NetworkMonitor {
     return checkCurrentConnectivity(cm)
   }
 
+  fun refreshConnectivity(): Boolean {
+    val cm = connectivityManager ?: return _isOnline.value
+    val online = checkCurrentConnectivity(cm)
+    _isOnline.value = online
+    return online
+  }
+
   private fun checkCurrentConnectivity(cm: ConnectivityManager): Boolean {
     return try {
       val activeNetwork = cm.activeNetwork ?: return false

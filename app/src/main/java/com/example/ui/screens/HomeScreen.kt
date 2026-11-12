@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -77,6 +78,8 @@ import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
 import com.example.ui.theme.CardSurface
 import com.example.ui.theme.DeliveryOrange
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberDark
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.SoftGray
 import com.example.ui.theme.TextDark
@@ -131,7 +134,7 @@ fun HomeScreen(
       modifier = Modifier
         .fillMaxWidth()
         .weight(1f),
-      contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 16.dp),
+      contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
     ) {
       // ── Elegant Home Greeting Section (Naturally scrolls with page content) ──
       item(key = "home_greeting") {
@@ -250,24 +253,68 @@ fun HomeScreen(
           }
         }
       } else {
-        // ── Section 1: QUICK ORDER (Big Vertical Cards) ──────────────────────
-        if (quickItems.isNotEmpty()) {
-          item(key = "quick_order_header") {
-            SectionHeaderRow(
-              iconVector = Icons.Default.FlashOn,
-              title = "QUICK ORDER",
-              onSeeAllClick = {
-                appState.selectedMenuCategory = FoodCategory.QUICK_ORDER
-                onNavigateToTab(BottomNavTab.MENU)
-              },
-              onFilterClick = {
-                showQuickFilterDialog = true
-              },
-              isFilterActive = appState.selectedQuickFilterMinutes < 20,
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-          }
+        // ── Section 1: QUICK ORDER (Organized Filters & Quick Cards) ──────────────
+        item(key = "quick_order_header") {
+          SectionHeaderRow(
+            iconVector = Icons.Default.FlashOn,
+            title = "QUICK ORDER",
+            onSeeAllClick = {
+              appState.selectedMenuCategory = FoodCategory.QUICK_ORDER
+              onNavigateToTab(BottomNavTab.MENU)
+            },
+            onFilterClick = {
+              showQuickFilterDialog = true
+            },
+            isFilterActive = appState.selectedQuickFilterMinutes < 20,
+          )
+          Spacer(modifier = Modifier.height(10.dp))
+        }
 
+        // Professional Inline Prep-Time Filter Chips
+        item(key = "quick_order_filter_chips") {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 14.dp)
+              .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            val filterOptions = listOf(
+              20 to "All",
+              5 to "Under 5m ⚡",
+              10 to "Under 10m ⏱️",
+              15 to "Under 15m 🍽️",
+            )
+            filterOptions.forEach { (mins, label) ->
+              val isSelected = (appState.selectedQuickFilterMinutes == mins)
+              Surface(
+                modifier = Modifier
+                  .clip(RoundedCornerShape(16.dp))
+                  .clickable {
+                    appState.selectedQuickFilterMinutes = mins
+                  },
+                shape = RoundedCornerShape(16.dp),
+                color = if (isSelected) DrawerAmber else PureWhite,
+                border = androidx.compose.foundation.BorderStroke(
+                  width = 1.dp,
+                  color = if (isSelected) DrawerAmberDark else BorderGray,
+                ),
+                shadowElevation = if (isSelected) 3.dp else 1.dp,
+              ) {
+                Text(
+                  text = label,
+                  fontSize = 12.sp,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                  color = if (isSelected) PureWhite else TextDark,
+                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                )
+              }
+            }
+          }
+        }
+
+        if (quickItems.isNotEmpty()) {
           item(key = "quick_order_row") {
             LazyRow(
               modifier = Modifier.fillMaxWidth(),
@@ -282,6 +329,38 @@ fun HomeScreen(
                   foodItem = item,
                   onAddToCart = { appState.addToCart(item) },
                   onCardClick = { appState.openFoodDetail(item) },
+                )
+              }
+            }
+            Spacer(modifier = Modifier.height(26.dp))
+          }
+        } else {
+          item(key = "quick_order_empty") {
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(PureWhite)
+                .border(1.dp, BorderGray, RoundedCornerShape(14.dp))
+                .padding(horizontal = 16.dp, vertical = 20.dp),
+              contentAlignment = Alignment.Center,
+            ) {
+              Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("⏱️", fontSize = 28.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                  text = "No items ready in ≤ ${appState.selectedQuickFilterMinutes} mins",
+                  fontSize = 14.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = TextDark,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                  text = "Tap 'All' or select a different prep time to explore more items.",
+                  fontSize = 12.sp,
+                  color = TextMuted,
+                  textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
               }
             }

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -58,14 +59,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.example.ui.components.AiAssistantGlyph
 import com.example.ui.components.StudentProfileDrawer
 import com.example.ui.theme.DrawerAmber
 import com.example.ui.theme.GoldenAmber
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.platform.LocalContext
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
   appState: CanteenAppState = rememberCanteenAppState(),
@@ -74,14 +78,19 @@ fun MainScreen(
   modifier: Modifier = Modifier,
 ) {
   var isProfileDrawerOpen by remember { mutableStateOf(false) }
-  var showAiAssistantDialog by remember { mutableStateOf(false) }
   val context = LocalContext.current
 
   // Handle system back swiping / back gesture gracefully
   BackHandler(enabled = true) {
     when {
+      appState.isAiAssistantOpen -> {
+        appState.closeAiAssistant()
+      }
       isProfileDrawerOpen -> {
         isProfileDrawerOpen = false
+      }
+      appState.isProfileScreenOpen -> {
+        appState.closeProfileScreen()
       }
       appState.selectedOrderForTracking != null -> {
         appState.closeOrderTracking()
@@ -96,7 +105,7 @@ fun MainScreen(
         appState.isMenuFilterOpen = false
       }
       appState.currentTab != BottomNavTab.HOME -> {
-        // When swiping back from Menu, Orders, or Cart, navigate back to Home
+        // When swiping back from Menu, Orders, or AI Assistant, navigate back to Home
         appState.currentTab = BottomNavTab.HOME
         appState.isBottomBarVisible = true
       }
@@ -115,10 +124,14 @@ fun MainScreen(
     }
   }
 
-  val isDetailOrTracking = appState.selectedFoodForDetail != null || appState.selectedOrderForTracking != null || appState.isMenuFilterOpen || appState.isFavoritesScreenOpen
+  val isDetailOrTracking = appState.selectedFoodForDetail != null ||
+      appState.selectedOrderForTracking != null ||
+      appState.isMenuFilterOpen ||
+      appState.isFavoritesScreenOpen ||
+      appState.isProfileScreenOpen
   val isHomeTab = appState.currentTab == BottomNavTab.HOME && !isDetailOrTracking
   val isMenuTab = appState.currentTab == BottomNavTab.MENU && !isDetailOrTracking
-  val isScrollHideTab = isHomeTab || isMenuTab
+  val isScrollHideTab = isHomeTab
 
   Box(
     modifier = modifier
@@ -130,11 +143,19 @@ fun MainScreen(
       modifier = Modifier
         .fillMaxSize()
         .statusBarsPadding()
+        .navigationBarsPadding()
         .padding(
-          bottom = if (!isDetailOrTracking && !isScrollHideTab) 74.dp else 0.dp
+          bottom = if (!isDetailOrTracking && !isHomeTab) 64.dp else 0.dp
         )
     ) {
-      if (appState.selectedOrderForTracking != null) {
+      if (appState.isProfileScreenOpen) {
+        ProfileScreen(
+          userName = userName,
+          appState = appState,
+          onBack = { appState.closeProfileScreen() },
+          onLogout = onLogout,
+        )
+      } else if (appState.selectedOrderForTracking != null) {
         val trackingOrder = appState.selectedOrderForTracking!!
         CustomerOrderTrackingScreen(
           order = trackingOrder,
@@ -176,9 +197,21 @@ fun MainScreen(
               onOpenProfileDrawer = { isProfileDrawerOpen = true },
             )
           }
-          BottomNavTab.MENU -> {
+          BottomNavTab.CANTEENS, BottomNavTab.MENU -> {
             MenuScreen(
               appState = appState,
+            )
+          }
+          BottomNavTab.AI_ASSISTANT -> {
+            LaunchedEffect(Unit) {
+              appState.openAiAssistant()
+              appState.currentTab = BottomNavTab.HOME
+            }
+            HomeScreen(
+              userName = userName,
+              appState = appState,
+              onNavigateToTab = { tab -> appState.currentTab = tab },
+              onOpenProfileDrawer = { isProfileDrawerOpen = true },
             )
           }
           BottomNavTab.CART -> {
@@ -195,10 +228,9 @@ fun MainScreen(
             )
           }
           BottomNavTab.PROFILE -> {
-            // Direct to home and open side drawer seamlessly
             LaunchedEffect(Unit) {
+              appState.openProfileScreen()
               appState.currentTab = BottomNavTab.HOME
-              isProfileDrawerOpen = true
             }
             HomeScreen(
               userName = userName,
@@ -212,7 +244,7 @@ fun MainScreen(
     }
 
     // ── Bottom Navigation Bar (Animated slide down on Home & Menu tabs) ───────
-    if (!isDetailOrTracking) {
+    if (!isDetailOrTracking && !appState.isAiAssistantOpen) {
       val slideFraction by animateFloatAsState(
         targetValue = if (isScrollHideTab && !appState.isBottomBarVisible) 1f else 0f,
         animationSpec = tween(
@@ -238,7 +270,9 @@ fun MainScreen(
             appState.dismissCartNotification()
           },
           onAiClick = {
-            showAiAssistantDialog = true
+            appState.openAiAssistant()
+            appState.isBottomBarVisible = true
+            appState.dismissCartNotification()
           },
           cartBadgeCount = appState.totalCartCount,
         )
@@ -339,6 +373,35 @@ fun MainScreen(
         }
       }
 
+    // ── MunchMate AI Assistant Bottom Sheet (Opens half-screen initially, expandable) ──
+    if (appState.isAiAssistantOpen) {
+      val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = false,
+      )
+      ModalBottomSheet(
+        onDismissRequest = { appState.closeAiAssistant() },
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        containerColor = WarmCream,
+        dragHandle = {
+          Box(
+            modifier = Modifier
+              .padding(top = 10.dp, bottom = 4.dp)
+              .width(36.dp)
+              .height(4.dp)
+              .clip(RoundedCornerShape(2.dp))
+              .background(androidx.compose.ui.graphics.Color(0xFFCBD5E1))
+          )
+        },
+      ) {
+        AiAssistantScreen(
+          appState = appState,
+          onClose = { appState.closeAiAssistant() },
+          onBack = { appState.closeAiAssistant() },
+        )
+      }
+    }
+
     // ── Student Profile Side Drawer (Image 1) ────────────────────────────────
     StudentProfileDrawer(
       isOpen = isProfileDrawerOpen,
@@ -348,71 +411,6 @@ fun MainScreen(
       onNavigateToTab = { tab -> appState.currentTab = tab },
       onLogout = onLogout,
     )
-
-    // ── Clean AI Assistant Feature Placeholder (Image 2) ─────────────────────
-    if (showAiAssistantDialog) {
-      AlertDialog(
-        onDismissRequest = { showAiAssistantDialog = false },
-        icon = {
-          Box(
-            modifier = Modifier
-              .size(54.dp)
-              .clip(CircleShape)
-              .background(DrawerAmber),
-            contentAlignment = Alignment.Center,
-          ) {
-            AiAssistantGlyph(
-              modifier = Modifier.size(24.dp),
-              tint = BlackPrimary,
-            )
-          }
-        },
-        title = {
-          Text(
-            text = "QuickBite AI Assistant",
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 18.sp,
-            color = BlackPrimary,
-          )
-        },
-        text = {
-          Column(
-            modifier = Modifier
-              .fillMaxWidth()
-              .clip(RoundedCornerShape(16.dp))
-              .background(WarmCream)
-              .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-          ) {
-            Text(
-              text = "Feature Ready",
-              fontWeight = FontWeight.Bold,
-              fontSize = 13.sp,
-              color = DrawerAmber,
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-              text = "The AI Assistant module has been reserved for your custom smart features. You can integrate meal recommendations, queue estimates, and smart voice ordering here.",
-              fontSize = 13.sp,
-              color = BlackPrimary.copy(alpha = 0.8f),
-              lineHeight = 18.sp,
-            )
-          }
-        },
-        confirmButton = {
-          Button(
-            onClick = { showAiAssistantDialog = false },
-            colors = ButtonDefaults.buttonColors(containerColor = BlackPrimary),
-            shape = RoundedCornerShape(12.dp),
-          ) {
-            Text("Got it", fontWeight = FontWeight.Bold, color = PureWhite)
-          }
-        },
-        containerColor = PureWhite,
-        shape = RoundedCornerShape(24.dp),
-      )
-    }
   }
 }
 

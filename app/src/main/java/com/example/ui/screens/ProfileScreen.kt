@@ -20,8 +20,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ChevronRight
@@ -81,6 +83,7 @@ fun ProfileScreen(
   userName: String = "Alex",
   appState: CanteenAppState,
   onLogout: () -> Unit = {},
+  onBack: (() -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
   val snackbarHostState = remember { SnackbarHostState() }
@@ -116,6 +119,37 @@ fun ProfileScreen(
         .verticalScroll(rememberScrollState())
         .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
+      if (onBack != null) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          IconButton(
+            onClick = onBack,
+            modifier = Modifier
+              .size(38.dp)
+              .clip(CircleShape)
+              .background(Color(0xFFEDE3D0)),
+          ) {
+            Icon(
+              imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+              contentDescription = "Back",
+              tint = BlackPrimary,
+              modifier = Modifier.size(20.dp),
+            )
+          }
+          Spacer(modifier = Modifier.width(12.dp))
+          Text(
+            text = "My Profile",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = BlackPrimary,
+          )
+        }
+      }
+
       // ── 1. Top Student Profile Card (Matching Image 1 Exactly) ─────────────────
       Card(
         modifier = Modifier.fillMaxWidth(),

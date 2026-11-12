@@ -133,6 +133,27 @@ app.use('/api/owners/orders/confirm-pickup', verifyLimiter);
 app.use('/api/owner/orders/verify-qr', verifyLimiter);
 app.use('/api/owners/orders/verify-qr', verifyLimiter);
 
+// 4. AI Assistant Chat Rate Limiter (Protects Gemini API quota)
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120, // 120 queries per 15 mins per student/IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { keyGeneratorIpFallback: false },
+  keyGenerator: (req) => {
+    const authHeader = req.headers['authorization'];
+    if (authHeader) return `ai_${authHeader.slice(-24)}`;
+    return req.ip || req.connection?.remoteAddress || 'unknown';
+  },
+  message: { error: 'Too many AI Assistant requests. Please wait a moment before asking again.' },
+  skip: (req) => {
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    if (isDev || isLocalOrPrivateIp(ip)) return true;
+    return false;
+  },
+});
+app.use('/api/ai', aiLimiter);
+
 // Google Play Mandatory Compliance Pages
 app.get('/privacy-policy', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/privacy-policy.html'));
@@ -218,6 +239,7 @@ app.use('/api/orders', require('./routes/orders'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/ai', require('./routes/aiRoutes'));
 
 // 404 handler for unmatched routes
 app.use((req, res) => {

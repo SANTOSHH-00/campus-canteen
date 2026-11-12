@@ -389,6 +389,28 @@ class CanteenAppState(val context: android.content.Context? = null) {
     isFavoritesScreenOpen = false
   }
 
+  // Profile Screen State (Dedicated view accessible via Drawer / TopBar)
+  var isProfileScreenOpen by mutableStateOf(false)
+
+  fun openProfileScreen() {
+    isProfileScreenOpen = true
+  }
+
+  fun closeProfileScreen() {
+    isProfileScreenOpen = false
+  }
+
+  // MunchMate AI Assistant Bottom Sheet State
+  var isAiAssistantOpen by mutableStateOf(false)
+
+  fun openAiAssistant() {
+    isAiAssistantOpen = true
+  }
+
+  fun closeAiAssistant() {
+    isAiAssistantOpen = false
+  }
+
   // Favorites
   val favoriteItemIds = mutableStateListOf<String>()
 
@@ -919,10 +941,22 @@ class CanteenAppState(val context: android.content.Context? = null) {
   val customerPickupTimeFormatted: String
     get() = if (!isPickupAsap && customPickupTime != null) customPickupTime!! else "ASAP"
 
-  // Place Order action
-  fun placeOrder(): OrderRecord? {
-    if (cartItems.isEmpty()) return null
-    if (!selectedCanteen.isOpen) return null
+  // Place Order action with authoritative MongoDB persistence verification
+  suspend fun placeOrder(): Result<OrderRecord> = withContext(Dispatchers.IO) {
+    if (cartItems.isEmpty()) return@withContext Result.failure(Exception("Cart is empty"))
+    if (!selectedCanteen.isOpen) return@withContext Result.failure(Exception("Canteen is currently closed"))
+
+    val studentUid = currentUser?.registrationNumber?.ifBlank { currentUser?.email }?.ifBlank { null }
+      ?: "student_guest"
+
+    val isGuest = currentUser == null ||
+        studentUid == "student_guest" ||
+        studentUid.contains("guest", ignoreCase = true) ||
+        displayUserName.contains("guest", ignoreCase = true)
+
+    if (isGuest) {
+      return@withContext Result.failure(Exception("Please log in as a student to place an order that saves to your account."))
+    }
 
     // Generate unique 3-digit token & unique collision-safe order ID
     val token = String.format(Locale.getDefault(), "%03d", (100..999).random())
@@ -951,122 +985,117 @@ class CanteenAppState(val context: android.content.Context? = null) {
       orderPlacedAt = orderTime,
       confirmedAt = orderTime,
     )
-    orders.add(0, newOrder)
-    cartItems.clear()
 
-    val studentUid = currentUser?.registrationNumber?.ifBlank { currentUser?.email }?.ifBlank { null }
-      ?: "student_guest"
+    val assignedCounter = if ((orders.size % 2) == 0) "Counter 1" else "Counter 2"
+    val orderDoc = OrderDocument.fromOrderRecord(
+      record = newOrder,
+      studentId = studentUid,
+      studentName = displayUserName,
+      canteenId = selectedCanteen.id,
+      studentPhone = currentUser?.phone ?: "",
+      studentCourse = currentUser?.course ?: "",
+      pickupCounter = assignedCounter,
+    )
 
-    val isGuest = currentUser == null ||
-        studentUid == "student_guest" ||
-        studentUid.contains("guest", ignoreCase = true) ||
-        displayUserName.contains("guest", ignoreCase = true)
+    // Call backend API / MongoDB persistence BEFORE clearing cart or claiming success
+    val createResult = firestoreRepo.createOrder(orderDoc)
+    if (createResult.isFailure) {
+      val errMsg = createResult.exceptionOrNull()?.localizedMessage ?: "Failed to connect to backend server"
+      return@withContext Result.failure(Exception(errMsg))
+    }
 
-    if (!isGuest) {
-      val canteenName = selectedCanteen.name
-      val block = selectedCanteen.betweenBlocks.ifBlank { selectedCanteen.id }
+    // SUCCESS - Commit to local state on Main thread
+    withContext(Dispatchers.Main) {
+      orders.add(0, newOrder)
+      cartItems.clear()
+    }
 
-      // Persist active order and launch background notification service for lockscreen/closed-app alerts
-      SessionManager.saveActiveOrderTracking(
+    val canteenName = selectedCanteen.name
+    val block = selectedCanteen.betweenBlocks.ifBlank { selectedCanteen.id }
+
+    // Persist active order and launch background notification service
+    SessionManager.saveActiveOrderTracking(
+      orderId = newOrder.id,
+      tokenNumber = newOrder.tokenNumber,
+      canteenId = newOrder.canteenId,
+      canteenName = canteenName,
+      block = block,
+      lastStatus = "NEW",
+      counter = assignedCounter
+    )
+    context?.let { ctx ->
+      com.example.data.service.OrderStatusNotificationService.start(
+        context = ctx,
         orderId = newOrder.id,
         tokenNumber = newOrder.tokenNumber,
         canteenId = newOrder.canteenId,
+        studentId = studentUid,
         canteenName = canteenName,
         block = block,
-        lastStatus = "NEW",
-        counter = "Counter 1"
       )
-      context?.let { ctx ->
-        com.example.data.service.OrderStatusNotificationService.start(
-          context = ctx,
-          orderId = newOrder.id,
-          tokenNumber = newOrder.tokenNumber,
-          canteenId = newOrder.canteenId,
-          studentId = studentUid,
-          canteenName = canteenName,
-          block = block,
-        )
-      }
+    }
 
-      // Sync order to backend/MongoDB in background (only for logged-in students)
-      CoroutineScope(Dispatchers.IO).launch {
-        try {
-          val assignedCounter = if ((orders.size % 2) == 0) "Counter 1" else "Counter 2"
-          val orderDoc = OrderDocument.fromOrderRecord(
-            record = newOrder,
-            studentId = studentUid,
-            studentName = displayUserName,
-            canteenId = selectedCanteen.id,
-            studentPhone = currentUser?.phone ?: "",
-            studentCourse = currentUser?.course ?: "",
-            pickupCounter = assignedCounter,
-          )
-          firestoreRepo.createOrder(orderDoc)
+    // Post notification to backend
+    val notifDoc = NotificationDocument(
+      userId = studentUid,
+      title = "Order Token #$token Placed",
+      message = "Your order at ${selectedCanteen.name} has been placed successfully and is pending confirmation.",
+      type = "ORDER_UPDATE",
+      orderId = newOrder.id,
+      canteenId = selectedCanteen.id,
+      createdAt = System.currentTimeMillis(),
+      read = false,
+    )
+    firestoreRepo.sendNotification(notifDoc)
 
-          // Post notification to Firestore notifications collection
-          val notifDoc = NotificationDocument(
-            userId = studentUid,
-            title = "Order Token #$token Placed",
-            message = "Your order at ${selectedCanteen.name} has been placed successfully and is pending confirmation.",
-            type = "ORDER_UPDATE",
-            orderId = newOrder.id,
-            canteenId = selectedCanteen.id,
-            createdAt = System.currentTimeMillis(),
-            read = false,
-          )
-          firestoreRepo.sendNotification(notifDoc)
+    // Observe live status updates from owner for this specific order
+    CoroutineScope(Dispatchers.IO).launch {
+      firestoreRepo.observeOrder(newOrder.id).collect { updatedDoc ->
+        if (updatedDoc != null) {
+          val updatedRecord = updatedDoc.toOrderRecord()
+          withContext(Dispatchers.Main) {
+            val idx = orders.indexOfFirst { it.id == updatedRecord.id }
+            if (idx >= 0) {
+              val oldStatus = orders[idx].status
+              orders[idx] = updatedRecord
+              if (oldStatus != updatedRecord.status && updatedRecord.status != OrderStatus.NEW) {
+                val counter = updatedDoc.pickupCounter.ifBlank { "Counter 1" }
+                val rawStatus = updatedRecord.status.name.uppercase()
 
-          // Observe live status updates from owner for this specific order
-          firestoreRepo.observeOrder(newOrder.id).collect { updatedDoc ->
-            if (updatedDoc != null) {
-              val updatedRecord = updatedDoc.toOrderRecord()
-              withContext(Dispatchers.Main) {
-                val idx = orders.indexOfFirst { it.id == updatedRecord.id }
-                if (idx >= 0) {
-                  val oldStatus = orders[idx].status
-                  orders[idx] = updatedRecord
-                  if (oldStatus != updatedRecord.status && updatedRecord.status != OrderStatus.NEW) {
-                    val counter = updatedDoc.pickupCounter.ifBlank { "Counter 1" }
-                    val rawStatus = updatedRecord.status.name.uppercase()
-
-                    // Delegate notification to OrderNotificationHelper with canteen & block details and deduplication
-                    context?.let { ctx ->
-                      com.example.util.OrderNotificationHelper.showOrderStatusNotification(
-                        context = ctx,
-                        tokenNumber = updatedRecord.tokenNumber,
-                        status = rawStatus,
-                        counter = counter,
-                        canteenName = canteenName,
-                        block = block,
-                      )
-                    }
-
-                    // Reload notifications from session to reflect authoritative record
-                    loadNotificationsFromSession()
-
-                    val isFinished = updatedRecord.status == OrderStatus.COMPLETED ||
-                        rawStatus in listOf("PICKED_UP", "DELIVERED", "CANCELLED")
-                    if (isFinished) {
-                      SessionManager.clearActiveOrderTracking()
-                      context?.let { com.example.data.service.OrderStatusNotificationService.stop(it) }
-                    } else {
-                      SessionManager.updateActiveOrderStatus(updatedRecord.status.name, counter)
-                    }
-                  }
+                // Delegate notification to OrderNotificationHelper with canteen & block details and deduplication
+                context?.let { ctx ->
+                  com.example.util.OrderNotificationHelper.showOrderStatusNotification(
+                    context = ctx,
+                    tokenNumber = updatedRecord.tokenNumber,
+                    status = rawStatus,
+                    counter = counter,
+                    canteenName = canteenName,
+                    block = block,
+                  )
                 }
-                if (selectedOrderForTracking?.id == updatedRecord.id) {
-                  selectedOrderForTracking = updatedRecord
+
+                // Reload notifications from session to reflect authoritative record
+                loadNotificationsFromSession()
+
+                val isFinished = updatedRecord.status == OrderStatus.COMPLETED ||
+                    rawStatus in listOf("PICKED_UP", "DELIVERED", "CANCELLED")
+                if (isFinished) {
+                  SessionManager.clearActiveOrderTracking()
+                  context?.let { com.example.data.service.OrderStatusNotificationService.stop(it) }
+                } else {
+                  SessionManager.updateActiveOrderStatus(updatedRecord.status.name, counter)
                 }
               }
             }
+            if (selectedOrderForTracking?.id == updatedRecord.id) {
+              selectedOrderForTracking = updatedRecord
+            }
           }
-        } catch (e: Exception) {
-          android.util.Log.e("AppState", "Error in background order processing: ${e.message}")
         }
       }
     }
 
-    return newOrder
+    Result.success(newOrder)
   }
 
   fun updateBreakSchedule(start: String, end: String, minutesRemaining: Int) {

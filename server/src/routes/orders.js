@@ -1025,15 +1025,22 @@ router.post('/', async (req, res) => {
 
     // Server-authoritative status history and milestone timestamps
     const statusHistory = [
-      { status: 'PLACED', timestamp: now, timestampLocal: formatIstDateTime(now) },
-      { status: 'CONFIRMED', timestamp: now, timestampLocal: formatIstDateTime(now) },
+      { status: 'PLACED', timestamp: now, timestampLocal: formatIstDateTime(now), changedBy: studentId || 'STUDENT', changedByRole: 'STUDENT' },
+      { status: 'CONFIRMED', timestamp: now, timestampLocal: formatIstDateTime(now), changedBy: 'SYSTEM', changedByRole: 'SYSTEM' },
     ];
     if (initialStatus === 'PREPARING') {
       orderData.preparingAt = now;
       orderData.preparingAtLocal = formatIstDateTime(now);
-      statusHistory.push({ status: 'PREPARING', timestamp: now, timestampLocal: formatIstDateTime(now) });
+      statusHistory.push({ status: 'PREPARING', timestamp: now, timestampLocal: formatIstDateTime(now), changedBy: 'SYSTEM', changedByRole: 'SYSTEM' });
     }
     orderData.statusHistory = statusHistory;
+
+    // Snapshot item subtotals for immutable historical accuracy
+    if (orderData.items && Array.isArray(orderData.items)) {
+      orderData.items.forEach(it => {
+        it.subtotal = (it.price || 0) * (it.quantity || 1);
+      });
+    }
 
     // Customer Pickup Time: preserve user's explicit selection
     let customerPickup = (orderData.customerPickupTime || '').trim();
@@ -1179,6 +1186,20 @@ router.patch('/:id/status', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    // Prevent invalid transitions: reject transitions out of terminal states (COMPLETED, CANCELLED, REJECTED)
+    const currentStatus = (targetOrder.status || '').toUpperCase().trim();
+    if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(currentStatus)) {
+      if (currentStatus !== normalizedStatus) {
+        return res.status(400).json({
+          error: `Invalid transition: Order ${targetOrder.orderId} is already in terminal state "${currentStatus}".`,
+          currentStatus: currentStatus,
+        });
+      }
+    }
+
+    const changedBy = req.body.changedBy || req.headers['x-owner-id'] || 'OWNER';
+    const changedByRole = req.body.changedByRole || 'OWNER';
+
     const now = new Date();
     const nowLocal = formatIstDateTime(now);
 
@@ -1218,7 +1239,7 @@ router.patch('/:id/status', async (req, res) => {
     }
 
     const pushUpdate = normalizedStatus
-      ? { $push: { statusHistory: { status: normalizedStatus, timestamp: now, timestampLocal: nowLocal } } }
+      ? { $push: { statusHistory: { status: normalizedStatus, timestamp: now, timestampLocal: nowLocal, changedBy, changedByRole } } }
       : {};
 
     const updated = await Order.findOneAndUpdate(
