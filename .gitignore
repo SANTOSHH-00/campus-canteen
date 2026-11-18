@@ -27,3 +27,12 @@ scratch/
 scratch_diagrams/
 *.pyc
 __pycache__/
+*.pptx
+*.docx
+*.pdf
+*.py
+home_dump.xml
+window_dump.xml
+presentation_assets/
+app/src/test/screenshots/
+screenshots/
