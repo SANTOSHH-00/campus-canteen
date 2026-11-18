@@ -1,3 +1,4 @@
+// LocalDaos: Room database component for offline caching and local persistence
 package com.example.data.local
 
 import androidx.room.Dao

@@ -14,6 +14,9 @@ const canteenSchema = new mongoose.Schema(
     icon: { type: String, default: '🏢' },
     imageUrl: { type: String, default: '' },
     timings: { type: String, default: '7:00 AM – 10:00 PM' },
+    packagingCharge: { type: Number, default: 10 },
+    taxRate: { type: Number, default: 0.05 },
+    supportsScheduling: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

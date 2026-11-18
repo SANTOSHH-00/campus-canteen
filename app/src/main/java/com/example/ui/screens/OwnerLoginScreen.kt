@@ -1,3 +1,4 @@
+// OwnerLoginScreen: Jetpack Compose screen for OwnerLogin user interface
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
@@ -92,7 +93,10 @@ import com.example.ui.viewmodel.OwnerLoginUiState
 import com.example.ui.viewmodel.OwnerViewModel
 import kotlinx.coroutines.delay
 
-private val AmberBrand = Color(0xFFF5A623)
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberLight
+
+private val AmberBrand = DrawerAmber
 private val TextDark = Color(0xFF1F2937)
 private val PillBackground = Color(0xFFF3F4F6)
 private val BorderMuted = Color(0xFFE5E7EB)
@@ -195,7 +199,6 @@ fun OwnerLoginScreen(
     Column(
       modifier = Modifier.fillMaxSize(),
     ) {
-      // ── Top Header with Back Navigation & Staff Portal Badge ──────────
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -272,7 +275,6 @@ fun OwnerLoginScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // ── White Curved Sheet Container (Image 3 Right layout) ───────────────
       Box(
         modifier = Modifier
           .fillMaxWidth()
@@ -287,7 +289,6 @@ fun OwnerLoginScreen(
             .verticalScroll(rememberScrollState()),
           horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-          // ── STEP 1: EMAIL & PASSWORD ─────────────────────────────────────
           if (currentStep == OwnerAuthStep.CREDENTIALS) {
             Column(modifier = Modifier.fillMaxWidth()) {
               Text(
@@ -484,7 +485,6 @@ fun OwnerLoginScreen(
             }
           }
 
-          // ── STEP 2: EMAIL OTP RE-VERIFICATION (VIA RESEND) ───────────────
           if (currentStep == OwnerAuthStep.EMAIL_OTP || currentStep == OwnerAuthStep.PHONE_OTP) {
             Column(modifier = Modifier.fillMaxWidth()) {
               Text(
@@ -729,7 +729,6 @@ fun OwnerLoginScreen(
     }
   }
 
-  // ── STEP 3: FIRST-TIME OWNER CANTEEN ALLOCATION MINI POPUP DIALOG ────────
   if (showAllocationMiniPopup) {
     Dialog(
       onDismissRequest = { /* Prevent accidental dismiss without allocating */ },
@@ -748,7 +747,6 @@ fun OwnerLoginScreen(
         Column(
           modifier = Modifier.padding(24.dp),
         ) {
-          // Header
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

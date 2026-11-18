@@ -1,3 +1,4 @@
+// Inventory Routes: Raw ingredient tracking, stock updates, and replenishment
 const express = require('express');
 const router = express.Router();
 const Inventory = require('../models/Inventory');
@@ -6,7 +7,6 @@ const Inventory = require('../models/Inventory');
 router.get('/canteen/:canteenId', async (req, res) => {
   try {
     let items = await Inventory.find({ canteenId: req.params.canteenId }).lean();
-    // Seed default inventory items if collection is currently empty
     if (items.length === 0) {
       const defaultInventory = [
         { canteenId: req.params.canteenId, name: 'Bread', icon: '🍞', quantity: 120.0, unit: 'pcs', lowStockThreshold: 20.0 },

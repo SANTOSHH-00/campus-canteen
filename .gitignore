@@ -23,3 +23,7 @@ server/node_modules/
 .vscode/
 .idea/deploymentTargetSelector.xml
 debug.keystore
+scratch/
+scratch_diagrams/
+*.pyc
+__pycache__/

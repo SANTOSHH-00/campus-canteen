@@ -1,3 +1,4 @@
+// Main Activity: Initializes core application services, real-time WebSockets, push notifications, and navigation host
 package com.example
 
 import android.content.Intent
@@ -28,14 +29,19 @@ import com.example.ui.screens.NoInternetScreen
 import com.example.ui.state.rememberCanteenAppState
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.AuthViewModel
+import com.razorpay.Checkout
+import com.razorpay.PaymentData
+import com.razorpay.PaymentResultWithDataListener
+import com.example.util.RazorpayPaymentBridge
 import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
   private val TAG = "MainActivity"
   private var pendingDeepLinkRoute by mutableStateOf<String?>(null)
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    Checkout.preload(applicationContext)
     SessionManager.initialize(applicationContext)
     FirebaseConfig.initialize(applicationContext)
     com.example.util.NetworkMonitor.initialize(applicationContext)
@@ -88,6 +94,13 @@ class MainActivity : ComponentActivity() {
       }
     }
 
+    // Pre-warm backend connection asynchronously to eliminate cold-start lag
+    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+      try {
+        com.example.data.api.ApiClient.apiService.getHealth()
+      } catch (_: Exception) {}
+    }
+
     enableEdgeToEdge()
     setContent {
       MyApplicationTheme {
@@ -103,6 +116,16 @@ class MainActivity : ComponentActivity() {
     super.onNewIntent(intent)
     setIntent(intent)
     processPasswordResetDeepLink(intent)
+  }
+
+  override fun onPaymentSuccess(razorpayPaymentId: String?, paymentData: PaymentData?) {
+    Log.i(TAG, "Razorpay payment success: $razorpayPaymentId, orderId: ${paymentData?.orderId}")
+    RazorpayPaymentBridge.notifySuccess(razorpayPaymentId, paymentData)
+  }
+
+  override fun onPaymentError(code: Int, response: String?, paymentData: PaymentData?) {
+    Log.w(TAG, "Razorpay payment failed or cancelled: code=$code, response=$response")
+    RazorpayPaymentBridge.notifyError(code, response, paymentData)
   }
 
   private fun processPasswordResetDeepLink(intent: Intent?) {
@@ -156,22 +179,12 @@ fun AppEntry(
     }
   }
 
-  val isOnline by com.example.util.NetworkMonitor.isOnline.collectAsState()
-
   Box(modifier = Modifier.fillMaxSize()) {
-    if (!isOnline) {
-      NoInternetScreen(
-        onRetrySuccess = {
-          com.example.util.NetworkMonitor.refreshConnectivity()
-        }
-      )
-    } else {
-      MessQNavHost(
-        navController = navController,
-        appState = appState,
-        deepLinkDestination = deepLinkDestination,
-      )
-    }
+    MessQNavHost(
+      navController = navController,
+      appState = appState,
+      deepLinkDestination = deepLinkDestination,
+    )
   }
 }
 

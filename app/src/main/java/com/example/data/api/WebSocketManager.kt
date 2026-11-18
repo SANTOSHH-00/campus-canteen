@@ -1,3 +1,4 @@
+// WebSocketManager: Core utility and helper functions
 package com.example.data.api
 
 import android.util.Log
@@ -59,6 +60,9 @@ object WebSocketManager {
   private val _queueUpdates = MutableSharedFlow<String>(extraBufferCapacity = 64)
   val queueUpdates: Flow<String> = _queueUpdates.asSharedFlow()
 
+  private val _reconnectEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
+  val reconnectEvents: Flow<Unit> = _reconnectEvents.asSharedFlow()
+
   fun getWsUrl(): String {
     val base = ApiClient.baseUrl.trimEnd('/')
     val wsPrefix = if (base.startsWith("https://", ignoreCase = true)) "wss://" else "ws://"
@@ -74,9 +78,15 @@ object WebSocketManager {
     val wsUrl = getWsUrl()
     Log.d(TAG, "Connecting to Quick Bite WebSocket: $wsUrl")
 
-    val request = Request.Builder()
-      .url(wsUrl)
-      .build()
+    val token = com.example.data.session.SessionManager.getOwnerToken().ifBlank {
+      com.example.data.session.SessionManager.getStudentToken()
+    }.trim()
+
+    val requestBuilder = Request.Builder().url(wsUrl)
+    if (token.isNotBlank()) {
+      requestBuilder.addHeader("Authorization", "Bearer $token")
+    }
+    val request = requestBuilder.build()
 
     webSocket = client.newWebSocket(request, object : WebSocketListener() {
       override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -84,10 +94,19 @@ object WebSocketManager {
         isConnecting = false
         Log.i(TAG, "WebSocket connected successfully to $wsUrl")
 
+        // Send authentication token if available
+        if (token.isNotBlank()) {
+          val authPayload = "{\"action\":\"authenticate\",\"token\":\"$token\"}"
+          webSocket.send(authPayload)
+        }
+
         // Resubscribe to all active channels
         for (channel in activeChannels) {
           sendSubscription(webSocket, channel)
         }
+
+        // Emit reconnection event to notify observers to fetch latest database status
+        _reconnectEvents.tryEmit(Unit)
       }
 
       override fun onMessage(webSocket: WebSocket, text: String) {

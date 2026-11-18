@@ -1,3 +1,4 @@
+// MessQNavHost: Navigation component defining application routes and screen transitions
 package com.example.ui.navigation
 
 import androidx.compose.runtime.Composable
@@ -42,12 +43,23 @@ fun MessQNavHost(
     startDestination = MessQDestinations.SPLASH,
     modifier = modifier,
   ) {
-    // 1. Splash Screen
     composable(MessQDestinations.SPLASH) {
       val context = LocalContext.current
       CampusCanteenSplashScreen(
         onLoadingFinished = {
           val isOnline = NetworkUtils.isOnline(context)
+          if (!isOnline) {
+            try {
+              navController.navigate(MessQDestinations.NO_INTERNET) {
+                popUpTo(MessQDestinations.SPLASH) { inclusive = true }
+                launchSingleTop = true
+              }
+            } catch (e: Exception) {
+              android.util.Log.e("MessQNavHost", "No internet navigation error: ${e.message}", e)
+            }
+            return@CampusCanteenSplashScreen
+          }
+
           val nextDestination = if (!deepLinkDestination.isNullOrBlank()) {
             deepLinkDestination
           } else if (com.example.ui.viewmodel.AuthViewModel.deepLinkToken.isNotBlank()) {
@@ -56,7 +68,6 @@ fun MessQNavHost(
             when {
               SessionManager.isStudentLoggedIn() -> MessQDestinations.STUDENT_MAIN
               SessionManager.isOwnerLoggedIn() -> MessQDestinations.OWNER_MAIN
-              !isOnline -> MessQDestinations.NO_INTERNET
               else -> MessQDestinations.WELCOME
             }
           }
@@ -72,7 +83,6 @@ fun MessQNavHost(
       )
     }
 
-    // 1b. Dedicated No Internet Screen (Matching user reference)
     composable(MessQDestinations.NO_INTERNET) {
       NoInternetScreen(
         onRetrySuccess = {
@@ -93,7 +103,6 @@ fun MessQNavHost(
       )
     }
 
-    // 2. Welcome Screen (Image 3 Left Phone Screen)
     composable(MessQDestinations.WELCOME) {
       WelcomeOnboardingScreen(
         onNavigateToSignIn = {
@@ -112,7 +121,6 @@ fun MessQNavHost(
       )
     }
 
-    // 3. Modern Sign In Screen (Image 3 Right Phone Screen with Google & Owner portal)
     composable("${MessQDestinations.SIGN_IN}?register={register}") { backStackEntry ->
       val isRegister = backStackEntry.arguments?.getString("register")?.toBoolean() ?: false
       ModernSignInScreen(
@@ -136,7 +144,6 @@ fun MessQNavHost(
       )
     }
 
-    // 4. Owner Login Screen (Dedicated Owner Portal with Email OTP)
     composable(MessQDestinations.OWNER_LOGIN) {
       OwnerLoginScreen(
         viewModel = ownerViewModel,
@@ -165,7 +172,6 @@ fun MessQNavHost(
       )
     }
 
-    // 4a. Owner OTP Verification Screen Route
     composable(
       route = "${MessQDestinations.OWNER_OTP}?email={email}",
       arguments = listOf(
@@ -228,7 +234,6 @@ fun MessQNavHost(
       )
     }
 
-    // 4b. Forgot Password Screen
     composable(MessQDestinations.FORGOT_PASSWORD) {
       ForgotPasswordScreen(
         onBackToLogin = {
@@ -237,7 +242,6 @@ fun MessQNavHost(
       )
     }
 
-    // 4c. Reset Password Screen (Opened directly or via Recovery Deep Link)
     composable(
       route = MessQDestinations.RESET_PASSWORD,
       deepLinks = listOf(
@@ -264,7 +268,6 @@ fun MessQNavHost(
       )
     }
 
-    // 5. Student Main Screen (Full campus canteen ordering experience)
     composable(MessQDestinations.STUDENT_MAIN) {
       MainScreen(
         appState = appState,
@@ -277,7 +280,6 @@ fun MessQNavHost(
       )
     }
 
-    // 6. Owner Main Screen (Owner Dashboard destination)
     composable(MessQDestinations.OWNER_MAIN) {
       val effectiveOwner = currentOwner
         ?: ownerDashboardViewModel.currentOwner.value
@@ -304,7 +306,6 @@ fun MessQNavHost(
       )
     }
 
-    // 7. Owner Manage Items Screen
     composable(MessQDestinations.OWNER_ITEMS) {
       val effectiveOwner = currentOwner
         ?: ownerDashboardViewModel.currentOwner.value
@@ -316,7 +317,6 @@ fun MessQNavHost(
       )
     }
 
-    // 7b. Owner Inventory Screen (Distinct from Menu Management)
     composable(MessQDestinations.OWNER_INVENTORY) {
       val effectiveOwner = currentOwner
         ?: ownerDashboardViewModel.currentOwner.value
@@ -328,7 +328,6 @@ fun MessQNavHost(
       )
     }
 
-    // 8. Owner Live Orders Screen
     composable(MessQDestinations.OWNER_ORDERS) {
       val effectiveOwner = currentOwner
         ?: ownerDashboardViewModel.currentOwner.value
@@ -344,7 +343,6 @@ fun MessQNavHost(
       )
     }
 
-    // 9. Owner Order Details Screen (Image 2)
     composable("${MessQDestinations.OWNER_ORDER_DETAILS}/{orderId}") { backStackEntry ->
       val orderId = backStackEntry.arguments?.getString("orderId") ?: ""
       com.example.ui.screens.OwnerOrderDetailsScreen(

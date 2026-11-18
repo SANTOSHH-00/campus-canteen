@@ -52,7 +52,6 @@ async function createOrRotateOrderVerification({ orderId, studentId, canteenId, 
   const now = new Date();
   const expiresAt = new Date(now.getTime() + validityMinutes * 60 * 1000);
 
-  // Invalidate any existing active tokens for this order by marking them EXPIRED
   await OrderVerification.updateMany(
     { orderId, status: 'ACTIVE' },
     { $set: { status: 'EXPIRED' } }

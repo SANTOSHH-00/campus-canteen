@@ -1,3 +1,4 @@
+// FirebaseConfig: Core utility and helper functions
 package com.example.data.firebase
 
 import android.content.Context

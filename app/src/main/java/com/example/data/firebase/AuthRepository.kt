@@ -1,3 +1,4 @@
+// AuthRepository: Repository managing data synchronization between remote API and local storage
 package com.example.data.firebase
 
 import android.util.Log

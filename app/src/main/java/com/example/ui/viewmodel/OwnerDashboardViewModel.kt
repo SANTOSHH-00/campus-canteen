@@ -1,3 +1,4 @@
+// OwnerDashboardViewModel: ViewModel managing UI state and business logic for OwnerDashboard
 package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
@@ -24,6 +25,8 @@ import java.util.Date
 import java.util.Locale
 
 data class OwnerDashboardMetrics(
+  val pendingOrdersCount: Int = 0,
+  val acceptedOrdersCount: Int = 0,
   val newOrdersCount: Int = 0,
   val preparingOrdersCount: Int = 0,
   val readyOrdersCount: Int = 0,
@@ -126,7 +129,6 @@ open class OwnerDashboardViewModel(
   private fun setupDashboard(owner: OwnerDocument) {
     val canteenId = owner.canteenId.ifBlank { "canteen_33" }
 
-    // 0. Pre-populate with memory cache if available
     MongoRepository.cachedCanteenItems[canteenId]?.let {
       if (it.isNotEmpty()) _items.value = it
     }
@@ -146,7 +148,6 @@ open class OwnerDashboardViewModel(
     }
     recomputeUiState()
 
-    // 1. Direct one-shot async fetch for instant items loading
     viewModelScope.launch {
       val itemsRes = mongoRepo.getCanteenItems(canteenId)
       if (itemsRes.isSuccess) {
@@ -158,7 +159,6 @@ open class OwnerDashboardViewModel(
       }
     }
 
-    // 2. Direct one-shot async fetch for instant orders loading
     viewModelScope.launch {
       val ordersRes = mongoRepo.getCanteenOrders(canteenId)
       if (ordersRes.isSuccess) {
@@ -168,7 +168,6 @@ open class OwnerDashboardViewModel(
       }
     }
 
-    // 3. Continuous real-time flows
     viewModelScope.launch {
       firestoreRepo.observeCanteen(canteenId).catch {}.collect { remoteCanteen ->
         if (remoteCanteen != null) {
@@ -182,6 +181,32 @@ open class OwnerDashboardViewModel(
       firestoreRepo.observeCanteenOrders(canteenId).catch {}.collect { ordersList ->
         _orders.value = ordersList.filter { !isGuestOrder(it) }
         recomputeUiState()
+      }
+    }
+
+    viewModelScope.launch {
+      com.example.data.api.WebSocketManager.observeCanteenOrders(canteenId).catch {}.collect { updatedOrder ->
+        val updatedDoc = updatedOrder.toDocument()
+        val currentList = _orders.value.toMutableList()
+        val idx = currentList.indexOfFirst { it.orderId == updatedDoc.orderId }
+        if (idx != -1) {
+          currentList[idx] = updatedDoc
+        } else if (!isGuestOrder(updatedDoc)) {
+          currentList.add(0, updatedDoc)
+        }
+        _orders.value = currentList
+        recomputeUiState()
+      }
+    }
+
+    viewModelScope.launch {
+      com.example.data.api.WebSocketManager.reconnectEvents.collect {
+        val ordersRes = mongoRepo.getCanteenOrders(canteenId)
+        if (ordersRes.isSuccess) {
+          val list = ordersRes.getOrThrow().map { it.toDocument() }.filter { !isGuestOrder(it) }
+          _orders.value = list
+          recomputeUiState()
+        }
       }
     }
 
@@ -208,7 +233,8 @@ open class OwnerDashboardViewModel(
     val itemsList = _items.value
 
     // Calculate metrics strictly from non-guest orders
-    val newCount = ordersList.count { it.status.equals("NEW", ignoreCase = true) }
+    val pendingCount = ordersList.count { it.status.equals("PENDING", ignoreCase = true) || it.status.equals("NEW", ignoreCase = true) || it.status.equals("WAITING", ignoreCase = true) }
+    val acceptedCount = ordersList.count { it.status.equals("ACCEPTED", ignoreCase = true) || it.status.equals("CONFIRMED", ignoreCase = true) }
     val preparingCount = ordersList.count { it.status.equals("PREPARING", ignoreCase = true) }
     val readyCount = ordersList.count { it.status.equals("READY", ignoreCase = true) }
 
@@ -221,7 +247,9 @@ open class OwnerDashboardViewModel(
     val todayRevenue = todayOrders.sumOf { it.totalAmount }
 
     val metrics = OwnerDashboardMetrics(
-      newOrdersCount = newCount,
+      pendingOrdersCount = pendingCount,
+      acceptedOrdersCount = acceptedCount,
+      newOrdersCount = pendingCount,
       preparingOrdersCount = preparingCount,
       readyOrdersCount = readyCount,
       todayOrdersCount = todayOrders.size,
@@ -286,6 +314,42 @@ open class OwnerDashboardViewModel(
    */
   fun observeOrder(orderId: String): Flow<OrderDocument?> {
     return firestoreRepo.observeOrder(orderId)
+  }
+
+  fun acceptOrder(orderId: String) {
+    val pressTime = System.currentTimeMillis()
+    viewModelScope.launch {
+      firestoreRepo.acceptOrder(orderId)
+      _orders.value = _orders.value.map {
+        if (it.orderId == orderId) {
+          it.copy(
+            status = "ACCEPTED",
+            updatedAt = pressTime,
+            confirmedAt = pressTime,
+            acceptedAt = pressTime,
+          )
+        } else it
+      }
+      recomputeUiState()
+    }
+  }
+
+  fun rejectOrder(orderId: String, reason: String) {
+    val pressTime = System.currentTimeMillis()
+    viewModelScope.launch {
+      firestoreRepo.rejectOrder(orderId, reason)
+      _orders.value = _orders.value.map {
+        if (it.orderId == orderId) {
+          it.copy(
+            status = "REJECTED",
+            updatedAt = pressTime,
+            rejectedAt = pressTime,
+            rejectionReason = reason,
+          )
+        } else it
+      }
+      recomputeUiState()
+    }
   }
 
   fun updateOrderStatus(orderId: String, newStatus: String) {

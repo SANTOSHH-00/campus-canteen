@@ -1,3 +1,4 @@
+// AppState: State holder maintaining active user session, cart, and canteen selections
 package com.example.ui.state
 
 import androidx.compose.runtime.Composable
@@ -13,6 +14,7 @@ import com.example.data.CartItem
 import com.example.data.FoodAddon
 import com.example.data.FoodCategory
 import com.example.data.FoodItem
+import com.example.data.FulfillmentType
 import com.example.data.MenuDietaryFilter
 import com.example.data.MenuSortOption
 import com.example.data.NotificationItem
@@ -53,17 +55,169 @@ data class UsualOrderInfo(
 )
 
 class CanteenAppState(val context: android.content.Context? = null) {
-  private val firestoreRepo = FirestoreRepository()
+  val firestoreRepo = FirestoreRepository()
 
-  // ── Intermediate Block Canteen State ───────────────────────────────────────
   var allCanteens by mutableStateOf<List<CampusBlockCanteen>>(SampleFoodData.campusCanteens)
   var selectedCanteen by mutableStateOf<CampusBlockCanteen>(SampleFoodData.canteen_33)
   var studentCurrentBlock by mutableStateOf<Int?>(33)
+
+  // Loading & Refreshing States (Requirements 1, 2, 3, 4)
+  var isLoadingItems by mutableStateOf(true)
+  var isHomeRefreshing by mutableStateOf(false)
+  var isMenuRefreshing by mutableStateOf(false)
+  var isOrdersRefreshing by mutableStateOf(false)
+  var homeError by mutableStateOf<String?>(null)
+  var menuError by mutableStateOf<String?>(null)
+  var ordersError by mutableStateOf<String?>(null)
 
   private var canteenObservationJob: Job? = null
   private var itemsObservationJob: Job? = null
   private var allCanteensObservationJob: Job? = null
   private var studentOrdersJob: Job? = null
+
+  fun refreshHomeData() {
+    if (isHomeRefreshing) return
+    isHomeRefreshing = true
+    homeError = null
+    CoroutineScope(Dispatchers.IO).launch {
+      try {
+        val canteensRes = firestoreRepo.fetchFreshCanteens()
+        if (canteensRes.isSuccess && canteensRes.getOrThrow().isNotEmpty()) {
+          val mapped = canteensRes.getOrThrow().map { doc ->
+            doc.toCampusBlockCanteen(emptyList()).copy(
+              imageUrl = if (doc.imageUrl.isNotBlank()) doc.imageUrl else SessionManager.getCanteenImage(doc.id),
+              timings = if (doc.timings.isNotBlank() && doc.timings != "7:00 AM – 10:00 PM") doc.timings else (SessionManager.getCanteenTimings(doc.id) ?: doc.timings),
+            )
+          }
+          withContext(Dispatchers.Main) {
+            allCanteens = mapped
+          }
+        }
+        val itemsRes = firestoreRepo.fetchFreshItems(selectedCanteen.id)
+        if (itemsRes.isSuccess) {
+          val availableDocs = itemsRes.getOrThrow().filter { it.available }
+          val foodItems = availableDocs.map { it.toFoodItem() }
+          val quick = foodItems.filter { it.category == FoodCategory.QUICK_ORDER }.ifEmpty { foodItems.filter { it.prepMinutes <= 5 } }
+          val popular = foodItems.filter { it.category == FoodCategory.POPULAR }.ifEmpty { foodItems.take(8) }
+          val readyIn10 = foodItems.filter { it.category == FoodCategory.READY_UNDER_10 }.ifEmpty { foodItems.filter { it.prepMinutes <= 10 } }
+
+          withContext(Dispatchers.Main) {
+            val updated = selectedCanteen.copy(
+              rawItems = foodItems,
+              quickOrderItems = quick,
+              popularItems = popular,
+              readyIn10Items = readyIn10,
+            )
+            selectedCanteen = updated
+            allCanteens = allCanteens.map { if (it.id == updated.id) updated else it }
+            isLoadingItems = false
+            homeError = null
+          }
+        } else {
+          withContext(Dispatchers.Main) {
+            if (selectedCanteen.allItems.isEmpty()) {
+              homeError = "Unable to load the latest home content. Check your internet connection and try again."
+            }
+          }
+        }
+      } catch (e: Exception) {
+        withContext(Dispatchers.Main) {
+          if (selectedCanteen.allItems.isEmpty()) {
+            homeError = "Unable to load the latest home content. Check your internet connection and try again."
+          }
+        }
+      } finally {
+        withContext(Dispatchers.Main) {
+          isHomeRefreshing = false
+        }
+      }
+    }
+  }
+
+  fun refreshCurrentMenu() {
+    if (isMenuRefreshing) return
+    isMenuRefreshing = true
+    menuError = null
+    CoroutineScope(Dispatchers.IO).launch {
+      try {
+        val itemsRes = firestoreRepo.fetchFreshItems(selectedCanteen.id)
+        if (itemsRes.isSuccess) {
+          val availableDocs = itemsRes.getOrThrow().filter { it.available }
+          val foodItems = availableDocs.map { it.toFoodItem() }
+          val quick = foodItems.filter { it.category == FoodCategory.QUICK_ORDER }.ifEmpty { foodItems.filter { it.prepMinutes <= 5 } }
+          val popular = foodItems.filter { it.category == FoodCategory.POPULAR }.ifEmpty { foodItems.take(8) }
+          val readyIn10 = foodItems.filter { it.category == FoodCategory.READY_UNDER_10 }.ifEmpty { foodItems.filter { it.prepMinutes <= 10 } }
+
+          withContext(Dispatchers.Main) {
+            val updated = selectedCanteen.copy(
+              rawItems = foodItems,
+              quickOrderItems = quick,
+              popularItems = popular,
+              readyIn10Items = readyIn10,
+            )
+            selectedCanteen = updated
+            allCanteens = allCanteens.map { if (it.id == updated.id) updated else it }
+            isLoadingItems = false
+            menuError = null
+          }
+        } else {
+          withContext(Dispatchers.Main) {
+            if (selectedCanteen.allItems.isEmpty()) {
+              menuError = "Unable to load the latest menu. Please check your connection."
+            }
+          }
+        }
+      } catch (e: Exception) {
+        withContext(Dispatchers.Main) {
+          if (selectedCanteen.allItems.isEmpty()) {
+            menuError = "Unable to load the latest menu. Please check your connection."
+          }
+        }
+      } finally {
+        withContext(Dispatchers.Main) {
+          isMenuRefreshing = false
+        }
+      }
+    }
+  }
+
+  fun refreshOrders() {
+    if (isOrdersRefreshing) return
+    val studentId = SessionManager.getStudentSession()?.registrationNumber?.ifBlank { null }
+      ?: SessionManager.getUserSession()?.registrationNumber?.ifBlank { null }
+      ?: currentUser?.registrationNumber?.ifBlank { null }
+      ?: SessionManager.getUserSession()?.uid?.ifBlank { null }
+      ?: currentUser?.email?.ifBlank { null }
+      ?: ""
+    if (studentId.isBlank()) return
+    isOrdersRefreshing = true
+    ordersError = null
+    CoroutineScope(Dispatchers.IO).launch {
+      try {
+        val res = firestoreRepo.fetchFreshStudentOrders(studentId)
+        if (res.isSuccess) {
+          val freshOrders = res.getOrThrow().map { it.toOrderRecord() }
+          withContext(Dispatchers.Main) {
+            orders.clear()
+            orders.addAll(freshOrders)
+            ordersError = null
+          }
+        } else {
+          withContext(Dispatchers.Main) {
+            ordersError = "Your orders couldn't be loaded. Please reconnect and retry."
+          }
+        }
+      } catch (e: Exception) {
+        withContext(Dispatchers.Main) {
+          ordersError = "Your orders couldn't be loaded. Please reconnect and retry."
+        }
+      } finally {
+        withContext(Dispatchers.Main) {
+          isOrdersRefreshing = false
+        }
+      }
+    }
+  }
 
   private fun startAllCanteensObservation() {
     allCanteensObservationJob?.cancel()
@@ -156,9 +310,20 @@ class CanteenAppState(val context: android.content.Context? = null) {
             foodItems.forEach { fi ->
               allKnownFoodItems[fi.id] = fi to updatedCanteen
             }
+            isLoadingItems = false
+            homeError = null
+            menuError = null
           }
         }
-      } catch (e: Exception) {}
+      } catch (e: Exception) {
+        withContext(Dispatchers.Main) {
+          isLoadingItems = false
+          if (selectedCanteen.allItems.isEmpty()) {
+            homeError = "Unable to load the latest home content. Check your internet connection and try again."
+            menuError = "Unable to load the latest menu. Please check your connection."
+          }
+        }
+      }
     }
   }
 
@@ -200,6 +365,8 @@ class CanteenAppState(val context: android.content.Context? = null) {
   fun loginUser(profile: UserProfile) {
     currentUser = profile
     SessionManager.saveStudentSession(profile)
+    loadNotificationsFromSession()
+    refreshNotifications()
 
     // Sync student to Cloud Firestore and observe their live orders
     studentOrdersJob?.cancel()
@@ -291,8 +458,10 @@ class CanteenAppState(val context: android.content.Context? = null) {
     orders.clear()
     clearCart()
     favoriteItemIds.clear()
+    notifications.clear()
     try {
       SessionManager.saveFavoriteItemIds(emptySet())
+      SessionManager.clearNotifications()
     } catch (_: Exception) {}
     SessionManager.clearStudentSession()
     SessionManager.clearActiveOrderTracking()
@@ -369,9 +538,30 @@ class CanteenAppState(val context: android.content.Context? = null) {
   // Global Food Item Resolution Cache for Instant Favorites & Cart Access
   val allKnownFoodItems = androidx.compose.runtime.mutableStateMapOf<String, Pair<FoodItem, CampusBlockCanteen>>()
 
+  // Recently Viewed Items State
+  val recentlyViewedItems = mutableStateListOf<FoodItem>()
+
+  fun recordRecentlyViewed(item: FoodItem) {
+    val existingIdx = recentlyViewedItems.indexOfFirst { it.id == item.id }
+    if (existingIdx != -1) {
+      recentlyViewedItems.removeAt(existingIdx)
+    }
+    recentlyViewedItems.add(0, item)
+    if (recentlyViewedItems.size > 20) {
+      recentlyViewedItems.removeAt(recentlyViewedItems.lastIndex)
+    }
+    allKnownFoodItems[item.id] = item to selectedCanteen
+    try {
+      SessionManager.saveRecentlyViewedItemIds(recentlyViewedItems.map { it.id })
+    } catch (e: Exception) {
+      android.util.Log.w("CanteenAppState", "Failed to save recently viewed: ${e.message}")
+    }
+  }
+
   fun openFoodDetail(item: FoodItem) {
     selectedFoodForDetail = item
     allKnownFoodItems[item.id] = item to selectedCanteen
+    recordRecentlyViewed(item)
   }
 
   fun closeFoodDetail() {
@@ -465,11 +655,28 @@ class CanteenAppState(val context: android.content.Context? = null) {
   val subtotal: Int
     get() = cartItems.sumOf { it.totalPrice }
 
+  // Order Fulfilment: Dine-in vs Takeaway
+  var fulfillmentType by mutableStateOf(FulfillmentType.TAKEAWAY)
+
+  // Packaging charge: ONLY applied when student selects Takeaway
+  val packagingCharge: Int
+    get() = if (fulfillmentType == FulfillmentType.TAKEAWAY && subtotal > 0) {
+      selectedCanteen.packagingCharge
+    } else {
+      0
+    }
+
+  // GST Taxes: calculated independently of packaging (5% GST on food subtotal)
   val taxAmount: Int
-    get() = if (subtotal > 0) (subtotal * 0.05).toInt().coerceAtLeast(5) else 0
+    get() = if (subtotal > 0) {
+      val rate = (selectedCanteen.taxRatePercent.coerceAtLeast(0)) / 100.0
+      Math.round(subtotal * rate).toInt()
+    } else {
+      0
+    }
 
   val grandTotal: Int
-    get() = if (subtotal > 0) subtotal + taxAmount else 0
+    get() = if (subtotal > 0) subtotal + packagingCharge + taxAmount else 0
 
   private fun persistCartToSession() {
     try {
@@ -798,6 +1005,10 @@ class CanteenAppState(val context: android.content.Context? = null) {
   }
 
   fun loadNotificationsFromSession() {
+    if (isGuest) {
+      notifications.clear()
+      return
+    }
     try {
       val raw = SessionManager.getSavedNotificationsJson()
       val loaded = mutableListOf<NotificationItem>()
@@ -854,7 +1065,38 @@ class CanteenAppState(val context: android.content.Context? = null) {
     }
   }
 
+  fun refreshNotifications(onDone: () -> Unit = {}) {
+    if (isGuest) {
+      notifications.clear()
+      onDone()
+      return
+    }
+    loadNotificationsFromSession()
+    val uid = currentUser?.email ?: SessionManager.getUserSession()?.uid ?: ""
+    if (uid.isNotBlank()) {
+      CoroutineScope(Dispatchers.IO).launch {
+        try {
+          firestoreRepo.observeUserNotifications(uid).collect { docs ->
+            if (docs.isNotEmpty()) {
+              val mapped = docs.map { it.toNotificationItem() }
+              withContext(Dispatchers.Main) {
+                notifications.clear()
+                notifications.addAll(mapped)
+              }
+            }
+          }
+        } catch (_: Exception) {
+        } finally {
+          withContext(Dispatchers.Main) { onDone() }
+        }
+      }
+    } else {
+      onDone()
+    }
+  }
+
   fun syncNotificationsToSession() {
+    if (isGuest) return
     try {
       val array = org.json.JSONArray()
       for (notif in notifications) {
@@ -874,6 +1116,7 @@ class CanteenAppState(val context: android.content.Context? = null) {
   }
 
   fun addNotification(title: String, message: String, isUnread: Boolean = true) {
+    if (isGuest) return
     val cleanTitle = title.trim()
     val tokenRegex = Regex("""#([A-Za-z0-9]+)""")
     val extractedToken = tokenRegex.find(cleanTitle)?.groupValues?.get(1)?.lowercase()
@@ -942,7 +1185,11 @@ class CanteenAppState(val context: android.content.Context? = null) {
     get() = if (!isPickupAsap && customPickupTime != null) customPickupTime!! else "ASAP"
 
   // Place Order action with authoritative MongoDB persistence verification
-  suspend fun placeOrder(): Result<OrderRecord> = withContext(Dispatchers.IO) {
+  suspend fun placeOrder(
+    paymentId: String = "",
+    razorpayOrderId: String = "",
+    razorpaySignature: String = "",
+  ): Result<OrderRecord> = withContext(Dispatchers.IO) {
     if (cartItems.isEmpty()) return@withContext Result.failure(Exception("Cart is empty"))
     if (!selectedCanteen.isOpen) return@withContext Result.failure(Exception("Canteen is currently closed"))
 
@@ -973,7 +1220,7 @@ class CanteenAppState(val context: android.content.Context? = null) {
       tokenNumber = token,
       items = cartItems.map { it.copy() },
       totalPrice = grandTotal,
-      status = OrderStatus.NEW,
+      status = OrderStatus.PENDING,
       orderTime = "Today, $orderTime",
       estimatedReadyTime = completionTime,
       customerPickupTime = customerPickup,
@@ -983,7 +1230,13 @@ class CanteenAppState(val context: android.content.Context? = null) {
       pickupPreference = if (isPickupAsap) "Pickup ASAP" else "Pickup at $customerPickup",
       canteenId = selectedCanteen.id,
       orderPlacedAt = orderTime,
-      confirmedAt = orderTime,
+      confirmedAt = "",
+      fulfillmentType = fulfillmentType,
+      packagingCharge = packagingCharge,
+      taxAmount = taxAmount,
+      itemsSubtotal = subtotal,
+      isScheduled = !isPickupAsap && customPickupTime != null,
+      scheduledPickupTime = if (!isPickupAsap && customPickupTime != null) customPickupTime!! else "",
     )
 
     val assignedCounter = if ((orders.size % 2) == 0) "Counter 1" else "Counter 2"
@@ -995,6 +1248,9 @@ class CanteenAppState(val context: android.content.Context? = null) {
       studentPhone = currentUser?.phone ?: "",
       studentCourse = currentUser?.course ?: "",
       pickupCounter = assignedCounter,
+      paymentId = paymentId,
+      razorpayOrderId = razorpayOrderId,
+      razorpaySignature = razorpaySignature,
     )
 
     // Call backend API / MongoDB persistence BEFORE clearing cart or claiming success
@@ -1035,7 +1291,7 @@ class CanteenAppState(val context: android.content.Context? = null) {
       )
     }
 
-    // Post notification to backend
+    // Post notification to backend asynchronously so placeOrder returns immediately
     val notifDoc = NotificationDocument(
       userId = studentUid,
       title = "Order Token #$token Placed",
@@ -1046,7 +1302,13 @@ class CanteenAppState(val context: android.content.Context? = null) {
       createdAt = System.currentTimeMillis(),
       read = false,
     )
-    firestoreRepo.sendNotification(notifDoc)
+    CoroutineScope(Dispatchers.IO).launch {
+      try {
+        firestoreRepo.sendNotification(notifDoc)
+      } catch (e: Exception) {
+        android.util.Log.w("AppState", "Async notification send error: ${e.message}")
+      }
+    }
 
     // Observe live status updates from owner for this specific order
     CoroutineScope(Dispatchers.IO).launch {
@@ -1167,7 +1429,6 @@ class CanteenAppState(val context: android.content.Context? = null) {
   }
 
   init {
-    // 1. Restore persisted student login session if available
     try {
       val savedStudent = SessionManager.getStudentSession()
       if (savedStudent != null) {
@@ -1178,7 +1439,6 @@ class CanteenAppState(val context: android.content.Context? = null) {
       android.util.Log.e("CanteenAppState", "Failed to restore student session: ${e.message}", e)
     }
 
-    // 2. Restore any persisted canteen overrides (timings, profile image, open/closed)
     try {
       allCanteens = allCanteens.map { canteen ->
         val savedImg = SessionManager.getCanteenImage(canteen.id)
@@ -1198,7 +1458,6 @@ class CanteenAppState(val context: android.content.Context? = null) {
       android.util.Log.e("CanteenAppState", "Failed to restore canteen overrides: ${e.message}", e)
     }
 
-    // 3. Start canteen observations
     try {
       startAllCanteensObservation()
       startCanteenObservation(selectedCanteen.id)
@@ -1206,21 +1465,22 @@ class CanteenAppState(val context: android.content.Context? = null) {
       android.util.Log.e("CanteenAppState", "Failed to start canteen observation: ${e.message}", e)
     }
 
-    // 4. Restore persisted cart items
     try {
       loadCartFromSession()
     } catch (e: Exception) {
       android.util.Log.e("CanteenAppState", "Failed to restore cart: ${e.message}", e)
     }
 
-    // 5. Restore persisted notifications
     try {
-      loadNotificationsFromSession()
+      if (!isGuest) {
+        loadNotificationsFromSession()
+      } else {
+        notifications.clear()
+      }
     } catch (e: Exception) {
       android.util.Log.e("CanteenAppState", "Failed to restore notifications: ${e.message}", e)
     }
 
-    // 6. Restore persisted favorites
     try {
       val savedFavs = SessionManager.getFavoriteItemIds()
       if (savedFavs.isNotEmpty()) {
@@ -1229,6 +1489,17 @@ class CanteenAppState(val context: android.content.Context? = null) {
       }
     } catch (e: Exception) {
       android.util.Log.e("CanteenAppState", "Failed to restore favorites: ${e.message}", e)
+    }
+
+    try {
+      val savedRecent = SessionManager.getRecentlyViewedItemIds()
+      if (savedRecent.isNotEmpty()) {
+        val loaded = savedRecent.mapNotNull { id -> allKnownFoodItems[id]?.first ?: selectedCanteen.allItems.find { it.id == id } }
+        recentlyViewedItems.clear()
+        recentlyViewedItems.addAll(loaded)
+      }
+    } catch (e: Exception) {
+      android.util.Log.w("CanteenAppState", "Failed restoring recently viewed: ${e.message}")
     }
   }
 }

@@ -1,3 +1,4 @@
+// User Profile Routes: Student profile management, FCM token synchronization, and favorites
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');

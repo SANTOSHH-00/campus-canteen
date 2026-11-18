@@ -1,3 +1,4 @@
+// HomeScreen: Jetpack Compose screen for Home user interface
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
@@ -25,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashOn
@@ -33,6 +35,11 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.example.ui.components.QuickBiteStateView
+import com.example.ui.components.QuickBiteStateType
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -88,6 +95,7 @@ import com.example.ui.theme.TextMuted
 import com.example.ui.theme.WarmCream
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
   userName: String = "Alex",
@@ -98,6 +106,7 @@ fun HomeScreen(
 ) {
   val listState = rememberLazyListState()
   var showNotificationsDialog by remember { mutableStateOf(false) }
+  var showLoginSheet by remember { mutableStateOf(false) }
   var showQuickFilterDialog by remember { mutableStateOf(false) }
   var showSuggestProductSheet by remember { mutableStateOf(false) }
 
@@ -118,7 +127,6 @@ fun HomeScreen(
       .fillMaxSize()
       .background(WarmCream)
   ) {
-    // ── Constant Minimal Top Bar (Zero borders, zero shadows, seamlessly blends with WarmCream) ──
     HomeScreenTopBar(
       appState = appState,
       onProfileClick = onOpenProfileDrawer,
@@ -131,17 +139,22 @@ fun HomeScreen(
         .padding(horizontal = 16.dp, vertical = 6.dp),
     )
 
-    LazyColumn(
-      state = listState,
+    PullToRefreshBox(
+      isRefreshing = appState.isHomeRefreshing,
+      onRefresh = { appState.refreshHomeData() },
       modifier = Modifier
         .fillMaxWidth()
         .weight(1f),
-      contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
     ) {
-      // ── Elegant Home Greeting Section (Naturally scrolls with page content) ──
+      LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
+      ) {
       item(key = "home_greeting") {
         HomeGreetingSection(
           userName = userName,
+          appState = appState,
           modifier = Modifier
             .fillMaxWidth()
             .padding(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 12.dp),
@@ -149,7 +162,6 @@ fun HomeScreen(
       }
 
       if (currentCanteen.allItems.isNotEmpty()) {
-        // ── Hero Featured Steak-Style Banner Card ──
         item(key = "featured_special") {
           Box(
             modifier = Modifier
@@ -218,44 +230,30 @@ fun HomeScreen(
         }
       }
 
-      if (currentCanteen.allItems.isEmpty()) {
+      val isOffline = !com.example.util.NetworkMonitor.isCurrentlyOnline()
+      if (isOffline || appState.homeError != null) {
+        item(key = "home_error_state") {
+          QuickBiteStateView(
+            type = QuickBiteStateType.NO_INTERNET,
+            title = "Unable to Load Home Content",
+            message = appState.homeError ?: "It looks like you're offline. Please check your network connection and try again.",
+            isRetrying = appState.isHomeRefreshing,
+            onRetry = {
+              com.example.util.NetworkMonitor.refreshConnectivity()
+              appState.refreshHomeData()
+            },
+          )
+        }
+      } else if (currentCanteen.allItems.isEmpty()) {
         item(key = "empty_menu") {
-          Spacer(modifier = Modifier.height(20.dp))
-          androidx.compose.material3.Card(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(horizontal = 20.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = PureWhite),
-            border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray.copy(alpha = 0.6f)),
-          ) {
-            Column(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(28.dp),
-              horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-              Text("🍽️", fontSize = 42.sp)
-              Spacer(modifier = Modifier.height(12.dp))
-              Text(
-                text = "No menu items available yet.",
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextDark,
-              )
-              Spacer(modifier = Modifier.height(6.dp))
-              Text(
-                text = "The menu for ${currentCanteen.name} is currently empty.\nItems added in the Owner Dashboard will appear here automatically.",
-                fontSize = 13.sp,
-                color = TextMuted,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                lineHeight = 18.sp,
-              )
-            }
-          }
+          QuickBiteStateView(
+            type = QuickBiteStateType.EMPTY_DATA,
+            title = "No menu items available yet",
+            message = "The menu for ${currentCanteen.name} is currently empty. Items added in the Owner Dashboard will appear here automatically.",
+            onRetry = { appState.refreshHomeData() },
+          )
         }
       } else {
-        // ── Section 1: QUICK ORDER (Organized Filters & Quick Cards) ──────────────
         item(key = "quick_order_header") {
           SectionHeaderRow(
             iconVector = Icons.Default.FlashOn,
@@ -264,56 +262,8 @@ fun HomeScreen(
               appState.selectedMenuCategory = FoodCategory.QUICK_ORDER
               onNavigateToTab(BottomNavTab.MENU)
             },
-            onFilterClick = {
-              showQuickFilterDialog = true
-            },
-            isFilterActive = appState.selectedQuickFilterMinutes < 20,
           )
           Spacer(modifier = Modifier.height(10.dp))
-        }
-
-        // Professional Inline Prep-Time Filter Chips
-        item(key = "quick_order_filter_chips") {
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(horizontal = 14.dp)
-              .padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            val filterOptions = listOf(
-              20 to "All",
-              5 to "Under 5m ⚡",
-              10 to "Under 10m ⏱️",
-              15 to "Under 15m 🍽️",
-            )
-            filterOptions.forEach { (mins, label) ->
-              val isSelected = (appState.selectedQuickFilterMinutes == mins)
-              Surface(
-                modifier = Modifier
-                  .clip(RoundedCornerShape(16.dp))
-                  .clickable {
-                    appState.selectedQuickFilterMinutes = mins
-                  },
-                shape = RoundedCornerShape(16.dp),
-                color = if (isSelected) DrawerAmber else PureWhite,
-                border = androidx.compose.foundation.BorderStroke(
-                  width = 1.dp,
-                  color = if (isSelected) DrawerAmberDark else BorderGray,
-                ),
-                shadowElevation = if (isSelected) 3.dp else 1.dp,
-              ) {
-                Text(
-                  text = label,
-                  fontSize = 12.sp,
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                  color = if (isSelected) PureWhite else TextDark,
-                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                )
-              }
-            }
-          }
         }
 
         if (quickItems.isNotEmpty()) {
@@ -338,39 +288,16 @@ fun HomeScreen(
           }
         } else {
           item(key = "quick_order_empty") {
-            Box(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(PureWhite)
-                .border(1.dp, BorderGray, RoundedCornerShape(14.dp))
-                .padding(horizontal = 16.dp, vertical = 20.dp),
-              contentAlignment = Alignment.Center,
-            ) {
-              Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("⏱️", fontSize = 28.sp)
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                  text = "No items ready in ≤ ${appState.selectedQuickFilterMinutes} mins",
-                  fontSize = 14.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = TextDark,
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                  text = "Tap 'All' or select a different prep time to explore more items.",
-                  fontSize = 12.sp,
-                  color = TextMuted,
-                  textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-              }
-            }
-            Spacer(modifier = Modifier.height(26.dp))
+            QuickBiteStateView(
+              type = QuickBiteStateType.EMPTY_DATA,
+              title = "No items ready in ≤ ${appState.selectedQuickFilterMinutes} mins",
+              message = "Tap 'All' or select a different prep time to explore more items.",
+              modifier = Modifier.padding(vertical = 10.dp),
+            )
+            Spacer(modifier = Modifier.height(18.dp))
           }
         }
 
-        // ── Section 2: POPULAR RIGHT NOW (Big Vertical Cards with Image Placeholder) ──
         if (popularItems.isNotEmpty()) {
           item(key = "popular_header") {
             SectionHeaderRow(
@@ -408,7 +335,6 @@ fun HomeScreen(
 
 
 
-        // ── Section 4: YOUR USUAL ORDER CARD ────────────────────────────────
         val usual = appState.usualOrderInfo
         if (!appState.isUsualBannerDismissed && usual != null && usual.foodItem != null) {
           item(key = "usual_order") {
@@ -417,10 +343,12 @@ fun HomeScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp)
             ) {
+              val homeContext = LocalContext.current
               YourUsualBanner(
                 usualInfo = usual,
                 onReorder = {
                   appState.addToCart(usual.foodItem)
+                  android.widget.Toast.makeText(homeContext, "${usual.itemName} added to cart!", android.widget.Toast.LENGTH_SHORT).show()
                 },
                 onDismiss = {
                   appState.dismissUsualBanner()
@@ -442,6 +370,7 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(24.dp))
       }
     }
+    }
   }
 
   // Suggest Product Sheet (Canteen-Specific Owner Routing with 3-Day Rate Limit)
@@ -459,7 +388,34 @@ fun HomeScreen(
     ModernNotificationsSheet(
       appState = appState,
       onDismiss = { showNotificationsDialog = false },
+      onLoginClick = {
+        showNotificationsDialog = false
+        showLoginSheet = true
+      },
     )
+  }
+
+  // Login Modal Bottom Sheet when guest initiates sign in
+  if (showLoginSheet) {
+    Box(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(Color(0x80000000))
+        .clickable(
+          interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+          indication = null,
+          onClick = { showLoginSheet = false },
+        ),
+      contentAlignment = Alignment.BottomCenter,
+    ) {
+      LoginContent(
+        onDismiss = { showLoginSheet = false },
+        onLoginSuccess = { profile ->
+          appState.loginUser(profile)
+          showLoginSheet = false
+        },
+      )
+    }
   }
 
   // Quick Order Prep Time Filter Dialog
@@ -661,52 +617,43 @@ private fun SuggestProductSection(
   onSuggestClick: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  Box(
+  Column(
     modifier = modifier
       .fillMaxWidth()
-      .padding(horizontal = 14.dp, vertical = 10.dp)
-      .clip(RoundedCornerShape(20.dp))
-      .background(PureWhite)
-      .border(1.dp, BorderGray.copy(alpha = 0.7f), RoundedCornerShape(20.dp))
-      .padding(horizontal = 20.dp, vertical = 22.dp),
+      .padding(horizontal = 20.dp, vertical = 18.dp)
   ) {
-    Column {
+    Text(
+      text = "didn't find\nwhat you were\nlooking for?",
+      fontSize = 24.sp,
+      fontWeight = FontWeight.ExtraBold,
+      color = Color(0xFF4B4844),
+      lineHeight = 30.sp,
+    )
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    Text(
+      text = "Suggest something & we'll look into it",
+      fontSize = 14.sp,
+      fontWeight = FontWeight.Medium,
+      color = TextMuted,
+    )
+
+    Spacer(modifier = Modifier.height(14.dp))
+
+    // Blends seamlessly into WarmCream background as pure text (no box) with theme color
+    Row(
+      modifier = Modifier
+        .clickable { onSuggestClick() }
+        .padding(vertical = 4.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
       Text(
-        text = "didn't find\nwhat you were\nlooking for?",
-        fontSize = 24.sp,
+        text = "Suggest a Dish or Drink →",
+        fontSize = 15.sp,
         fontWeight = FontWeight.Bold,
-        color = Color(0xFFB0B0B0),
-        lineHeight = 30.sp,
+        color = DrawerAmber,
       )
-
-      Spacer(modifier = Modifier.height(10.dp))
-
-      Text(
-        text = "Suggest something & we'll look into it",
-        fontSize = 13.5.sp,
-        fontWeight = FontWeight.Normal,
-        color = Color(0xFF9E9E9E),
-      )
-
-      Spacer(modifier = Modifier.height(18.dp))
-
-      Surface(
-        modifier = Modifier
-          .clip(RoundedCornerShape(8.dp))
-          .clickable { onSuggestClick() },
-        shape = RoundedCornerShape(8.dp),
-        color = PureWhite,
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E7EB)),
-        shadowElevation = 0.dp,
-      ) {
-        Text(
-          text = "Suggest a Product",
-          fontSize = 14.sp,
-          fontWeight = FontWeight.Bold,
-          color = Color(0xFFFA2E67),
-          modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-        )
-      }
     }
   }
 }

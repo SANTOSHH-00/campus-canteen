@@ -1,3 +1,4 @@
+// LoginBottomSheet: Jetpack Compose screen for LoginBottomSheet user interface
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
@@ -146,7 +147,6 @@ fun LoginContent(
 
       Spacer(modifier = Modifier.height(16.dp))
 
-      // Header Row with Back Button and Title
       Box(modifier = Modifier.fillMaxWidth()) {
         // Circular back button on the left (Screenshot 5)
         Box(
@@ -183,7 +183,6 @@ fun LoginContent(
       // Sign Up extra fields: Student Name, Reg Number, Current Course, Phone Number
       AnimatedVisibility(visible = isSignUpMode) {
         Column(modifier = Modifier.fillMaxWidth()) {
-          // 1. Student Full Name
           Text(
             text = "FULL NAME",
             fontSize = 11.sp,
@@ -222,7 +221,6 @@ fun LoginContent(
 
           Spacer(modifier = Modifier.height(14.dp))
 
-          // 2. Student Registration Number (8 digits)
           Text(
             text = "REGISTRATION NUMBER",
             fontSize = 11.sp,
@@ -267,7 +265,6 @@ fun LoginContent(
 
           Spacer(modifier = Modifier.height(14.dp))
 
-          // 3. Current Course
           Text(
             text = "CURRENT COURSE",
             fontSize = 11.sp,
@@ -307,7 +304,6 @@ fun LoginContent(
 
           Spacer(modifier = Modifier.height(14.dp))
 
-          // 4. Phone Number (10 digits)
           Text(
             text = "PHONE NUMBER",
             fontSize = 11.sp,

@@ -1,3 +1,4 @@
+// BarcodeGenerator: Core utility and helper functions
 package com.example.util
 
 import android.graphics.Bitmap

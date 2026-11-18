@@ -1,3 +1,4 @@
+// Product Suggestions Routes: Student dish suggestions and owner review workflows
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -22,7 +23,6 @@ async function resolveStudentIdentities(req) {
   if (rawReg) identities.add(String(rawReg).trim());
   if (rawEmail) identities.add(rawEmail);
 
-  // Check JWT if present
   const authHeader = req.headers['authorization'] || '';
   if (authHeader.startsWith('Bearer ')) {
     try {
@@ -31,11 +31,9 @@ async function resolveStudentIdentities(req) {
       if (decoded?.registrationNumber) identities.add(String(decoded.registrationNumber));
       if (decoded?.email) identities.add(String(decoded.email).trim().toLowerCase());
     } catch (_) {
-      // Non-fatal if JWT is expired/invalid; fallback to headers
     }
   }
 
-  // Also query MongoDB User to expand registration number / email if any ID matched
   if (identities.size > 0) {
     try {
       const idArray = Array.from(identities);
@@ -60,7 +58,6 @@ async function resolveStudentIdentities(req) {
   return Array.from(identities);
 }
 
-// ── 1. POST /api/suggestions - Submit Product Suggestion with 3-Day Cooldown ──
 router.post('/', async (req, res) => {
   try {
     const { canteenId, canteenName, suggestionText, studentName } = req.body;
@@ -84,7 +81,6 @@ router.post('/', async (req, res) => {
     const studentReg = req.headers['x-student-reg'] || req.body.studentRegistration || '';
     const resolvedStudentName = req.headers['x-student-name'] || studentName || 'Student';
 
-    // ── 3-Day Rate Limiting Check ──────────────────────────────────────────
     const threeDaysAgo = new Date(Date.now() - COOLDOWN_MS);
     const query = {
       canteenId: canteenId.trim(),
@@ -120,7 +116,6 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // ── Route strictly to the canteen's assigned owner ────────────────────
     const owner = await Owner.findOne({
       canteenId: canteenId.trim(),
       canteenAssigned: true,
@@ -159,7 +154,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-// ── 2. GET /api/suggestions/eligibility - Check if user is eligible to submit ──
 router.get('/eligibility', async (req, res) => {
   try {
     const canteenId = (req.query.canteenId || '').trim();
@@ -211,7 +205,28 @@ router.get('/eligibility', async (req, res) => {
   }
 });
 
-// ── 3. GET /api/suggestions/owner - Fetch Suggestions for Authenticated Owner ──
+router.get('/admin', async (req, res) => {
+  try {
+    const filter = {};
+    if (req.query.canteenId && req.query.canteenId !== 'all') {
+      filter.canteenId = req.query.canteenId;
+    }
+    const suggestions = await ProductSuggestion.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+
+    return res.json({
+      success: true,
+      count: suggestions.length,
+      suggestions,
+    });
+  } catch (err) {
+    console.error('[Suggestions] Error fetching admin suggestions:', err);
+    return res.status(500).json({ success: false, error: 'Failed to fetch suggestions.' });
+  }
+});
+
 router.get('/owner', requireOwnerAuth, async (req, res) => {
   try {
     const ownerCanteenId = req.owner.canteenId;
@@ -236,7 +251,6 @@ router.get('/owner', requireOwnerAuth, async (req, res) => {
   }
 });
 
-// ── 4. PATCH /api/suggestions/owner/:suggestionId/status - Owner Status Update ──
 router.patch('/owner/:suggestionId/status', requireOwnerAuth, async (req, res) => {
   try {
     const { suggestionId } = req.params;
@@ -284,3 +298,4 @@ router.patch('/owner/:suggestionId/status', requireOwnerAuth, async (req, res) =
 });
 
 module.exports = router;
+

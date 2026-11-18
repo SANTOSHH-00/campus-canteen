@@ -10,7 +10,6 @@ function runTests() {
   // Order A -> 5 min remaining
   // Order B -> 8 min remaining
   // Order C (Current order) -> 10 min required prep
-  // Expected completion = 12:23 PM
   const serverTime12PM = new Date('2026-09-12T06:30:00.000Z'); // 12:00 PM IST
   assert.strictEqual(formatIstTime(serverTime12PM), '12:00 PM', 'Server time must format to 12:00 PM IST');
 
@@ -63,7 +62,6 @@ function runTests() {
   // Owner completes Order A.
   // Active queue ahead is now only Order B (8 min remaining)
   // Current user's Order C (10 min prep)
-  // Expected completion becomes 12:18 PM
   const activeOrdersAfter = [orderB, orderC]; // Order A is removed upon completion
   const metricsC_After = calculateQueueMetrics(orderC, activeOrdersAfter, 7, serverTime12PM);
 

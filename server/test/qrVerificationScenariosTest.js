@@ -298,7 +298,6 @@ async function runTests() {
     assert(qrData.qrDataUrl && qrData.qrDataUrl.startsWith('data:image/png;base64,'), 'Returns valid PNG data URL');
     assert(qrData.rawToken != null, 'Returns fresh rawToken payload');
 
-    // Verify that the newly rotated token can be redeemed by the owner
     const resRotVerify = await postVerify(qrData.rawToken, owner1Token);
     assert(resRotVerify.status === 200, 'Rotated token can be redeemed successfully');
     assert(resRotVerify.data.order.status === 'PICKED_UP', 'Rotated order is now PICKED_UP');

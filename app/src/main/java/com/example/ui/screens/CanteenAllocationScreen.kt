@@ -1,3 +1,4 @@
+// CanteenAllocationScreen: Jetpack Compose screen for CanteenAllocation user interface
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
@@ -94,7 +95,6 @@ fun CanteenAllocationScreen(
     ) {
       Spacer(modifier = Modifier.height(16.dp))
 
-      // ── Top Navigation Bar ─────────────────────────────────────────────────
       Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -272,7 +272,6 @@ fun CanteenAllocationScreen(
               }
             }
 
-            // ── Bottom Confirm Allocation Button ─────────────────────────────
             Box(
               modifier = Modifier
                 .fillMaxWidth()
@@ -329,18 +328,22 @@ private fun CanteenAllocationCard(
   isSelected: Boolean,
   onClick: () -> Unit,
 ) {
-  val borderColor = if (isSelected) BlackPrimary else BorderGray
-  val cardBg = if (isSelected) Color(0xFFF9F9FB) else PureWhite
+  val borderColor = if (isSelected) com.example.ui.theme.DrawerAmber else BorderGray.copy(alpha = 0.7f)
+  val cardBg = if (isSelected) Color(0xFFFFFBEB) else PureWhite
 
   Box(
     modifier = Modifier
       .fillMaxWidth()
-      .shadow(if (isSelected) 6.dp else 2.dp, RoundedCornerShape(18.dp))
-      .clip(RoundedCornerShape(18.dp))
+      .shadow(
+        elevation = if (isSelected) 5.dp else 1.5.dp,
+        shape = RoundedCornerShape(20.dp),
+        spotColor = if (isSelected) com.example.ui.theme.DrawerAmber.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.06f),
+      )
+      .clip(RoundedCornerShape(20.dp))
       .background(cardBg)
-      .border(if (isSelected) 2.dp else 1.dp, borderColor, RoundedCornerShape(18.dp))
+      .border(if (isSelected) 1.8.dp else 1.dp, borderColor, RoundedCornerShape(20.dp))
       .clickable(role = Role.RadioButton, onClick = onClick)
-      .padding(16.dp)
+      .padding(15.dp)
       .testTag("canteen_card_${canteen.id}")
   ) {
     Row(
@@ -352,19 +355,18 @@ private fun CanteenAllocationCard(
         modifier = Modifier.weight(1f),
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        // Icon Container
         Box(
           modifier = Modifier
-            .size(48.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (isSelected) BlackPrimary else SoftGray),
+            .size(52.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (isSelected) com.example.ui.theme.DrawerAmber else Color(0xFFF3F4F6)),
           contentAlignment = Alignment.Center,
         ) {
           Icon(
             imageVector = Icons.Default.Storefront,
             contentDescription = null,
             tint = if (isSelected) PureWhite else BlackPrimary,
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(26.dp),
           )
         }
 
@@ -380,7 +382,7 @@ private fun CanteenAllocationCard(
             )
           }
 
-          Spacer(modifier = Modifier.height(2.dp))
+          Spacer(modifier = Modifier.height(3.dp))
 
           Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -403,21 +405,34 @@ private fun CanteenAllocationCard(
             )
           }
 
-          Spacer(modifier = Modifier.height(4.dp))
+          Spacer(modifier = Modifier.height(5.dp))
 
           // Open/Closed Status Chip
+          val statusBg = if (canteen.isOpen) Color(0xFFECFDF5) else Color(0xFFFEF2F2)
+          val statusTextClr = if (canteen.isOpen) Color(0xFF065F46) else Color(0xFF991B1B)
+          val dotClr = if (canteen.isOpen) Color(0xFF10B981) else Color(0xFFEF4444)
+
           Box(
             modifier = Modifier
-              .clip(RoundedCornerShape(6.dp))
-              .background(if (canteen.isOpen) Color(0xFFDCFCE7) else Color(0xFFFEE2E2))
-              .padding(horizontal = 7.dp, vertical = 2.dp),
+              .clip(RoundedCornerShape(8.dp))
+              .background(statusBg)
+              .padding(horizontal = 8.dp, vertical = 3.dp),
           ) {
-            Text(
-              text = if (canteen.isOpen) "Open for Orders" else "Closed",
-              fontSize = 10.5.sp,
-              fontWeight = FontWeight.Bold,
-              color = if (canteen.isOpen) OpenGreen else Color(0xFFDC2626),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Box(
+                modifier = Modifier
+                  .size(6.dp)
+                  .clip(CircleShape)
+                  .background(dotClr),
+              )
+              Spacer(modifier = Modifier.width(5.dp))
+              Text(
+                text = if (canteen.isOpen) "Open for Orders" else "Closed",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = statusTextClr,
+              )
+            }
           }
         }
       }
@@ -427,8 +442,12 @@ private fun CanteenAllocationCard(
         modifier = Modifier
           .size(24.dp)
           .clip(CircleShape)
-          .border(2.dp, if (isSelected) BlackPrimary else BorderGray, CircleShape)
-          .background(if (isSelected) BlackPrimary else PureWhite),
+          .border(
+            width = 2.dp,
+            color = if (isSelected) com.example.ui.theme.DrawerAmber else BorderGray,
+            shape = CircleShape
+          )
+          .background(if (isSelected) com.example.ui.theme.DrawerAmber else PureWhite),
         contentAlignment = Alignment.Center,
       ) {
         if (isSelected) {

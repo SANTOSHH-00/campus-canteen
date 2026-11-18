@@ -30,7 +30,6 @@ async function runQueueTests() {
   await connectDB();
 
   try {
-    // 0. Clean previous test data
     await Order.deleteMany({ canteenId: { $in: [TEST_CANTEEN_A, TEST_CANTEEN_B] } });
     await Canteen.deleteMany({ id: { $in: [TEST_CANTEEN_A, TEST_CANTEEN_B] } });
 
@@ -110,7 +109,6 @@ async function runQueueTests() {
       };
     }
 
-    // ── TEST 1: User A, User B, User C order from Canteen A ────────────────
     console.log('--- TEST 1: Multi-User Shared Queue in Canteen A ---');
     const now = Date.now();
 
@@ -168,7 +166,6 @@ async function runQueueTests() {
     let canteenAStats = await getCanteenQueueStats(TEST_CANTEEN_A);
     assert(canteenAStats.queueCount === 3, 'Canteen A queue depth is 3');
 
-    // ── TEST 2: Order Completion & Queue Position Advancement ──────────────
     console.log('\n--- TEST 2: Complete User A -> B becomes #1, C becomes #2 ---');
     await Order.findOneAndUpdate({ orderId: orderA.orderId }, { $set: { status: 'COMPLETED' } });
 
@@ -190,7 +187,6 @@ async function runQueueTests() {
     assert(qC.ordersAhead === 0, 'User C now has 0 orders ahead');
     assert(qC.estWaitMinutes === 7, 'User C estimated wait is 7 minutes');
 
-    // ── TEST 3: Canteen Isolation (Different Canteens -> Independent Queues) ─
     console.log('\n--- TEST 3: Canteen Isolation (Canteen A vs Canteen B) ---');
     const orderD = await Order.create({
       orderId: 'ORD-TEST-201',
@@ -214,7 +210,6 @@ async function runQueueTests() {
     assert(qC.queuePosition === 1, 'User C in Canteen A remains #1 in Canteen A');
     assert(qC.estWaitMinutes === 7, 'User C wait time in Canteen A unaffected by Canteen B');
 
-    // ── TEST 4: Order Cancellation ─────────────────────────────────────────
     console.log('\n--- TEST 4: Order Cancellation ---');
     const orderE = await Order.create({
       orderId: 'ORD-TEST-104',
@@ -236,7 +231,6 @@ async function runQueueTests() {
     assert(qE.queuePosition === 1, 'User E advances to #1 after User C cancellation');
     assert(qE.ordersAhead === 0, 'User E has 0 orders ahead');
 
-    // ── TEST 5: Ready for Pickup ───────────────────────────────────────────
     console.log('\n--- TEST 5: Ready for Pickup Status ---');
     await Order.findOneAndUpdate({ orderId: orderE.orderId }, { $set: { status: 'READY' } });
     qE = await getOrderQueuePosition(orderE.orderId);
@@ -245,7 +239,6 @@ async function runQueueTests() {
     assert(qE.estWaitMinutes === 0, 'Ready order has estWaitMinutes: 0');
     assert(qE.status === 'READY', 'Ready order status is READY');
 
-    // ── TEST 6: Deterministic Tie-Breaker for Simultaneous Orders ──────────
     console.log('\n--- TEST 6: Deterministic Tie-Breaker for Simultaneous Orders ---');
     const sameTime = new Date();
     await Order.create({

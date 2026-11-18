@@ -213,9 +213,7 @@ async function runTests() {
 
     const baseTime = Date.now();
 
-    // ──────────────────────────────────────────────────────────────────────────
     // Test 1: User A places 4 orders (Burger, Pizza, Burger, Juice)
-    // ──────────────────────────────────────────────────────────────────────────
     console.log('--- Test 1: User A places 4 orders in Canteen A ---');
     const orderA1 = await Order.create({
       orderId: 'ORD-USER-A-1',
@@ -264,9 +262,7 @@ async function runTests() {
 
     assert(activeInCanteenA.length === 4, 'Canteen A has 4 active orders placed by User A');
 
-    // ──────────────────────────────────────────────────────────────────────────
     // Test 2: User B previews Cart for Burger
-    // ──────────────────────────────────────────────────────────────────────────
     console.log('\n--- Test 2: User B previews Cart for Burger ---');
     const mockCartBurger = {
       orderId: 'CART_PREVIEW',
@@ -284,9 +280,7 @@ async function runTests() {
     assert(cartMetrics.queuePosition === 2, 'Cart shows Queue #2 for Burger');
     assert(cartMetrics.workloadSummary === '2 Burger orders ahead', 'Workload summary correctly says "2 Burger orders ahead"');
 
-    // ──────────────────────────────────────────────────────────────────────────
     // Test 3: User B places Order 5 (Burger)
-    // ──────────────────────────────────────────────────────────────────────────
     console.log('\n--- Test 3: User B places Order 5 (Burger) ---');
     const orderB5 = await Order.create({
       orderId: 'ORD-USER-B-5',
@@ -312,9 +306,7 @@ async function runTests() {
     assert(orderBMetrics.primaryItemName === 'Burger', 'Primary item name is Burger');
     assert(orderBMetrics.estimatedCompletionTime.length > 0, 'Estimated completion time is computed');
 
-    // ──────────────────────────────────────────────────────────────────────────
     // Test 4: User C places Pizza (Different Food Item)
-    // ──────────────────────────────────────────────────────────────────────────
     console.log('\n--- Test 4: User C places Pizza (Different Food Item) ---');
     const orderC6 = await Order.create({
       orderId: 'ORD-USER-C-6',
@@ -340,9 +332,7 @@ async function runTests() {
     assert(orderCMetrics.queuePosition === 2, 'User C is #2 in line for Pizza');
     assert(orderCMetrics.workloadSummary === '1 Pizza order ahead', 'Workload summary indicates 1 Pizza order ahead');
 
-    // ──────────────────────────────────────────────────────────────────────────
     // Test 5: Owner completes User A's Order 1 (Burger)
-    // ──────────────────────────────────────────────────────────────────────────
     console.log("\n--- Test 5: Owner marks User A's Order 1 as READY ---");
     await Order.findOneAndUpdate({ orderId: 'ORD-USER-A-1' }, { status: 'READY', readyAt: new Date() });
 
@@ -357,9 +347,7 @@ async function runTests() {
     assert(orderBMetricsAfterA1.similarOrdersAhead === 1, 'User B now has only 1 Burger order ahead (Order A3)');
     assert(orderBMetricsAfterA1.queuePosition === 2, 'User B is still #2 in line behind Order A3');
 
-    // ──────────────────────────────────────────────────────────────────────────
     // Test 6: Owner completes User A's Order 3 (Burger)
-    // ──────────────────────────────────────────────────────────────────────────
     console.log("\n--- Test 6: Owner marks User A's Order 3 as READY ---");
     await Order.findOneAndUpdate({ orderId: 'ORD-USER-A-3' }, { status: 'READY', readyAt: new Date() });
 
@@ -375,9 +363,7 @@ async function runTests() {
     assert(orderBMetricsAfterA3.queuePosition === 1, 'User B is now #1 in line ("You are next in line")');
     assert(orderBMetricsAfterA3.message === 'You are next in line', 'User B message is "You are next in line"');
 
-    // ──────────────────────────────────────────────────────────────────────────
     // Test 7: Canteen Isolation
-    // ──────────────────────────────────────────────────────────────────────────
     console.log('\n--- Test 7: Strict Canteen Isolation ---');
     const orderCanteenB = await Order.create({
       orderId: 'ORD-CANTEEN-B-1',

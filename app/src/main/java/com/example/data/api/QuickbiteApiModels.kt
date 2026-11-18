@@ -1,3 +1,4 @@
+// QuickbiteApiModels: Core utility and helper functions
 package com.example.data.api
 
 import com.example.data.CampusBlockCanteen
@@ -5,6 +6,7 @@ import com.example.data.CartItem
 import com.example.data.CrowdStatus
 import com.example.data.FoodCategory
 import com.example.data.FoodItem
+import com.example.data.FulfillmentType
 import com.example.data.NotificationItem
 import com.example.data.OrderRecord
 import com.example.data.OrderStatus
@@ -31,7 +33,6 @@ fun formatUtcToLocalTime(timestampStr: String?): String {
   if (timestampStr.isNullOrBlank()) return ""
   val trimmed = timestampStr.trim()
 
-  // 1. If it is an ISO timestamp (e.g. 2026-09-12T15:00:00.000Z), parse epoch and convert to IST/device local time
   if (trimmed.contains("T") || trimmed.endsWith("Z", ignoreCase = true)) {
     val epochMillis = parseIsoOrMillisToEpoch(trimmed)
     if (epochMillis > 0) {
@@ -42,12 +43,10 @@ fun formatUtcToLocalTime(timestampStr: String?): String {
     }
   }
 
-  // 2. Exact 12-hour format e.g. "1:00 AM", "01:00 AM", "8:30 PM"
   if (trimmed.matches(Regex("""^\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)$""", RegexOption.IGNORE_CASE))) {
     return trimmed
   }
 
-  // 3. If string contains date and 12-hour time e.g. "12 Sep 2026, 01:00:14 AM" or "01:00:14 AM"
   val timeWithSecondsMatch = Regex("""(\d{1,2}:\d{2}):\d{2}\s*(AM|PM|am|pm)""", RegexOption.IGNORE_CASE).find(trimmed)
   if (timeWithSecondsMatch != null) {
     val h = timeWithSecondsMatch.groupValues[1]
@@ -55,7 +54,6 @@ fun formatUtcToLocalTime(timestampStr: String?): String {
     return "$h $ampm"
   }
 
-  // 4. Check if string contains simple "h:mm a"
   val simpleTimeMatch = Regex("""(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))""", RegexOption.IGNORE_CASE).find(trimmed)
   if (simpleTimeMatch != null) {
     return simpleTimeMatch.groupValues[1]
@@ -79,17 +77,14 @@ fun parseIsoOrMillisToEpoch(timestampStr: String?): Long {
   if (timestampStr.isNullOrBlank()) return 0L
   val trimmed = timestampStr.trim()
 
-  // 1. Direct Epoch Milliseconds
   val asLong = trimmed.toLongOrNull()
   if (asLong != null && asLong > 0) return asLong
 
-  // 2. Embedded in Order ID (e.g. ORD-1726065360000-1234)
   if (trimmed.startsWith("ORD-", ignoreCase = true)) {
     val fromId = extractEpochFromOrderId(trimmed)
     if (fromId > 0) return fromId
   }
 
-  // 3. 12-Hour Local Time (e.g. "8:05 PM" or "Today, 8:05 PM")
   val timeOnly = trimmed.removePrefix("Today,").removePrefix("today,").trim()
   if (timeOnly.matches(Regex("""\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)""", RegexOption.IGNORE_CASE))) {
     try {
@@ -106,7 +101,6 @@ fun parseIsoOrMillisToEpoch(timestampStr: String?): Long {
     } catch (_: Exception) {}
   }
 
-  // 4. Java 8 java.time parsing (handles any ISO-8601 string)
   try {
     return Instant.parse(trimmed).toEpochMilli()
   } catch (_: Exception) {}
@@ -114,7 +108,6 @@ fun parseIsoOrMillisToEpoch(timestampStr: String?): Long {
     return OffsetDateTime.parse(trimmed).toInstant().toEpochMilli()
   } catch (_: Exception) {}
 
-  // 5. Fallback SimpleDateFormat patterns
   val isoPatterns = listOf(
     "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
     "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
@@ -139,8 +132,11 @@ fun parseIsoOrMillisToEpoch(timestampStr: String?): Long {
 @JsonClass(generateAdapter = true)
 data class StatusHistoryDto(
   @Json(name = "status") val status: String = "",
+  @Json(name = "previousStatus") val previousStatus: String? = null,
   @Json(name = "timestamp") val timestamp: String = "",
   @Json(name = "timestampLocal") val timestampLocal: String? = null,
+  @Json(name = "changedBy") val changedBy: String? = null,
+  @Json(name = "changedByRole") val changedByRole: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -215,6 +211,8 @@ data class MongoCanteenDto(
   @Json(name = "icon") val icon: String = "🏢",
   @Json(name = "imageUrl") val imageUrl: String = "",
   @Json(name = "timings") val timings: String = "7:00 AM – 10:00 PM",
+  @Json(name = "packagingCharge") val packagingCharge: Int = 10,
+  @Json(name = "taxRate") val taxRate: Double = 0.05,
 ) {
   fun toCampusBlockCanteen(items: List<FoodItem> = emptyList()): CampusBlockCanteen {
     val quick = items.filter { it.category == FoodCategory.QUICK_ORDER }.ifEmpty { items.filter { it.prepMinutes <= 5 } }
@@ -249,6 +247,8 @@ data class MongoCanteenDto(
       closeReason = closeReason.ifBlank { null },
       imageUrl = imageUrl.ifBlank { null },
       timings = timings.ifBlank { "7:00 AM – 10:00 PM" },
+      packagingCharge = if (packagingCharge >= 0) packagingCharge else 10,
+      taxRatePercent = (taxRate * 100).toInt().coerceIn(0, 28),
     )
   }
 }
@@ -275,6 +275,7 @@ data class MongoItemDto(
   @Json(name = "preparationTime") val preparationTime: String = "5-7 min",
   @Json(name = "prepMinutes") val prepMinutes: Int = 7,
   @Json(name = "rating") val rating: Double = 4.5,
+  @Json(name = "reviewCount") val reviewCount: Int = 0,
   @Json(name = "ingredients") val ingredients: List<String> = emptyList(),
   @Json(name = "customizationTitle") val customizationTitle: String = "",
   @Json(name = "customizationOptions") val customizationOptions: List<String> = emptyList(),
@@ -305,6 +306,7 @@ data class MongoItemDto(
       prepTime = preparationTime,
       prepMinutes = prepMinutes,
       rating = rating,
+      reviewCount = reviewCount,
       category = cat,
       imageLabel = name,
       imageUrl = imageUrl,
@@ -319,6 +321,56 @@ data class MongoItemDto(
     )
   }
 }
+
+@JsonClass(generateAdapter = true)
+data class MongoReviewDto(
+  @Json(name = "id") val id: String = "",
+  @Json(name = "itemId") val itemId: String = "",
+  @Json(name = "canteenId") val canteenId: String = "",
+  @Json(name = "userId") val userId: String = "",
+  @Json(name = "userName") val userName: String = "",
+  @Json(name = "rating") val rating: Double = 5.0,
+  @Json(name = "comment") val comment: String = "",
+  @Json(name = "createdAt") val createdAt: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ItemReviewsResponseDto(
+  @Json(name = "itemId") val itemId: String = "",
+  @Json(name = "averageRating") val averageRating: Double = 4.5,
+  @Json(name = "totalReviews") val totalReviews: Int = 0,
+  @Json(name = "reviews") val reviews: List<MongoReviewDto> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class CreateReviewRequestDto(
+  @Json(name = "rating") val rating: Double,
+  @Json(name = "comment") val comment: String,
+  @Json(name = "userName") val userName: String,
+  @Json(name = "userId") val userId: String = "",
+  @Json(name = "canteenId") val canteenId: String = "",
+)
+
+@JsonClass(generateAdapter = true)
+data class CreateReviewResponseDto(
+  @Json(name = "success") val success: Boolean = true,
+  @Json(name = "averageRating") val averageRating: Double = 4.5,
+  @Json(name = "totalReviews") val totalReviews: Int = 0,
+  @Json(name = "review") val review: MongoReviewDto? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class GenerateDescriptionRequestDto(
+  @Json(name = "name") val name: String,
+  @Json(name = "category") val category: String = "",
+  @Json(name = "ingredients") val ingredients: List<String> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class GenerateDescriptionResponseDto(
+  @Json(name = "description") val description: String = "",
+  @Json(name = "modelUsed") val modelUsed: String = "",
+)
 
 @JsonClass(generateAdapter = true)
 data class MongoOrderItemDto(
@@ -338,11 +390,16 @@ data class MongoOrderDto(
   @Json(name = "studentName") val studentName: String = "",
   @Json(name = "studentPhone") val studentPhone: String = "",
   @Json(name = "studentCourse") val studentCourse: String = "",
+  @Json(name = "studentRollNumber") val studentRollNumber: String? = null,
   @Json(name = "canteenId") val canteenId: String = "",
   @Json(name = "items") val items: List<MongoOrderItemDto> = emptyList(),
   @Json(name = "totalAmount") val totalAmount: Int = 0,
   @Json(name = "status") val status: String = "PREPARING",
   @Json(name = "paymentStatus") val paymentStatus: String = "PAID",
+  @Json(name = "paymentMethod") val paymentMethod: String? = "RAZORPAY",
+  @Json(name = "razorpayOrderId") val razorpayOrderId: String? = null,
+  @Json(name = "razorpayPaymentId") val razorpayPaymentId: String? = null,
+  @Json(name = "razorpaySignature") val razorpaySignature: String? = null,
   @Json(name = "tokenNumber") val tokenNumber: String = "",
   @Json(name = "pickupPreference") val pickupPreference: String = "Pickup ASAP",
   @Json(name = "pickupCanteenName") val pickupCanteenName: String = "",
@@ -376,14 +433,29 @@ data class MongoOrderDto(
   @Json(name = "collectedAt") val collectedAt: String? = null,
   @Json(name = "collectedBy") val collectedBy: String? = null,
   @Json(name = "verificationExpiresAt") val verificationExpiresAt: String? = null,
+  @Json(name = "rejectionReason") val rejectionReason: String? = null,
+  @Json(name = "rejectedAt") val rejectedAt: String? = null,
+  @Json(name = "acceptedAt") val acceptedAt: String? = null,
+  @Json(name = "refundStatus") val refundStatus: String? = null,
+  @Json(name = "fulfillmentType") val fulfillmentType: String? = "TAKEAWAY",
+  @Json(name = "itemsSubtotal") val itemsSubtotal: Int = 0,
+  @Json(name = "packagingCharge") val packagingCharge: Int = 0,
+  @Json(name = "taxAmount") val taxAmount: Int = 0,
+  @Json(name = "isScheduled") val isScheduled: Boolean = false,
+  @Json(name = "scheduledPickupTime") val scheduledPickupTime: String? = null,
   @Json(name = "statusHistory") val statusHistory: List<StatusHistoryDto> = emptyList(),
 ) {
   fun toOrderRecord(): OrderRecord {
-    val parsedStatus = when (status.uppercase()) {
-      "NEW" -> OrderStatus.NEW
+    val parsedStatus = when (status.uppercase().trim()) {
+      "PENDING", "WAITING", "ORDER_PLACED" -> OrderStatus.PENDING
+      "NEW" -> OrderStatus.PENDING
+      "ACCEPTED", "CONFIRMED" -> OrderStatus.ACCEPTED
+      "PREPARING" -> OrderStatus.PREPARING
       "READY" -> OrderStatus.READY
-      "COMPLETED", "PICKED_UP" -> OrderStatus.COMPLETED
-      else -> OrderStatus.PREPARING
+      "COMPLETED", "PICKED_UP", "COLLECTED" -> OrderStatus.COMPLETED
+      "CANCELLED" -> OrderStatus.CANCELLED
+      "REJECTED" -> OrderStatus.REJECTED
+      else -> OrderStatus.PENDING
     }
 
     val cartItems = items.map { itemDto ->
@@ -409,7 +481,11 @@ data class MongoOrderDto(
         if (fallbackEpoch > 0) SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(fallbackEpoch)) else ""
       }
     val confirmedLocalTime = confirmedAtLocal?.ifBlank { null }
-      ?: formatUtcToLocalTime(confirmedAt).ifBlank { placedLocalTime }
+      ?: formatUtcToLocalTime(confirmedAt)
+    val acceptedLocalTime = acceptedAt?.ifBlank { null }
+      ?: statusHistory.find { it.status.equals("ACCEPTED", ignoreCase = true) }?.let {
+        it.timestampLocal?.ifBlank { null } ?: formatUtcToLocalTime(it.timestamp)
+      } ?: confirmedLocalTime
     val preparingLocalTime = preparingAtLocal?.ifBlank { null }
       ?: formatUtcToLocalTime(preparingAt).ifBlank {
         statusHistory.find { it.status.equals("PREPARING", ignoreCase = true) }?.let {
@@ -443,6 +519,12 @@ data class MongoOrderDto(
     val effectiveOrderDate = orderDate?.ifBlank { null }
       ?: if (placedEpoch > 0) SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(placedEpoch)) else ""
 
+    val parsedFulfillment = if (fulfillmentType?.equals("DINE_IN", ignoreCase = true) == true) {
+      FulfillmentType.DINE_IN
+    } else {
+      FulfillmentType.TAKEAWAY
+    }
+
     return OrderRecord(
       id = orderId,
       tokenNumber = tokenNumber.ifBlank { "042" },
@@ -463,6 +545,16 @@ data class MongoOrderDto(
       preparingAt = preparingLocalTime,
       readyAt = readyLocalTime,
       completedAt = completedLocalTime,
+      acceptedAt = acceptedLocalTime,
+      rejectedAt = rejectedAt ?: "",
+      rejectionReason = rejectionReason ?: "",
+      refundStatus = refundStatus ?: "",
+      fulfillmentType = parsedFulfillment,
+      packagingCharge = packagingCharge,
+      taxAmount = taxAmount,
+      itemsSubtotal = itemsSubtotal,
+      isScheduled = isScheduled || (effectiveCustomerPickup.isNotBlank() && !effectiveCustomerPickup.contains("ASAP", ignoreCase = true)),
+      scheduledPickupTime = scheduledPickupTime ?: effectiveCustomerPickup,
       placedEpoch = placedEpoch,
       orderDate = effectiveOrderDate,
     )
@@ -587,6 +679,12 @@ data class StockUpdateDto(
 )
 
 @JsonClass(generateAdapter = true)
+data class AvailabilityUpdateDto(
+  @Json(name = "available") val available: Boolean,
+  @Json(name = "canteenId") val canteenId: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
 data class InventoryQuantityDto(
   @Json(name = "quantity") val quantity: Double,
 )
@@ -596,7 +694,6 @@ data class FcmTokenDto(
   @Json(name = "fcmToken") val fcmToken: String,
 )
 
-// ── Auth DTOs ─────────────────────────────────────────────────────────────
 @JsonClass(generateAdapter = true)
 data class LoginRequestDto(
   @Json(name = "email") val email: String,
@@ -645,7 +742,6 @@ data class SimpleMessageResponseDto(
   @Json(name = "error") val error: String? = null,
 )
 
-// ── Owner Auth DTOs ───────────────────────────────────────────────────────
 @JsonClass(generateAdapter = true)
 data class OwnerLoginRequestDto(
   @Json(name = "email") val email: String,
@@ -789,7 +885,6 @@ data class UserFavoritesResponseDto(
   @Json(name = "favorites") val favorites: List<String> = emptyList(),
 )
 
-// ── QR Code Verification Models ─────────────────────────────────────────────
 
 @JsonClass(generateAdapter = true)
 data class OrderQrResponseDto(
@@ -827,7 +922,6 @@ data class VerifyQrResponseDto(
   @Json(name = "currentStatus") val currentStatus: String? = null,
 )
 
-// ── Code 128 Barcode Verification Models ───────────────────────────────────
 
 @JsonClass(generateAdapter = true)
 data class OrderBarcodeResponseDto(
@@ -866,11 +960,14 @@ data class VerifyBarcodeResponseDto(
   @Json(name = "success") val success: Boolean = false,
   @Json(name = "code") val code: String? = null,
   @Json(name = "message") val message: String? = null,
+  @Json(name = "statusMessage") val statusMessage: String? = null,
+  @Json(name = "eligibleForPickup") val eligibleForPickup: Boolean = false,
   @Json(name = "order") val order: MongoOrderDto? = null,
   @Json(name = "error") val error: String? = null,
   @Json(name = "currentStatus") val currentStatus: String? = null,
   @Json(name = "collectedAt") val collectedAt: String? = null,
   @Json(name = "collectedAtLocal") val collectedAtLocal: String? = null,
+  @Json(name = "collectedBy") val collectedBy: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -888,7 +985,6 @@ data class ConfirmPickupResponseDto(
   @Json(name = "error") val error: String? = null,
 )
 
-// ── Gemini AI Assistant DTOs ──────────────────────────────────────────────────
 @JsonClass(generateAdapter = true)
 data class AiChatMessageDto(
   @Json(name = "role") val role: String,
@@ -925,6 +1021,10 @@ data class AiTrackedOrderDto(
   @Json(name = "canteenName") val canteenName: String = "",
   @Json(name = "status") val status: String = "",
   @Json(name = "paymentStatus") val paymentStatus: String = "PAID",
+  @Json(name = "paymentMethod") val paymentMethod: String? = "RAZORPAY",
+  @Json(name = "razorpayOrderId") val razorpayOrderId: String? = null,
+  @Json(name = "razorpayPaymentId") val razorpayPaymentId: String? = null,
+  @Json(name = "razorpaySignature") val razorpaySignature: String? = null,
   @Json(name = "totalAmount") val totalAmount: Double = 0.0,
   @Json(name = "orderDate") val orderDate: String = "",
   @Json(name = "estimatedReadyTime") val estimatedReadyTime: String = "",
@@ -1026,6 +1126,50 @@ data class UpdateSuggestionStatusRequestDto(
   @Json(name = "status") val status: String,
   @Json(name = "ownerNote") val ownerNote: String? = null,
 )
+
+@JsonClass(generateAdapter = true)
+data class PaymentConfigResponseDto(
+  @Json(name = "success") val success: Boolean = false,
+  @Json(name = "isEnabled") val isEnabled: Boolean = false,
+  @Json(name = "keyId") val keyId: String = "",
+  @Json(name = "currency") val currency: String = "INR",
+)
+
+@JsonClass(generateAdapter = true)
+data class CreatePaymentOrderRequestDto(
+  @Json(name = "amount") val amount: Double,
+  @Json(name = "canteenId") val canteenId: String = "",
+  @Json(name = "orderId") val orderId: String? = null,
+  @Json(name = "fulfillmentType") val fulfillmentType: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class CreatePaymentOrderResponseDto(
+  @Json(name = "success") val success: Boolean = false,
+  @Json(name = "simulation") val simulation: Boolean = false,
+  @Json(name = "razorpayOrderId") val razorpayOrderId: String = "",
+  @Json(name = "amount") val amount: Int = 0,
+  @Json(name = "currency") val currency: String = "INR",
+  @Json(name = "keyId") val keyId: String = "",
+  @Json(name = "message") val message: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class VerifyPaymentRequestDto(
+  @Json(name = "razorpay_order_id") val razorpayOrderId: String,
+  @Json(name = "razorpay_payment_id") val razorpayPaymentId: String,
+  @Json(name = "razorpay_signature") val razorpaySignature: String = "",
+  @Json(name = "orderId") val orderId: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class VerifyPaymentResponseDto(
+  @Json(name = "success") val success: Boolean = false,
+  @Json(name = "simulation") val simulation: Boolean = false,
+  @Json(name = "message") val message: String = "",
+  @Json(name = "paymentId") val paymentId: String? = null,
+)
+
 
 
 

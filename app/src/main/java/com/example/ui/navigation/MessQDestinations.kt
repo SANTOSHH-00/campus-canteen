@@ -1,3 +1,4 @@
+// MessQDestinations: Navigation component defining application routes and screen transitions
 package com.example.ui.navigation
 
 object MessQDestinations {

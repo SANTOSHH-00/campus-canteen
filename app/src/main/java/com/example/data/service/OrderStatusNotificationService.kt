@@ -1,3 +1,4 @@
+// OrderStatusNotificationService: Background service handling order lifecycle notifications and background synchronization
 package com.example.data.service
 
 import android.app.Notification
@@ -54,6 +55,7 @@ class OrderStatusNotificationService : Service() {
       canteenName: String = "",
       block: String = "",
     ) {
+      if (!SessionManager.isStudentLoggedIn()) return
       try {
         val intent = Intent(context, OrderStatusNotificationService::class.java).apply {
           putExtra(EXTRA_ORDER_ID, orderId)
@@ -193,7 +195,6 @@ class OrderStatusNotificationService : Service() {
   private fun startTracking() {
     monitorJob?.cancel()
     monitorJob = serviceScope.launch {
-      // 1. Connect WebSocket and subscribe to order and student channels
       try {
         WebSocketManager.connect()
         WebSocketManager.subscribe("order:$currentOrderId")
@@ -207,7 +208,6 @@ class OrderStatusNotificationService : Service() {
         Log.w(TAG, "WebSocket subscription error: ${e.message}")
       }
 
-      // 2. Real-time WebSocket listener
       val wsCollector = launch {
         WebSocketManager.orderUpdates.collect { updatedDto ->
           if (updatedDto.orderId == currentOrderId || updatedDto.tokenNumber == currentToken) {
@@ -216,7 +216,6 @@ class OrderStatusNotificationService : Service() {
         }
       }
 
-      // 3. Fallback active polling loop (every 4 seconds) to guarantee delivery even if WebSocket reconnects
       val pollingLoop = launch {
         while (isActive) {
           try {

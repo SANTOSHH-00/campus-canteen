@@ -1,3 +1,4 @@
+// Food Item Cards: Jetpack Compose cards displaying food dishes, vegetarian tags, prices, and cart controls
 package com.example.ui.components
 
 import android.graphics.BitmapFactory
@@ -38,7 +39,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -68,6 +72,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,6 +84,7 @@ import com.example.ui.theme.CardSurface
 import com.example.ui.theme.DeliveryOrange
 import com.example.ui.theme.DeliveryOrangeLight
 import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberDark
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.RatingStarYellow
 import com.example.ui.theme.SoftGray
@@ -159,25 +165,30 @@ fun FoodImagePlaceholder(
       val imageRequest = remember(imageUrl) {
         coil.request.ImageRequest.Builder(context)
           .data(imageUrl)
-          .crossfade(200)
+          .crossfade(150)
+          .allowHardware(true)
           .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
           .diskCachePolicy(coil.request.CachePolicy.ENABLED)
           .build()
       }
-      // Underlying fallback view
-      FallbackFoodCardView(itemName = itemName, compact = compact)
+
+      var isLoaded by remember(imageUrl) { mutableStateOf(false) }
+
+      if (!isLoaded) {
+        FallbackFoodCardView(itemName = itemName, compact = compact)
+      }
 
       AsyncImage(
         model = imageRequest,
         contentDescription = itemName,
         contentScale = ContentScale.Crop,
+        onSuccess = { isLoaded = true },
         modifier = Modifier.fillMaxSize(),
       )
     } else {
       FallbackFoodCardView(itemName = itemName, compact = compact)
     }
 
-    // Top Right Rating Badge (for Popular items)
     if (rating != null) {
       Box(
         modifier = Modifier
@@ -283,7 +294,6 @@ fun FeaturedSpecialBannerCard(
 
   val pagerState = rememberPagerState(pageCount = { slides.size })
 
-  // Auto-advance smoothly every 3.8 seconds without interrupting user gestures
   LaunchedEffect(pagerState) {
     while (true) {
       delay(3800)
@@ -305,13 +315,11 @@ fun FeaturedSpecialBannerCard(
   ) { pageIndex ->
     val slide = slides[pageIndex]
 
-    // Elegant depth transition effect: smooth scale & alpha based on page offset
-    val pageOffset = ((pagerState.currentPage - pageIndex) + pagerState.currentPageOffsetFraction).absoluteValue
-
     Card(
       modifier = Modifier
         .fillMaxWidth()
         .graphicsLayer {
+          val pageOffset = ((pagerState.currentPage - pageIndex) + pagerState.currentPageOffsetFraction).absoluteValue
           val pageScale = lerp(0.96f, 1.0f, 1f - pageOffset.coerceIn(0f, 1f))
           val pageAlpha = lerp(0.80f, 1.0f, 1f - pageOffset.coerceIn(0f, 1f))
           scaleX = pageScale
@@ -334,7 +342,6 @@ fun FeaturedSpecialBannerCard(
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically,
         ) {
-          // Left Column: Text and CTA
           Column(
             modifier = Modifier
               .weight(1.15f)
@@ -373,7 +380,6 @@ fun FeaturedSpecialBannerCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Amber Pill Button
             Row(
               modifier = Modifier
                 .clip(RoundedCornerShape(20.dp))
@@ -407,7 +413,6 @@ fun FeaturedSpecialBannerCard(
             }
           }
 
-          // Right Column: Food Image Preview (Enlarged box)
           Box(
             modifier = Modifier
               .weight(0.88f)
@@ -429,7 +434,6 @@ fun FeaturedSpecialBannerCard(
           }
         }
 
-        // Bottom Center: Dynamic 4 Pagination Dots that sync with pagerState!
         Row(
           modifier = Modifier
             .align(Alignment.BottomCenter)
@@ -478,7 +482,6 @@ fun QuickOrderCard(
     Column(
       modifier = Modifier.fillMaxSize(),
     ) {
-      // Top: Big Image Placeholder
       Box(
         modifier = Modifier
           .fillMaxWidth()
@@ -492,7 +495,6 @@ fun QuickOrderCard(
             .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)),
         )
 
-        // Top-left Prep Badge
         Box(
           modifier = Modifier
             .align(Alignment.TopStart)
@@ -519,7 +521,6 @@ fun QuickOrderCard(
         }
       }
 
-      // Bottom Content: Name, Description, Price and Circular '+' Add Button
       Column(
         modifier = Modifier
           .fillMaxSize()
@@ -536,6 +537,18 @@ fun QuickOrderCard(
             overflow = TextOverflow.Ellipsis,
           )
 
+          if (foodItem.displaySubtitle.isNotBlank()) {
+            Spacer(modifier = Modifier.height(1.dp))
+            Text(
+              text = foodItem.displaySubtitle,
+              fontSize = 11.sp,
+              fontWeight = FontWeight.Medium,
+              color = DrawerAmberDark,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+            )
+          }
+
           Spacer(modifier = Modifier.height(2.dp))
 
           val desc = foodItem.description.ifBlank {
@@ -548,10 +561,9 @@ fun QuickOrderCard(
             fontSize = 11.5.sp,
             fontWeight = FontWeight.Medium,
             color = TextMuted,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             lineHeight = 15.sp,
-            modifier = Modifier.height(30.dp),
           )
         }
 
@@ -560,14 +572,24 @@ fun QuickOrderCard(
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically,
         ) {
-          Text(
-            text = "₹${foodItem.price}",
-            fontSize = 17.sp,
-            fontWeight = FontWeight.Black,
-            color = BlackPrimary,
-          )
+          Column {
+            if (foodItem.originalPrice != null && foodItem.originalPrice > foodItem.price) {
+              Text(
+                text = "₹${foodItem.originalPrice}",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextMuted,
+                textDecoration = TextDecoration.LineThrough,
+              )
+            }
+            Text(
+              text = "₹${foodItem.price}",
+              fontSize = 17.sp,
+              fontWeight = FontWeight.Black,
+              color = BlackPrimary,
+            )
+          }
 
-          // Circular Amber '+' Button (identical to popular card)
           Box(
             modifier = Modifier
               .size(36.dp)
@@ -622,11 +644,10 @@ fun PopularCard(
     Column(
       modifier = Modifier.fillMaxWidth(),
     ) {
-      // Top: Big Image Placeholder with Badges
       Box(
         modifier = Modifier
           .fillMaxWidth()
-          .height(185.dp),
+          .height(220.dp),
       ) {
         FoodImagePlaceholder(
           itemName = foodItem.name,
@@ -636,7 +657,6 @@ fun PopularCard(
             .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)),
         )
 
-        // Top-left: Category Badge (BESTSELLER / CHEF'S PICK / POPULAR)
         Box(
           modifier = Modifier
             .align(Alignment.TopStart)
@@ -654,36 +674,8 @@ fun PopularCard(
             letterSpacing = 0.5.sp,
           )
         }
-
-        // Top-right: Star Rating
-        Box(
-          modifier = Modifier
-            .align(Alignment.TopEnd)
-            .padding(10.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(PureWhite)
-            .border(1.dp, BorderGray, RoundedCornerShape(10.dp))
-            .padding(horizontal = 7.dp, vertical = 3.dp),
-        ) {
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-              imageVector = Icons.Default.Star,
-              contentDescription = "Rating",
-              tint = RatingStarYellow,
-              modifier = Modifier.size(13.dp),
-            )
-            Spacer(modifier = Modifier.width(3.dp))
-            Text(
-              text = "${foodItem.rating ?: 4.8}",
-              fontSize = 12.sp,
-              fontWeight = FontWeight.ExtraBold,
-              color = BlackPrimary,
-            )
-          }
-        }
       }
 
-      // Bottom Content: Name, Description, Orders Count, Price and Circular '+' Add Button
       Column(
         modifier = Modifier
           .fillMaxWidth()
@@ -715,24 +707,31 @@ fun PopularCard(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // Rating and orders count text
+        val rawOrders = foodItem.ordersCount.trim()
+        val formattedOrders = when {
+          rawOrders.isBlank() -> "1.2k orders"
+          rawOrders.endsWith("orders", ignoreCase = true) -> rawOrders
+          rawOrders.endsWith("order", ignoreCase = true) -> rawOrders
+          else -> "$rawOrders orders"
+        }
+
         Row(verticalAlignment = Alignment.CenterVertically) {
           Icon(
             imageVector = Icons.Default.Star,
             contentDescription = null,
             tint = RatingStarYellow,
-            modifier = Modifier.size(12.dp),
+            modifier = Modifier.size(13.dp),
           )
           Spacer(modifier = Modifier.width(3.dp))
           Text(
             text = "${foodItem.rating ?: 4.8}",
-            fontSize = 11.5.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.ExtraBold,
             color = BlackPrimary,
           )
           Text(
-            text = " (${foodItem.ordersCount.ifBlank { "1.2K+" }} orders)",
-            fontSize = 11.sp,
+            text = " • $formattedOrders",
+            fontSize = 11.5.sp,
             fontWeight = FontWeight.Medium,
             color = TextMuted,
           )
@@ -745,14 +744,24 @@ fun PopularCard(
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically,
         ) {
-          Text(
-            text = "₹${foodItem.price}",
-            fontSize = 17.5.sp,
-            fontWeight = FontWeight.Black,
-            color = BlackPrimary,
-          )
+          Column {
+            if (foodItem.originalPrice != null && foodItem.originalPrice > foodItem.price) {
+              Text(
+                text = "₹${foodItem.originalPrice}",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextMuted,
+                textDecoration = TextDecoration.LineThrough,
+              )
+            }
+            Text(
+              text = "₹${foodItem.price}",
+              fontSize = 17.5.sp,
+              fontWeight = FontWeight.Black,
+              color = BlackPrimary,
+            )
+          }
 
-          // Circular Amber '+' Button (identical to quick order card)
           Box(
             modifier = Modifier
               .size(36.dp)
@@ -803,7 +812,6 @@ fun ReadyIn10Card(
         .padding(10.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      // Enlarged Image Area (Prominent & Easy to Identify)
       FoodImagePlaceholder(
         itemName = foodItem.name,
         imageUrl = foodItem.imageUrl,
@@ -815,7 +823,6 @@ fun ReadyIn10Card(
 
       Spacer(modifier = Modifier.width(12.dp))
 
-      // Details Column
       Column(
         modifier = Modifier
           .weight(1f)
@@ -857,7 +864,6 @@ fun ReadyIn10Card(
 
       Spacer(modifier = Modifier.width(8.dp))
 
-      // Amber '+' Button
       Box(
         modifier = Modifier
           .size(34.dp)
@@ -909,7 +915,6 @@ fun YourUsualBanner(
         .background(PureWhite)
         .padding(horizontal = 15.dp, vertical = 13.dp),
     ) {
-      // Top Row: Badge + Frequency + Cross (X) icon to minimize
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -954,7 +959,6 @@ fun YourUsualBanner(
           }
         }
 
-        // Cross (X) Icon to Minimize / Dismiss
         Box(
           modifier = Modifier
             .size(26.dp)
@@ -974,7 +978,6 @@ fun YourUsualBanner(
 
       Spacer(modifier = Modifier.height(11.dp))
 
-      // Bottom Row: Food Info + Price + Reorder Button
       Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -986,6 +989,7 @@ fun YourUsualBanner(
         ) {
           FoodImagePlaceholder(
             itemName = itemName,
+            imageUrl = usualInfo?.foodItem?.imageUrl ?: "",
             compact = true,
             modifier = Modifier.size(44.dp),
           )
@@ -1011,7 +1015,6 @@ fun YourUsualBanner(
 
         Spacer(modifier = Modifier.width(10.dp))
 
-        // High-contrast Black Reorder Button matching Dashboard theme
         Box(
           modifier = Modifier
             .clip(RoundedCornerShape(12.dp))

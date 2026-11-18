@@ -1,3 +1,4 @@
+// FirestoreRepository: Repository managing data synchronization between remote API and local storage
 package com.example.data.firebase
 
 import android.util.Log
@@ -17,7 +18,6 @@ open class FirestoreRepository(
 ) {
   private val TAG = "FirestoreRepository"
 
-  // ── 1. Users ────────────────────────────────────────────────────────────────
   suspend fun saveUser(user: UserDocument): Result<Unit> {
     return mongoRepo.saveUser(user.toMongoDto()).map { }
   }
@@ -26,7 +26,6 @@ open class FirestoreRepository(
     return mongoRepo.updateUserFcmToken(userId, token)
   }
 
-  // ── 2. Owners ───────────────────────────────────────────────────────────────
   suspend fun saveOwner(owner: OwnerDocument): Result<Unit> {
     return mongoRepo.saveOwner(owner.toMongoDto()).map { }
   }
@@ -35,9 +34,20 @@ open class FirestoreRepository(
     return mongoRepo.getOwner(uid).map { it.toDocument() }
   }
 
-  // ── 3. Canteens ─────────────────────────────────────────────────────────────
   fun observeCanteens(): Flow<List<CanteenDocument>> {
     return mongoRepo.observeCanteens()
+  }
+
+  suspend fun fetchFreshCanteens(): Result<List<CanteenDocument>> {
+    return mongoRepo.fetchFreshCanteens()
+  }
+
+  suspend fun fetchFreshItems(canteenId: String): Result<List<ItemDocument>> {
+    return mongoRepo.fetchFreshItems(canteenId)
+  }
+
+  suspend fun fetchFreshStudentOrders(studentId: String): Result<List<OrderDocument>> {
+    return mongoRepo.fetchFreshStudentOrders(studentId)
   }
 
   suspend fun getCanteen(canteenId: String): Result<CanteenDocument> {
@@ -66,7 +76,6 @@ open class FirestoreRepository(
     return mongoRepo.updateCanteenProfile(canteenId, imageUrl, timings, isOpen, closeReason)
   }
 
-  // ── 4. Items ────────────────────────────────────────────────────────────────
   open fun observeItems(canteenId: String): Flow<List<ItemDocument>> {
     return mongoRepo.observeItems(canteenId)
   }
@@ -83,7 +92,10 @@ open class FirestoreRepository(
     return mongoRepo.updateItemStock(itemId, available, stock)
   }
 
-  // ── 5. Orders ───────────────────────────────────────────────────────────────
+  open suspend fun updateItemAvailability(itemId: String, canteenId: String, available: Boolean): Result<Unit> {
+    return mongoRepo.updateItemAvailability(itemId, canteenId, available)
+  }
+
   open fun observeStudentOrders(studentId: String): Flow<List<OrderDocument>> {
     return mongoRepo.observeStudentOrders(studentId)
   }
@@ -96,12 +108,28 @@ open class FirestoreRepository(
     return mongoRepo.observeOrder(orderId)
   }
 
+  open suspend fun createPaymentOrder(amount: Double, canteenId: String, orderId: String? = null, fulfillmentType: String? = null) =
+    mongoRepo.createPaymentOrder(amount, canteenId, orderId, fulfillmentType)
+
+  open suspend fun verifyPayment(razorpayOrderId: String, razorpayPaymentId: String, razorpaySignature: String, orderId: String? = null) =
+    mongoRepo.verifyPayment(razorpayOrderId, razorpayPaymentId, razorpaySignature, orderId)
+
+  open suspend fun getPaymentConfig() = mongoRepo.getPaymentConfig()
+
   open suspend fun createOrder(order: OrderDocument): Result<String> {
     return mongoRepo.createOrder(order.toMongoDto()).map { it.orderId }
   }
 
   open suspend fun updateOrderStatus(orderId: String, status: String): Result<Unit> {
     return mongoRepo.updateOrderStatus(orderId, status)
+  }
+
+  open suspend fun acceptOrder(orderId: String): Result<com.example.data.api.MongoOrderDto> {
+    return mongoRepo.acceptOrder(orderId)
+  }
+
+  open suspend fun rejectOrder(orderId: String, reason: String): Result<com.example.data.api.MongoOrderDto> {
+    return mongoRepo.rejectOrder(orderId, reason)
   }
 
   open suspend fun getOrderQr(orderId: String): Result<com.example.data.api.OrderQrResponseDto> {
@@ -112,7 +140,6 @@ open class FirestoreRepository(
     return mongoRepo.verifyQrCode(token, ownerToken)
   }
 
-  // ── 6. Notifications ────────────────────────────────────────────────────────
   fun observeUserNotifications(userId: String): Flow<List<NotificationDocument>> {
     return mongoRepo.observeUserNotifications(userId)
   }

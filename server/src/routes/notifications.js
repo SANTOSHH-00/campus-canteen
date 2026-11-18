@@ -1,3 +1,4 @@
+// Notification Routes: User notifications retrieval and read-state management
 const express = require('express');
 const router = express.Router();
 const Notification = require('../models/Notification');
@@ -5,6 +6,10 @@ const Notification = require('../models/Notification');
 // GET /api/notifications/user/:userId - List notifications
 router.get('/user/:userId', async (req, res) => {
   try {
+    const rawUid = (req.params.userId || '').toLowerCase().trim();
+    if (!rawUid || rawUid === 'guest' || rawUid.includes('guest')) {
+      return res.json([]);
+    }
     const notifs = await Notification.find({ userId: req.params.userId })
       .sort({ createdAt: -1 })
       .lean();

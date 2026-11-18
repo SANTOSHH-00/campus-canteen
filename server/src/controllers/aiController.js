@@ -1,9 +1,4 @@
-/**
- * AI Controller for QuickBite Assistant (MunchMate)
- * Coordinates authentication, context generation, Gemini AI streaming interaction,
- * and user feedback collection (thumbs-up / thumbs-down) in MongoDB.
- */
-
+// AI Controller: Handles conversational queries via Gemini LLM with RAG context, streaming SSE, and user feedback
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const uuidv4 = () => crypto.randomUUID();
@@ -13,15 +8,13 @@ const AiFeedback = require('../models/AiFeedback');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'quickbite-super-secure-jwt-secret-key-2026';
 
-/**
- * Extracts and verifies authenticated student from request.
- * Reads JWT token if present, and extracts studentId, studentEmail, registrationNumber, and name.
- */
+// Extracts and validates student identity from JWT Bearer token with fallback to guest
 function extractStudent(req) {
   let studentId = null;
   let studentEmail = '';
   let registrationNumber = '';
   let studentName = '';
+  let isAuthenticated = false;
 
   const authHeader = req.headers['authorization'];
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -32,33 +25,21 @@ function extractStudent(req) {
       studentEmail = decoded.email || '';
       registrationNumber = decoded.registrationNumber || '';
       studentName = decoded.name || '';
+      isAuthenticated = true;
     } catch (e) {
-      // Token invalid / expired
+      isAuthenticated = false;
     }
   }
 
-  // Fallback to explicit client headers or body fields
-  if (!studentId || studentId === 'guest_student') {
-    studentId = req.headers['x-student-id'] || req.headers['x-student-reg'] || req.body?.studentId || 'guest_student';
-  }
-  if (!studentEmail) {
-    studentEmail = req.headers['x-student-email'] || req.body?.studentEmail || '';
-  }
-  if (!registrationNumber) {
-    registrationNumber = req.headers['x-student-reg'] || req.body?.registrationNumber || req.body?.studentRegNumber || '';
-  }
-  if (!studentName) {
-    studentName = req.headers['x-student-name'] || req.body?.studentName || '';
+  if (!isAuthenticated) {
+    studentId = 'guest_student';
+    studentName = req.headers['x-student-name'] || req.body?.studentName || 'Student';
   }
 
-  return { studentId, studentEmail, registrationNumber, studentName };
+  return { studentId, studentEmail, registrationNumber, studentName, isAuthenticated };
 }
 
-/**
- * Handles incoming chat messages with token/chunk STREAMING over Server-Sent Events (SSE).
- * Target response time: ~5s total, first chunk in 1-2s.
- * POST /api/ai/stream
- */
+// Real-Time SSE Stream: Streams AI response tokens alongside contextual recommendations over Server-Sent Events
 async function handleChatStream(req, res) {
   const startTime = Date.now();
   try {
@@ -68,16 +49,21 @@ async function handleChatStream(req, res) {
       return res.status(400).json({ success: false, error: 'Message text is required.' });
     }
 
-    // Set SSE headers
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // Disable proxy buffering (Nginx, Render)
+    res.setHeader('X-Accel-Buffering', 'no');
     if (res.flushHeaders) res.flushHeaders();
 
-    const { studentId, studentEmail, registrationNumber, studentName } = extractStudent(req);
+    const { studentId, studentEmail, registrationNumber, studentName, isAuthenticated } = extractStudent(req);
 
-    // 1. Build verified MongoDB facts (fast parallel + cached)
+    const authenticatedStudent = { studentId, studentEmail, registrationNumber, studentName, isAuthenticated };
+    const requestContext = {
+      selectedCanteenId: canteenId || '',
+      cartItems: req.body?.cartItems || req.body?.cart || [],
+      cartCanteenId: req.body?.cartCanteenId || canteenId || '',
+    };
+
     const contextStartTime = Date.now();
     const { contextText, recommendedItems, activeOrders, trackedOrder, greetingData } = await buildAiContext({
       studentId,
@@ -88,10 +74,8 @@ async function handleChatStream(req, res) {
       selectedCanteenId: canteenId || '',
     });
     const contextDuration = Date.now() - contextStartTime;
-
     const messageId = uuidv4();
 
-    // 2. Emit initial metadata immediately so client can render order cards / items
     const metaPayload = {
       type: 'meta',
       messageId,
@@ -103,7 +87,6 @@ async function handleChatStream(req, res) {
     };
     res.write(`data: ${JSON.stringify(metaPayload)}\n\n`);
 
-    // 3. Stream Gemini response chunks
     let firstTokenTime = null;
     let fullReply = '';
 
@@ -111,6 +94,8 @@ async function handleChatStream(req, res) {
       userMessage: message.trim(),
       verifiedContext: contextText,
       conversationHistory: conversationHistory || [],
+      authenticatedStudent,
+      requestContext,
       onChunk: (chunk) => {
         if (!firstTokenTime) {
           firstTokenTime = Date.now() - startTime;
@@ -123,12 +108,12 @@ async function handleChatStream(req, res) {
     const suggestions = generateContextualSuggestions(message, activeOrders);
     const totalDuration = Date.now() - startTime;
 
-    // 4. Emit done event
     const donePayload = {
       type: 'done',
       messageId,
       fullReply: fullReply || streamResult.reply,
       modelUsed: streamResult.modelUsed,
+      toolCallsExecuted: streamResult.toolCallsExecuted || [],
       suggestions,
       firstTokenMs: firstTokenTime || totalDuration,
       totalDurationMs: totalDuration,
@@ -145,10 +130,7 @@ async function handleChatStream(req, res) {
   }
 }
 
-/**
- * Handles incoming chat messages from the Android AI Assistant (Standard non-streaming JSON).
- * POST /api/ai/chat
- */
+// Standard REST AI Chat: Generates single JSON response with grounding context and tool invocation
 async function handleChat(req, res) {
   const startTime = Date.now();
   try {
@@ -161,9 +143,15 @@ async function handleChat(req, res) {
       });
     }
 
-    const { studentId, studentEmail, registrationNumber, studentName } = extractStudent(req);
+    const { studentId, studentEmail, registrationNumber, studentName, isAuthenticated } = extractStudent(req);
 
-    // 1. Retrieve verified MongoDB facts & candidate menu items & tracking details
+    const authenticatedStudent = { studentId, studentEmail, registrationNumber, studentName, isAuthenticated };
+    const requestContext = {
+      selectedCanteenId: canteenId || '',
+      cartItems: req.body?.cartItems || req.body?.cart || [],
+      cartCanteenId: req.body?.cartCanteenId || canteenId || '',
+    };
+
     const { contextText, recommendedItems, activeOrders, trackedOrder, greetingData } = await buildAiContext({
       studentId,
       studentEmail,
@@ -173,17 +161,15 @@ async function handleChat(req, res) {
       selectedCanteenId: canteenId || '',
     });
 
-    // 2. Generate grounded Gemini response
-    const { reply, modelUsed } = await generateAiResponse({
+    const { reply, modelUsed, toolCallsExecuted } = await generateAiResponse({
       userMessage: message.trim(),
       verifiedContext: contextText,
       conversationHistory: conversationHistory || [],
+      authenticatedStudent,
+      requestContext,
     });
 
-    // 3. Generate unique messageId for feedback tracking
     const messageId = uuidv4();
-
-    // 4. Generate contextual follow-up quick suggestion chips
     const suggestions = generateContextualSuggestions(message, activeOrders);
     const durationMs = Date.now() - startTime;
 
@@ -192,6 +178,7 @@ async function handleChat(req, res) {
       messageId,
       reply,
       modelUsed,
+      toolCallsExecuted: toolCallsExecuted || [],
       suggestions,
       recommendedItems,
       hasActiveOrders: activeOrders && activeOrders.length > 0,
@@ -210,10 +197,7 @@ async function handleChat(req, res) {
   }
 }
 
-/**
- * Submits or updates thumbs-up / thumbs-down feedback for an AI response.
- * POST /api/ai/feedback
- */
+// Feedback Recording: Records student thumbs-up/down ratings and comments for response evaluation
 async function handleFeedback(req, res) {
   try {
     const { messageId, userQuestion, assistantResponse, feedbackType, reason } = req.body;
@@ -235,7 +219,6 @@ async function handleFeedback(req, res) {
     const { studentId, studentEmail } = extractStudent(req);
     const typeNormalized = feedbackType.toLowerCase();
 
-    // Upsert feedback: update existing rating if student changes their mind, or create new
     const feedbackDoc = await AiFeedback.findOneAndUpdate(
       { studentId, messageId },
       {
@@ -275,10 +258,7 @@ async function handleFeedback(req, res) {
   }
 }
 
-/**
- * Returns analytical feedback aggregations for evaluation and continuous quality improvement.
- * GET /api/ai/feedback/analytics
- */
+// Analytics: Computes satisfaction percentage and review summaries
 async function handleFeedbackAnalytics(req, res) {
   try {
     const total = await AiFeedback.countDocuments();
@@ -311,9 +291,7 @@ async function handleFeedbackAnalytics(req, res) {
   }
 }
 
-/**
- * Generate smart suggestion chips based on what the student just asked
- */
+// Generates contextual follow-up quick suggestion chips based on query intent
 function generateContextualSuggestions(userMessage, activeOrders) {
   const query = (userMessage || '').toLowerCase();
 

@@ -1,3 +1,4 @@
+// ForgotPasswordScreen: Jetpack Compose screen for ForgotPassword user interface
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
@@ -153,7 +154,6 @@ fun ForgotPasswordScreen(
         Column(
           modifier = Modifier.fillMaxWidth(),
         ) {
-          // Card Header: Sleek dark icon badge on left + Luxury Account Recovery chip on right
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

@@ -1,3 +1,4 @@
+// MessQViewModel: ViewModel managing UI state and business logic for MessQ
 package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
@@ -150,20 +151,21 @@ class MessQViewModel(
     _currentUser.value = null
   }
 
-  fun placeOrder(orderRecord: OrderRecord, studentId: String = "student_guest", canteenId: String = "canteen_33") {
-    val isGuest = studentId.isBlank() ||
-        studentId == "student_guest" ||
-        studentId.contains("guest", ignoreCase = true) ||
-        (_currentUser.value?.name ?: "").contains("guest", ignoreCase = true)
-    if (isGuest) {
-      // Do NOT persist guest orders to database or show on owner dashboard
+  fun placeOrder(orderRecord: OrderRecord, studentId: String = "", canteenId: String = "canteen_33") {
+    val resolvedStudentId = studentId.ifBlank {
+      _currentUser.value?.registrationNumber?.ifBlank { null }
+        ?: _currentUser.value?.email?.ifBlank { null }
+        ?: ""
+    }
+    if (resolvedStudentId.isBlank() || resolvedStudentId.contains("guest", ignoreCase = true)) {
+      android.util.Log.w("MessQViewModel", "Skipping order placement: Student must be logged in.")
       return
     }
     viewModelScope.launch {
       val doc = OrderDocument.fromOrderRecord(
         record = orderRecord,
-        studentId = studentId,
-        studentName = _currentUser.value?.name ?: "Alex Rivera",
+        studentId = resolvedStudentId,
+        studentName = _currentUser.value?.name ?: "Student",
         canteenId = canteenId,
       )
       firestoreRepository.createOrder(doc)

@@ -1,3 +1,4 @@
+// OwnerOrdersScreen: Jetpack Compose screen for OwnerOrders user interface
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
@@ -26,6 +27,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.Restaurant
+import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -68,16 +71,20 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-private val OrangeAccent = Color(0xFFF97316)
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberLight
+import com.example.ui.theme.BorderGray
+
+private val OrangeAccent = DrawerAmber
 private val GreenReady = Color(0xFF16A34A)
-private val BadgePreparingBg = Color(0xFFFFF7ED)
+private val BadgePreparingBg = DrawerAmberLight
 private val BadgeReadyBg = Color(0xFFF0FDF4)
 private val BadgePickedUpBg = Color(0xFFF3F4F6)
-private val CardBorderColor = Color(0xFFF3F4F6)
+private val CardBorderColor = BorderGray
 private val PageBackground = WarmCream
 
-// Tabs: Preparing, Ready, Picked Up (All tab removed as requested)
-private val FilterTabs = listOf("Preparing", "Ready", "Picked Up")
+// Tabs: Incoming (Pending), Preparing, Ready, Picked Up
+private val FilterTabs = listOf("Incoming", "Preparing", "Ready", "Picked Up")
 
 @Composable
 fun OwnerOrdersScreen(
@@ -85,9 +92,10 @@ fun OwnerOrdersScreen(
   onBack: () -> Unit,
   onNavigateToOrderDetails: (String) -> Unit = {},
   dashboardViewModel: OwnerDashboardViewModel = viewModel(),
+  initialTab: String = "Preparing",
   modifier: Modifier = Modifier,
 ) {
-  var selectedTab by remember { mutableStateOf("Preparing") }
+  var selectedTab by remember(initialTab) { mutableStateOf(initialTab) }
   val allOrders by dashboardViewModel.orders.collectAsState()
 
   // Filter feature for Picked Up orders
@@ -99,36 +107,66 @@ fun OwnerOrdersScreen(
     allOrders.filter { !dashboardViewModel.isGuestOrder(it) }
   }
 
+  var orderToReject by remember { mutableStateOf<OrderDocument?>(null) }
+  var rejectionReasonOption by remember { mutableStateOf("Items temporarily out of stock") }
+  var customRejectionReason by remember { mutableStateOf("") }
+
   // Counts for each tab
-  val preparingCount = sourceOrders.count { it.status.equals("PREPARING", ignoreCase = true) || it.status.equals("NEW", ignoreCase = true) }
+  val incomingCount = sourceOrders.count {
+    it.status.equals("PENDING", ignoreCase = true) ||
+    it.status.equals("NEW", ignoreCase = true) ||
+    it.status.equals("WAITING", ignoreCase = true)
+  }
+  val preparingCount = sourceOrders.count {
+    it.status.equals("PREPARING", ignoreCase = true) ||
+    it.status.equals("ACCEPTED", ignoreCase = true)
+  }
   val readyCount = sourceOrders.count { it.status.equals("READY", ignoreCase = true) }
-  val pickedUpCount = sourceOrders.count { it.status.equals("COMPLETED", ignoreCase = true) || it.status.equals("DELIVERED", ignoreCase = true) }
+  val pickedUpCount = sourceOrders.count {
+    it.status.equals("COMPLETED", ignoreCase = true) ||
+    it.status.equals("DELIVERED", ignoreCase = true) ||
+    it.status.equals("PICKED_UP", ignoreCase = true)
+  }
 
   val filteredOrders = remember(sourceOrders, selectedTab, pickedUpFilterTime, pickedUpSearchQuery) {
     when (selectedTab) {
-      "Preparing" -> sourceOrders.filter { it.status.equals("PREPARING", ignoreCase = true) || it.status.equals("NEW", ignoreCase = true) }
+      "Incoming" -> sourceOrders.filter {
+        it.status.equals("PENDING", ignoreCase = true) ||
+        it.status.equals("NEW", ignoreCase = true) ||
+        it.status.equals("WAITING", ignoreCase = true)
+      }
+      "Preparing" -> sourceOrders.filter {
+        it.status.equals("PREPARING", ignoreCase = true) ||
+        it.status.equals("ACCEPTED", ignoreCase = true)
+      }
       "Ready" -> sourceOrders.filter { it.status.equals("READY", ignoreCase = true) }
       "Picked Up" -> {
         val now = System.currentTimeMillis()
         val oneDayMs = 24 * 60 * 60 * 1000L
-        sourceOrders.filter { it.status.equals("COMPLETED", ignoreCase = true) || it.status.equals("DELIVERED", ignoreCase = true) }
-          .filter { order ->
-            val matchesTime = when (pickedUpFilterTime) {
-              "Today" -> (now - order.createdAt) < oneDayMs
-              "Yesterday" -> {
-                val diff = now - order.createdAt
-                diff in oneDayMs..(2 * oneDayMs)
-              }
-              else -> true
+        sourceOrders.filter {
+          it.status.equals("COMPLETED", ignoreCase = true) ||
+          it.status.equals("DELIVERED", ignoreCase = true) ||
+          it.status.equals("PICKED_UP", ignoreCase = true)
+        }.filter { order ->
+          val matchesTime = when (pickedUpFilterTime) {
+            "Today" -> (now - order.createdAt) < oneDayMs
+            "Yesterday" -> {
+              val diff = now - order.createdAt
+              diff in oneDayMs..(2 * oneDayMs)
             }
-            val matchesQuery = pickedUpSearchQuery.isBlank() ||
-              order.tokenNumber.contains(pickedUpSearchQuery, ignoreCase = true) ||
-              order.studentName.contains(pickedUpSearchQuery, ignoreCase = true) ||
-              order.studentCourse.contains(pickedUpSearchQuery, ignoreCase = true)
-            matchesTime && matchesQuery
+            else -> true
           }
+          val matchesQuery = pickedUpSearchQuery.isBlank() ||
+            order.tokenNumber.contains(pickedUpSearchQuery, ignoreCase = true) ||
+            order.studentName.contains(pickedUpSearchQuery, ignoreCase = true) ||
+            order.studentCourse.contains(pickedUpSearchQuery, ignoreCase = true)
+          matchesTime && matchesQuery
+        }
       }
-      else -> sourceOrders.filter { it.status.equals("PREPARING", ignoreCase = true) }
+      else -> sourceOrders.filter {
+        it.status.equals("PREPARING", ignoreCase = true) ||
+        it.status.equals("ACCEPTED", ignoreCase = true)
+      }
     }
   }
 
@@ -143,7 +181,6 @@ fun OwnerOrdersScreen(
     Column(
       modifier = Modifier.fillMaxSize(),
     ) {
-      // ── Clean Header (Without redundant constant top bar) ─────────────────
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -203,7 +240,6 @@ fun OwnerOrdersScreen(
 
       Spacer(modifier = Modifier.height(4.dp))
 
-      // ── Filter Tabs: Preparing (6), Ready (3), Picked Up (3)
       LazyRow(
         modifier = Modifier
           .fillMaxWidth()
@@ -215,6 +251,7 @@ fun OwnerOrdersScreen(
         items(FilterTabs) { tab ->
           val isSelected = selectedTab.equals(tab, ignoreCase = true)
           val count = when (tab) {
+            "Incoming" -> incomingCount
             "Preparing" -> preparingCount
             "Ready" -> readyCount
             "Picked Up" -> pickedUpCount
@@ -270,7 +307,6 @@ fun OwnerOrdersScreen(
 
       Spacer(modifier = Modifier.height(6.dp))
 
-      // ── Live Orders List ──────────────────────────────────────────────────
       if (filteredOrders.isEmpty()) {
         Box(
           modifier = Modifier
@@ -301,13 +337,113 @@ fun OwnerOrdersScreen(
               onClick = {
                 onNavigateToOrderDetails(order.orderId)
               },
+              onAccept = {
+                dashboardViewModel.acceptOrder(order.orderId)
+              },
+              onReject = {
+                orderToReject = order
+              },
+              onAdvanceStatus = { nextStatus ->
+                dashboardViewModel.updateOrderStatus(order.orderId, nextStatus)
+              },
             )
           }
         }
       }
     }
 
-    // ── Picked Up Filter Dialog ─────────────────────────────────────────────
+    // Reject Order Confirmation Dialog
+    if (orderToReject != null) {
+      val targetOrder = orderToReject!!
+      AlertDialog(
+        onDismissRequest = { orderToReject = null },
+        title = {
+          Text(
+            text = "Reject Order #${targetOrder.tokenNumber}?",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFFDC2626),
+          )
+        },
+        text = {
+          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+              text = "Please select or enter the reason for rejecting this student's order. A full refund will be automatically scheduled.",
+              fontSize = 12.5.sp,
+              color = TextDark,
+            )
+
+            val reasonOptions = listOf(
+              "Items temporarily out of stock",
+              "Kitchen overloaded / peak rush",
+              "Canteen closing soon",
+              "Unable to fulfill custom request",
+              "Other reason",
+            )
+
+            reasonOptions.forEach { option ->
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clip(RoundedCornerShape(8.dp))
+                  .clickable { rejectionReasonOption = option }
+                  .padding(vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                RadioButton(
+                  selected = rejectionReasonOption == option,
+                  onClick = { rejectionReasonOption = option },
+                  colors = RadioButtonDefaults.colors(selectedColor = Color(0xFFDC2626)),
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                  text = option,
+                  fontSize = 13.sp,
+                  fontWeight = if (rejectionReasonOption == option) FontWeight.SemiBold else FontWeight.Normal,
+                  color = TextDark,
+                )
+              }
+            }
+
+            if (rejectionReasonOption == "Other reason") {
+              OutlinedTextField(
+                value = customRejectionReason,
+                onValueChange = { customRejectionReason = it },
+                placeholder = { Text("Enter specific rejection reason...", fontSize = 12.sp) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+              )
+            }
+          }
+        },
+        confirmButton = {
+          Button(
+            onClick = {
+              val finalReason = if (rejectionReasonOption == "Other reason") {
+                customRejectionReason.ifBlank { "Canteen unable to accept order" }
+              } else {
+                rejectionReasonOption
+              }
+              dashboardViewModel.rejectOrder(targetOrder.orderId, finalReason)
+              orderToReject = null
+              customRejectionReason = ""
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+            shape = RoundedCornerShape(10.dp),
+          ) {
+            Text("Confirm Rejection", color = PureWhite, fontWeight = FontWeight.Bold)
+          }
+        },
+        dismissButton = {
+          TextButton(onClick = { orderToReject = null }) {
+            Text("Keep Order", color = TextMuted)
+          }
+        },
+        shape = RoundedCornerShape(20.dp),
+        containerColor = PureWhite,
+      )
+    }
+
     if (showPickedUpFilterDialog) {
       AlertDialog(
         onDismissRequest = { showPickedUpFilterDialog = false },
@@ -397,20 +533,30 @@ fun OwnerOrdersScreen(
   }
 }
 
-// ── LIVE ORDER CARD (MATCHES IMAGE 1 PRECISELY) ──────────────────────────────
 
 @Composable
 private fun LiveOrderCard(
   order: OrderDocument,
   onClick: () -> Unit,
+  onAccept: (() -> Unit)? = null,
+  onReject: (() -> Unit)? = null,
+  onAdvanceStatus: ((String) -> Unit)? = null,
 ) {
-  val isReady = order.status.equals("READY", ignoreCase = true)
-  val isPickedUp = order.status.equals("COMPLETED", ignoreCase = true) || order.status.equals("DELIVERED", ignoreCase = true)
+  val normStatus = order.status.uppercase().trim()
+  val isIncoming = normStatus in listOf("PENDING", "NEW", "WAITING")
+  val isAccepted = normStatus in listOf("ACCEPTED", "CONFIRMED")
+  val isPreparing = normStatus == "PREPARING"
+  val isReady = normStatus == "READY"
+  val isPickedUp = normStatus in listOf("COMPLETED", "DELIVERED", "PICKED_UP")
+  val isRejected = normStatus == "REJECTED"
 
   val statusLabel = when {
     isPickedUp -> "Picked Up"
     isReady -> "Ready"
-    else -> "Preparing"
+    isPreparing -> "Preparing"
+    isAccepted -> "Accepted"
+    isRejected -> "Rejected"
+    else -> "Incoming"
   }
 
   val statusTextColor = when {
@@ -488,13 +634,44 @@ private fun LiveOrderCard(
 
       Spacer(modifier = Modifier.height(8.dp))
 
-      // Student Name (e.g. Rahul Sharma)
-      Text(
-        text = order.studentName.ifBlank { "Student" },
-        fontSize = 15.sp,
-        fontWeight = FontWeight.Bold,
-        color = TextDark,
-      )
+      // Student Name & Fulfilment Badge (Dine-in vs Takeaway)
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Text(
+          text = order.studentName.ifBlank { "Student" },
+          fontSize = 15.sp,
+          fontWeight = FontWeight.Bold,
+          color = TextDark,
+        )
+
+        val isDineIn = order.fulfillmentType.equals("DINE_IN", ignoreCase = true)
+        Box(
+          modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (isDineIn) Color(0xFFF0FDF4) else Color(0xFFFFFBEB))
+            .border(0.8.dp, if (isDineIn) Color(0xFF86EFAC) else Color(0xFFFDE68A), RoundedCornerShape(8.dp))
+            .padding(horizontal = 7.dp, vertical = 2.5.dp),
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = if (isDineIn) Icons.Outlined.Restaurant else Icons.Outlined.ShoppingBag,
+              contentDescription = null,
+              tint = if (isDineIn) Color(0xFF16A34A) else Color(0xFFD97706),
+              modifier = Modifier.size(12.dp),
+            )
+            Spacer(modifier = Modifier.width(3.5.dp))
+            Text(
+              text = if (isDineIn) "Dine-in (No Pack)" else "Takeaway (Pack)",
+              fontSize = 11.sp,
+              fontWeight = FontWeight.Bold,
+              color = if (isDineIn) Color(0xFF16A34A) else Color(0xFFB45309),
+            )
+          }
+        }
+      }
 
       Spacer(modifier = Modifier.height(8.dp))
 
@@ -554,17 +731,18 @@ private fun LiveOrderCard(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+          val isScheduled = order.isScheduled || (!customerPickupDisplay.contains("ASAP", ignoreCase = true) && customerPickupDisplay.isNotBlank())
           Text(
-            text = "Pickup: ",
+            text = if (isScheduled) "Pickup (Scheduled): " else "Pickup: ",
             fontSize = 11.5.sp,
             fontWeight = FontWeight.Medium,
-            color = TextMuted,
+            color = if (isScheduled) Color(0xFFEA580C) else TextMuted,
           )
           Text(
             text = customerPickupDisplay,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
-            color = TextDark,
+            color = if (isScheduled) Color(0xFFEA580C) else TextDark,
           )
         }
 
@@ -598,6 +776,60 @@ private fun LiveOrderCard(
               color = OrangeAccent,
             )
           }
+        }
+      }
+
+      // Action Buttons per status
+      if (isIncoming && onAccept != null && onReject != null) {
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+          Button(
+            onClick = onAccept,
+            modifier = Modifier
+              .weight(1f)
+              .height(42.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+            shape = RoundedCornerShape(10.dp),
+          ) {
+            Text("Accept Order", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+          }
+
+          Button(
+            onClick = onReject,
+            modifier = Modifier.height(42.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2)),
+            shape = RoundedCornerShape(10.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDC2626)),
+          ) {
+            Text("Reject", color = Color(0xFFDC2626), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+          }
+        }
+      } else if (isAccepted && onAdvanceStatus != null) {
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(
+          onClick = { onAdvanceStatus("PREPARING") },
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(42.dp),
+          colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent),
+          shape = RoundedCornerShape(10.dp),
+        ) {
+          Text("Start Preparation", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        }
+      } else if (isPreparing && onAdvanceStatus != null) {
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(
+          onClick = { onAdvanceStatus("READY") },
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(42.dp),
+          colors = ButtonDefaults.buttonColors(containerColor = GreenReady),
+          shape = RoundedCornerShape(10.dp),
+        ) {
+          Text("Mark Ready for Pickup", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp)
         }
       }
     }

@@ -1,3 +1,4 @@
+// ModernSignInScreen: Jetpack Compose screen for ModernSignIn user interface
 package com.example.ui.screens
 
 import android.content.Context
@@ -85,7 +86,10 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.launch
 
-private val AmberBrand = Color(0xFFF5A623)
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberLight
+
+private val AmberBrand = DrawerAmber
 private val TextDark = Color(0xFF1F2937)
 private val PillBackground = Color(0xFFF3F4F6)
 private val BorderMuted = Color(0xFFE5E7EB)
@@ -182,7 +186,6 @@ fun ModernSignInScreen(
     Column(
       modifier = Modifier.fillMaxSize(),
     ) {
-      // ── Top Header with Back Button and Register Link (Image 3 Right) ──
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -252,7 +255,6 @@ fun ModernSignInScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // ── White Curved Sheet Container (Image 3 Right) ──────────────────────
       Box(
         modifier = Modifier
           .fillMaxWidth()
@@ -801,7 +803,6 @@ fun ModernSignInScreen(
 
           Spacer(modifier = Modifier.height(28.dp))
 
-          // ── Quick / Social Sign-In Buttons (Image 3 Right) ─────────────────
           Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(14.dp),

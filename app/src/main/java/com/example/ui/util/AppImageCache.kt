@@ -1,3 +1,4 @@
+// AppImageCache: Core utility and helper functions
 package com.example.ui.util
 
 import android.content.Context

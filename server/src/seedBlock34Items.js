@@ -8,7 +8,6 @@ const connectDB = require('./config/db');
 const Item = require('./models/Item');
 
 const block34Items = [
-  // ── NORTH INDIAN / MEALS ───────────────────────────────────────────────────
   {
     name: "Normal Roti Meal",
     description: "Daal / Chana Gravy + 4 Roti",
@@ -98,7 +97,6 @@ const block34Items = [
     ingredients: ["Potato", "Onion", "Wheat Flour"]
   },
 
-  // ── RICE ───────────────────────────────────────────────────────────────────
   {
     name: "Fried Rice",
     description: "Stir-fried in a wok and mixed with vegetables",
@@ -124,7 +122,6 @@ const block34Items = [
     ingredients: ["Rice", "Lemon Seasoning", "Mustard Seeds", "Curry Leaves"]
   },
 
-  // ── SOUTH INDIAN ───────────────────────────────────────────────────────────
   {
     name: "Idli Sambar",
     description: "Rice cake with hot spicy vegetable stew",
@@ -142,7 +139,6 @@ const block34Items = [
     ingredients: ["Crispy Medu Vada", "Sambar", "Chutney"]
   },
 
-  // ── SNACKS ─────────────────────────────────────────────────────────────────
   {
     name: "Pav Bhaji",
     description: "Thick vegetable curry served with soft bread",
@@ -192,7 +188,6 @@ const block34Items = [
     ingredients: ["Bread", "Besan", "Potato Masala"]
   },
 
-  // ── BEVERAGES ──────────────────────────────────────────────────────────────
   {
     name: "Chai",
     description: "Indian hot beverage",
@@ -224,7 +219,6 @@ async function runSeed() {
     await connectDB();
     console.log('Connected to MongoDB Atlas...');
 
-    // 1. Fetch existing items to preserve any custom images already set
     const existingItems = await Item.find({ canteenId: 'canteen_34' });
     const imageMap = new Map();
     for (const item of existingItems) {
@@ -236,11 +230,9 @@ async function runSeed() {
       }
     }
 
-    // 2. Clear old items for Block 34
     const deleted = await Item.deleteMany({ canteenId: 'canteen_34' });
     console.log(`🗑️ Cleaned up ${deleted.deletedCount} previous items for Block 34 (canteen_34).`);
 
-    // 3. Prepare items with appropriate IDs and attributes
     const docs = block34Items.map((item, index) => {
       const slug = item.name.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 25);
       const preservedImage = imageMap.get(item.name.toLowerCase().trim());

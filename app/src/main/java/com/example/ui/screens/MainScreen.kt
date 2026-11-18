@@ -1,6 +1,8 @@
+// MainScreen: Jetpack Compose screen for Main user interface
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -35,6 +37,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +59,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,6 +84,19 @@ fun MainScreen(
 ) {
   var isProfileDrawerOpen by remember { mutableStateOf(false) }
   val context = LocalContext.current
+  val isOnline by com.example.util.NetworkMonitor.isOnline.collectAsState()
+
+  if (!isOnline) {
+    NoInternetScreen(
+      onRetrySuccess = {
+        com.example.util.NetworkMonitor.refreshConnectivity()
+        appState.refreshHomeData()
+        appState.refreshCurrentMenu()
+      },
+      modifier = modifier,
+    )
+    return
+  }
 
   // Handle system back swiping / back gesture gracefully
   BackHandler(enabled = true) {
@@ -138,15 +156,11 @@ fun MainScreen(
       .fillMaxSize()
       .background(WarmCream)
   ) {
-    // ── Screen Content Container ──────────────────────────────────────────────
     Box(
       modifier = Modifier
         .fillMaxSize()
         .statusBarsPadding()
         .navigationBarsPadding()
-        .padding(
-          bottom = if (!isDetailOrTracking && !isHomeTab) 64.dp else 0.dp
-        )
     ) {
       if (appState.isProfileScreenOpen) {
         ProfileScreen(
@@ -187,64 +201,68 @@ fun MainScreen(
           onBack = { appState.closeFavoritesScreen() },
         )
       } else {
-        // ── Tab Screen Content ──────────────────────────────────────────────
-        when (appState.currentTab) {
-          BottomNavTab.HOME -> {
-            HomeScreen(
-              userName = userName,
-              appState = appState,
-              onNavigateToTab = { tab -> appState.currentTab = tab },
-              onOpenProfileDrawer = { isProfileDrawerOpen = true },
-            )
-          }
-          BottomNavTab.CANTEENS, BottomNavTab.MENU -> {
-            MenuScreen(
-              appState = appState,
-            )
-          }
-          BottomNavTab.AI_ASSISTANT -> {
-            LaunchedEffect(Unit) {
-              appState.openAiAssistant()
-              appState.currentTab = BottomNavTab.HOME
+        Crossfade(
+          targetState = appState.currentTab,
+          animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+          label = "tabCrossfade",
+        ) { targetTab ->
+          when (targetTab) {
+            BottomNavTab.HOME -> {
+              HomeScreen(
+                userName = userName,
+                appState = appState,
+                onNavigateToTab = { tab -> appState.currentTab = tab },
+                onOpenProfileDrawer = { isProfileDrawerOpen = true },
+              )
             }
-            HomeScreen(
-              userName = userName,
-              appState = appState,
-              onNavigateToTab = { tab -> appState.currentTab = tab },
-              onOpenProfileDrawer = { isProfileDrawerOpen = true },
-            )
-          }
-          BottomNavTab.CART -> {
-            CartScreen(
-              appState = appState,
-              onNavigateToTab = { tab -> appState.currentTab = tab },
-            )
-          }
-          BottomNavTab.ORDERS -> {
-            OrdersScreen(
-              appState = appState,
-              onNavigateToTab = { tab -> appState.currentTab = tab },
-              onOrderClick = { order -> appState.openOrderTracking(order) },
-            )
-          }
-          BottomNavTab.PROFILE -> {
-            LaunchedEffect(Unit) {
-              appState.openProfileScreen()
-              appState.currentTab = BottomNavTab.HOME
+            BottomNavTab.CANTEENS, BottomNavTab.MENU -> {
+              MenuScreen(
+                appState = appState,
+              )
             }
-            HomeScreen(
-              userName = userName,
-              appState = appState,
-              onNavigateToTab = { tab -> appState.currentTab = tab },
-              onOpenProfileDrawer = { isProfileDrawerOpen = true },
-            )
+            BottomNavTab.AI_ASSISTANT -> {
+              LaunchedEffect(Unit) {
+                appState.openAiAssistant()
+                appState.currentTab = BottomNavTab.HOME
+              }
+              HomeScreen(
+                userName = userName,
+                appState = appState,
+                onNavigateToTab = { tab -> appState.currentTab = tab },
+                onOpenProfileDrawer = { isProfileDrawerOpen = true },
+              )
+            }
+            BottomNavTab.CART -> {
+              CartScreen(
+                appState = appState,
+                onNavigateToTab = { tab -> appState.currentTab = tab },
+              )
+            }
+            BottomNavTab.ORDERS -> {
+              OrdersScreen(
+                appState = appState,
+                onNavigateToTab = { tab -> appState.currentTab = tab },
+                onOrderClick = { order -> appState.openOrderTracking(order) },
+              )
+            }
+            BottomNavTab.PROFILE -> {
+              LaunchedEffect(Unit) {
+                appState.openProfileScreen()
+                appState.currentTab = BottomNavTab.HOME
+              }
+              HomeScreen(
+                userName = userName,
+                appState = appState,
+                onNavigateToTab = { tab -> appState.currentTab = tab },
+                onOpenProfileDrawer = { isProfileDrawerOpen = true },
+              )
+            }
           }
         }
       }
     }
 
-    // ── Bottom Navigation Bar (Animated slide down on Home & Menu tabs) ───────
-    if (!isDetailOrTracking && !appState.isAiAssistantOpen) {
+    if (!isDetailOrTracking && !appState.isAiAssistantOpen && appState.currentTab != BottomNavTab.CART) {
       val slideFraction by animateFloatAsState(
         targetValue = if (isScrollHideTab && !appState.isBottomBarVisible) 1f else 0f,
         animationSpec = tween(
@@ -279,7 +297,6 @@ fun MainScreen(
       }
     }
 
-    // ── Modern Floating Quick-Cart Capsule (Replaces ugly black snackbar) ──
     AnimatedVisibility(
       visible = appState.cartNotificationMessage != null && appState.currentTab != BottomNavTab.CART && !appState.isMenuFilterOpen,
       enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
@@ -373,8 +390,8 @@ fun MainScreen(
         }
       }
 
-    // ── MunchMate AI Assistant Bottom Sheet (Opens half-screen initially, expandable) ──
     if (appState.isAiAssistantOpen) {
+      val coroutineScope = rememberCoroutineScope()
       val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = false,
       )
@@ -398,11 +415,17 @@ fun MainScreen(
           appState = appState,
           onClose = { appState.closeAiAssistant() },
           onBack = { appState.closeAiAssistant() },
+          onRequestExpand = {
+            coroutineScope.launch {
+              try {
+                sheetState.expand()
+              } catch (_: Exception) {}
+            }
+          },
         )
       }
     }
 
-    // ── Student Profile Side Drawer (Image 1) ────────────────────────────────
     StudentProfileDrawer(
       isOpen = isProfileDrawerOpen,
       onClose = { isProfileDrawerOpen = false },

@@ -1,3 +1,4 @@
+// ResetPasswordScreen: Jetpack Compose screen for ResetPassword user interface
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
@@ -162,7 +163,6 @@ fun ResetPasswordScreen(
         Column(
           modifier = Modifier.fillMaxWidth(),
         ) {
-          // Card Header: Sleek dark key badge on left + Reset Password status chip on right
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

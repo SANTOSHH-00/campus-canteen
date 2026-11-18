@@ -1,3 +1,4 @@
+// Authentication Routes: Student registration, login, and password reset workflows
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
@@ -15,7 +16,6 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(token.trim()).digest('hex');
 }
 
-// ── POST /api/auth/register ──────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
     const {
@@ -97,7 +97,6 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// ── POST /api/auth/login ─────────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -140,7 +139,6 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ── POST /api/auth/forgot-password ───────────────────────────────────────────
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -210,7 +208,6 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-// ── POST /api/auth/reset-password ───────────────────────────────────────────
 router.post('/reset-password', async (req, res) => {
   try {
     const { token, email, newPassword } = req.body;
@@ -277,7 +274,6 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
-// ── GET /api/auth/reset-password (Responsive Web Interface & Deep Link Launcher)
 router.get('/reset-password', async (req, res) => {
   const { token, email } = req.query;
   const rawToken = (token || '').trim();

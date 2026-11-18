@@ -1,3 +1,4 @@
+// OwnerCustomersScreen: Jetpack Compose screen for OwnerCustomers user interface
 package com.example.ui.screens
 
 import android.content.Intent
@@ -57,13 +58,22 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// ── Theme Palette ─────────────────────────────────────────────────────────────
-private val PrimaryOrange = Color(0xFFFF6433)
-private val LightOrangeBg = Color(0xFFFFF1EB)
-private val DarkText = Color(0xFF111827)
-private val GrayText = Color(0xFF6B7280)
-private val CardBg = Color(0xFFFFFFFF)
-private val ScreenBg = Color(0xFFF8F9FA)
+import androidx.compose.foundation.layout.PaddingValues
+import com.example.ui.theme.BlackPrimary
+import com.example.ui.theme.BorderGray
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberLight
+import com.example.ui.theme.PureWhite
+import com.example.ui.theme.TextDark
+import com.example.ui.theme.TextMuted
+import com.example.ui.theme.WarmCream
+
+private val PrimaryOrange = DrawerAmber
+private val LightOrangeBg = DrawerAmberLight
+private val DarkText = TextDark
+private val GrayText = TextMuted
+private val CardBg = PureWhite
+private val ScreenBg = WarmCream
 private val GreenBadge = Color(0xFF10B981)
 
 data class CustomerSummary(
@@ -154,7 +164,6 @@ fun OwnerCustomersScreen(
         .fillMaxSize()
         .padding(horizontal = 20.dp, vertical = 12.dp),
     ) {
-      // ── Top Bar with Back Arrow ────────────────────────────────────────────
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -194,7 +203,6 @@ fun OwnerCustomersScreen(
         }
       }
 
-      // ── KPI Summary Cards ──────────────────────────────────────────────────
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -248,7 +256,6 @@ fun OwnerCustomersScreen(
         }
       }
 
-      // ── Search Bar ─────────────────────────────────────────────────────────
       OutlinedTextField(
         value = searchQuery,
         onValueChange = { searchQuery = it },
@@ -269,7 +276,6 @@ fun OwnerCustomersScreen(
           .padding(bottom = 12.dp),
       )
 
-      // ── Customer List ──────────────────────────────────────────────────────
       if (displayCustomers.isEmpty()) {
         Box(
           modifier = Modifier
@@ -288,6 +294,7 @@ fun OwnerCustomersScreen(
           modifier = Modifier
             .fillMaxWidth()
             .weight(1f),
+          contentPadding = PaddingValues(bottom = 96.dp),
           verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
           items(displayCustomers, key = { it.id }) { customer ->

@@ -10,7 +10,6 @@ const Order = require('./models/Order');
 
 // Complete Block 33 menu requested by user
 const block33Items = [
-  // ── BREAKFAST ───────────────────────────────────────────────────────────────
   { name: "Chana Bhatura", price: 75, category: "BREAKFAST", prepMinutes: 8 },
   { name: "Chana Puri", price: 75, category: "BREAKFAST", prepMinutes: 8 },
   { name: "Chana Kulcha", price: 75, category: "BREAKFAST", prepMinutes: 6 },
@@ -30,19 +29,16 @@ const block33Items = [
   { name: "Aloo Sandwich", price: 30, category: "BREAKFAST", prepMinutes: 5 },
   { name: "Paneer Sandwich", price: 50, category: "BREAKFAST", prepMinutes: 6 },
 
-  // ── HEALTHY BREAKFAST ───────────────────────────────────────────────────────
   { name: "Masala Oats", price: 40, category: "HEALTHY BREAKFAST", prepMinutes: 5 },
   { name: "Milk Oats", price: 50, category: "HEALTHY BREAKFAST", prepMinutes: 5 },
   { name: "Milk Dalia", price: 50, category: "HEALTHY BREAKFAST", prepMinutes: 6 },
   { name: "Peanut Butter with Banana (2 Pc.)", price: 50, category: "HEALTHY BREAKFAST", prepMinutes: 4 },
 
-  // ── BEVERAGES ───────────────────────────────────────────────────────────────
   { name: "Tea", price: 15, category: "BEVERAGES", prepMinutes: 3 },
   { name: "Coffee", price: 30, category: "BEVERAGES", prepMinutes: 4 },
   { name: "Lassi (Sweet & Salted)", price: 40, category: "BEVERAGES", prepMinutes: 3 },
   { name: "Shakes (Banana, Mango, Chocolate, Strawberry)", price: 60, category: "BEVERAGES", prepMinutes: 5 },
 
-  // ── LUNCH ───────────────────────────────────────────────────────────────────
   { name: "Normal Thali (Dal, Veg, Sabji, Rice, Raita, Salad, 3 Roti)", price: 90, category: "LUNCH", prepMinutes: 7 },
   { name: "Special Thali (Paneer, Dal, Veg, Sabji, Rice, Raita, Salad, 3 Roti)", price: 90, category: "LUNCH", prepMinutes: 8 },
   { name: "Dal Rice", price: 75, category: "LUNCH", prepMinutes: 5 },
@@ -58,7 +54,6 @@ const block33Items = [
   { name: "Paneer Burji + 2 Plain Prantha", price: 80, category: "LUNCH", prepMinutes: 8 },
   { name: "Paneer Burji + 2 Bread", price: 80, category: "LUNCH", prepMinutes: 6 },
 
-  // ── SNACKS ──────────────────────────────────────────────────────────────────
   { name: "Noodles", price: 70, category: "SNACKS", prepMinutes: 8 },
   { name: "Manchurian", price: 80, category: "SNACKS", prepMinutes: 9 },
   { name: "Fried Rice", price: 80, category: "SNACKS", prepMinutes: 8 },
@@ -80,7 +75,6 @@ async function runSeed() {
     await connectDB();
     console.log('Connected to MongoDB Atlas...');
 
-    // 1. Clear any old/pre-defined orders in MongoDB
     const deletedOrders = await Order.deleteMany({});
     console.log(`🗑️ Cleared ${deletedOrders.deletedCount} orders from MongoDB database.`);
 
@@ -90,11 +84,9 @@ async function runSeed() {
       name: { $regex: /chana bhatura/i },
     });
 
-    // 2. Remove previous items for canteen_33 to ensure clean slate
     const deletedItems = await Item.deleteMany({ canteenId: 'canteen_33' });
     console.log(`Cleaned up ${deletedItems.deletedCount} previous items for canteen_33.`);
 
-    // 3. Insert Block 33 menu items
     const docs = block33Items.map((item, index) => {
       const slug = item.name.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 25);
       const isChanaBhatura = item.name.toLowerCase().includes('chana bhatura');

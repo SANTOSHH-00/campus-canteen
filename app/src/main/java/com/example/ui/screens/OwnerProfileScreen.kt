@@ -1,3 +1,4 @@
+// OwnerProfileScreen: Jetpack Compose screen for OwnerProfile user interface
 package com.example.ui.screens
 
 import android.net.Uri
@@ -89,13 +90,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// ── Private Palette ───────────────────────────────────────────────────────────
-private val PrimaryOrange = Color(0xFFFF6433)
-private val LightOrangeBg = Color(0xFFFFF1EB)
-private val DarkText = Color(0xFF111827)
-private val GrayText = Color(0xFF6B7280)
-private val CardBg = Color(0xFFFFFFFF)
-private val ScreenBg = Color(0xFFF8F9FA)
+import com.example.ui.theme.BlackPrimary
+import com.example.ui.theme.BorderGray
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberLight
+import com.example.ui.theme.PureWhite
+import com.example.ui.theme.TextDark
+import com.example.ui.theme.TextMuted
+import com.example.ui.theme.WarmCream
+
+private val PrimaryOrange = DrawerAmber
+private val LightOrangeBg = DrawerAmberLight
+private val DarkText = TextDark
+private val GrayText = TextMuted
+private val CardBg = PureWhite
+private val ScreenBg = WarmCream
 private val GreenOpen = Color(0xFF10B981)
 private val RedClosed = Color(0xFFEF4444)
 
@@ -155,14 +164,12 @@ fun OwnerProfileScreen(
         isUploadingPhoto = true
         coroutineScope.launch(Dispatchers.IO) {
           try {
-            // 1. Immediately drop previous image from Coil memory cache
             withContext(Dispatchers.Main) {
               try {
                 Coil.imageLoader(context).memoryCache?.clear()
               } catch (e: Exception) {}
             }
 
-            // 2. Save new persistent local file with timestamp (deletes previous local images)
             val persistentFile = CanteenImageHelper.saveGalleryImageLocally(context, canteenId, uri)
             val persistentPath = persistentFile.absolutePath
 
@@ -172,7 +179,6 @@ fun OwnerProfileScreen(
               appState?.updateCanteenDetails(canteenId, isOpen, currentTimings, persistentPath, closeReason)
             }
 
-            // 3. Update canteen profile in MongoDB
             FirestoreRepository().updateCanteenProfile(canteenId, persistentPath, currentTimings, isOpen, closeReason)
 
             withContext(Dispatchers.Main) {
@@ -212,7 +218,6 @@ fun OwnerProfileScreen(
         .verticalScroll(rememberScrollState())
         .padding(horizontal = 20.dp, vertical = 12.dp),
     ) {
-      // ── Top Bar ────────────────────────────────────────────────────────────
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -252,7 +257,163 @@ fun OwnerProfileScreen(
         }
       }
 
-      // ── Card 1: Canteen Photo & Identity ───────────────────────────────────
+      Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray.copy(alpha = 0.7f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+      ) {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(18.dp),
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Box(
+              modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(LightOrangeBg),
+              contentAlignment = Alignment.Center,
+            ) {
+              Icon(
+                imageVector = Icons.Default.Storefront,
+                contentDescription = "Canteen Storefront",
+                tint = PrimaryOrange,
+                modifier = Modifier.size(24.dp),
+              )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+              Text(
+                text = "Canteen Status & Operations",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = DarkText,
+              )
+              Text(
+                text = "Live visibility toggle & student ordering controls",
+                fontSize = 11.5.sp,
+                color = GrayText,
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(14.dp))
+          HorizontalDivider(color = Color(0xFFF1F2F4))
+          Spacer(modifier = Modifier.height(14.dp))
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+          ) {
+            Column {
+              Text(
+                text = "Ordering Availability",
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = DarkText,
+              )
+              Text(
+                text = if (isOpen) "Currently Open for Orders" else "Closed (${closeReason.ifBlank { "Temporarily" }})",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isOpen) GreenOpen else RedClosed,
+              )
+            }
+
+            Switch(
+              checked = isOpen,
+              onCheckedChange = { checked ->
+                if (!checked) {
+                  showCloseReasonDialog = true
+                } else {
+                  isOpen = true
+                  closeReason = ""
+                  dashboardViewModel.setCanteenOpenStatus(true, "")
+                  appState?.updateCanteenDetails(canteenId, true, currentTimings, currentImgUrl, "")
+                  Toast.makeText(context, "Canteen is now marked Open!", Toast.LENGTH_SHORT).show()
+                }
+              },
+              colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = GreenOpen,
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = RedClosed,
+              ),
+            )
+          }
+
+          Spacer(modifier = Modifier.height(12.dp))
+          HorizontalDivider(color = Color(0xFFF1F2F4))
+          Spacer(modifier = Modifier.height(12.dp))
+
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(12.dp))
+              .clickable { showTimingsPicker = true }
+              .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Box(
+                modifier = Modifier
+                  .size(34.dp)
+                  .clip(CircleShape)
+                  .background(LightOrangeBg),
+                contentAlignment = Alignment.Center,
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Schedule,
+                  contentDescription = null,
+                  tint = PrimaryOrange,
+                  modifier = Modifier.size(17.dp),
+                )
+              }
+              Spacer(modifier = Modifier.width(10.dp))
+              Column {
+                Text(
+                  text = "Operating Hours",
+                  fontSize = 13.sp,
+                  fontWeight = FontWeight.SemiBold,
+                  color = DarkText,
+                )
+                Text(
+                  text = currentTimings,
+                  fontSize = 12.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = PrimaryOrange,
+                )
+              }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Text(
+                text = "Change",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = PrimaryOrange,
+              )
+              Spacer(modifier = Modifier.width(4.dp))
+              Icon(
+                imageVector = Icons.Default.Edit,
+                contentDescription = "Edit Timings",
+                tint = PrimaryOrange,
+                modifier = Modifier.size(15.dp),
+              )
+            }
+          }
+        }
+      }
+
+      Spacer(modifier = Modifier.height(16.dp))
+
       Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -415,159 +576,6 @@ fun OwnerProfileScreen(
 
       Spacer(modifier = Modifier.height(16.dp))
 
-      // ── Card 2: Operations, Open/Closed & Shop Timings ───────────────────────
-      Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-      ) {
-        Column(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(18.dp),
-        ) {
-          Text(
-            text = "Canteen Operations & Timings",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = DarkText,
-          )
-          Text(
-            text = "Changes reflect live on the student canteen selector",
-            fontSize = 12.sp,
-            color = GrayText,
-          )
-
-          Spacer(modifier = Modifier.height(16.dp))
-
-          // 1. Open / Closed Switch
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-          ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Box(
-                modifier = Modifier
-                  .size(36.dp)
-                  .clip(CircleShape)
-                  .background(if (isOpen) Color(0xFFECFDF5) else Color(0xFFFEF2F2)),
-                contentAlignment = Alignment.Center,
-              ) {
-                Icon(
-                  imageVector = Icons.Default.Storefront,
-                  contentDescription = null,
-                  tint = if (isOpen) GreenOpen else RedClosed,
-                  modifier = Modifier.size(18.dp),
-                )
-              }
-              Spacer(modifier = Modifier.width(12.dp))
-              Column {
-                Text(
-                  text = "Canteen Status",
-                  fontSize = 14.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = DarkText,
-                )
-                Text(
-                  text = if (isOpen) "Currently Open for Orders" else "Closed (${closeReason.ifBlank { "Temporarily" }})",
-                  fontSize = 12.sp,
-                  color = if (isOpen) GreenOpen else RedClosed,
-                )
-              }
-            }
-
-            Switch(
-              checked = isOpen,
-              onCheckedChange = { checked ->
-                if (!checked) {
-                  showCloseReasonDialog = true
-                } else {
-                  isOpen = true
-                  closeReason = ""
-                  dashboardViewModel.setCanteenOpenStatus(true, "")
-                  appState?.updateCanteenDetails(canteenId, true, currentTimings, currentImgUrl, "")
-                  Toast.makeText(context, "Canteen is now marked Open!", Toast.LENGTH_SHORT).show()
-                }
-              },
-              colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = GreenOpen,
-                uncheckedThumbColor = Color.White,
-                uncheckedTrackColor = RedClosed,
-              ),
-            )
-          }
-
-          Spacer(modifier = Modifier.height(14.dp))
-          HorizontalDivider(color = Color(0xFFF1F2F4))
-          Spacer(modifier = Modifier.height(14.dp))
-
-          // 2. Operating Timings Selector
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .clip(RoundedCornerShape(12.dp))
-              .clickable { showTimingsPicker = true }
-              .padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-          ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Box(
-                modifier = Modifier
-                  .size(36.dp)
-                  .clip(CircleShape)
-                  .background(LightOrangeBg),
-                contentAlignment = Alignment.Center,
-              ) {
-                Icon(
-                  imageVector = Icons.Default.Schedule,
-                  contentDescription = null,
-                  tint = PrimaryOrange,
-                  modifier = Modifier.size(18.dp),
-                )
-              }
-              Spacer(modifier = Modifier.width(12.dp))
-              Column {
-                Text(
-                  text = "Operating Timings",
-                  fontSize = 14.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = DarkText,
-                )
-                Text(
-                  text = currentTimings,
-                  fontSize = 12.sp,
-                  fontWeight = FontWeight.SemiBold,
-                  color = PrimaryOrange,
-                )
-              }
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Text(
-                text = "Change",
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = PrimaryOrange,
-              )
-              Spacer(modifier = Modifier.width(4.dp))
-              Icon(
-                imageVector = Icons.Default.Edit,
-                contentDescription = "Edit Timings",
-                tint = PrimaryOrange,
-                modifier = Modifier.size(16.dp),
-              )
-            }
-          }
-        }
-      }
-
-      Spacer(modifier = Modifier.height(16.dp))
-
-      // ── Card 3: Quick Navigation ───────────────────────────────────────────
       Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -597,7 +605,6 @@ fun OwnerProfileScreen(
 
       Spacer(modifier = Modifier.height(16.dp))
 
-      // ── Card 4: Logout ─────────────────────────────────────────────────────
       Card(
         modifier = Modifier
           .fillMaxWidth()
@@ -633,7 +640,6 @@ fun OwnerProfileScreen(
     }
   }
 
-  // ── Operating Timings Dialog (Simple custom timings feature) ────────────────
   if (showTimingsPicker) {
     var customTimingsInput by remember { mutableStateOf(currentTimings) }
 
@@ -692,7 +698,6 @@ fun OwnerProfileScreen(
   }
 
 
-  // ── DIALOG 3: Close Canteen Reason Dialog ──────────────────────────────────
   if (showCloseReasonDialog) {
     val reasons = listOf("Opens 8:00 AM", "Break", "Kitchen maintenance", "Stock unavailable", "End of day")
     var selectedReason by remember { mutableStateOf(reasons.first()) }
@@ -751,7 +756,6 @@ fun OwnerProfileScreen(
   }
 }
 
-// ── Helper Subcomponents ──────────────────────────────────────────────────────
 
 @Composable
 private fun OwnerInfoRow(

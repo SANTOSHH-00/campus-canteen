@@ -1,14 +1,15 @@
+// Models: Core utility and helper functions
 package com.example.data
 
-enum class FoodCategory {
-  BREAKFAST,
-  HEALTHY_BREAKFAST,
-  BEVERAGES,
-  LUNCH,
-  SNACKS,
-  QUICK_ORDER,
-  POPULAR,
-  READY_UNDER_10,
+enum class FoodCategory(val displayName: String) {
+  BREAKFAST("Breakfast"),
+  HEALTHY_BREAKFAST("Healthy Breakfast"),
+  BEVERAGES("Beverages"),
+  LUNCH("Lunch"),
+  SNACKS("Snacks"),
+  QUICK_ORDER("Quick Order"),
+  POPULAR("Popular"),
+  READY_UNDER_10("Ready Under 10"),
 }
 
 enum class PopularBadge(val displayName: String) {
@@ -40,6 +41,15 @@ data class FoodAddon(
   val price: Int,
 )
 
+data class FoodReview(
+  val id: String,
+  val itemId: String,
+  val userName: String,
+  val rating: Double,
+  val comment: String,
+  val date: String = "",
+)
+
 data class FoodItem(
   val id: String,
   val name: String,
@@ -47,6 +57,8 @@ data class FoodItem(
   val prepTime: String,
   val prepMinutes: Int,
   val rating: Double? = null,
+  val reviewCount: Int = 0,
+  val originalPrice: Int? = null,
   val category: FoodCategory,
   val imageLabel: String,
   val imageUrl: String = "",
@@ -73,6 +85,16 @@ data class FoodItem(
   val displayIngredients: List<String>
     get() = ingredients
 
+  val displaySubtitle: String
+    get() = when {
+      ingredients.isNotEmpty() -> "with " + ingredients.take(2).joinToString(" & ")
+      name.contains("with", ignoreCase = true) -> ""
+      category == FoodCategory.BREAKFAST -> "with Mint Chutney & Pickle"
+      category == FoodCategory.LUNCH -> "with Basmati Rice & Dal"
+      category == FoodCategory.BEVERAGES -> "served Chilled & Fresh"
+      else -> "with Fresh Seasonal Herbs"
+    }
+
   val displayCustomizationTitle: String
     get() = customizationTitle
 
@@ -96,12 +118,20 @@ data class CartItem(
     get() = unitPrice * quantity
 }
 
+enum class FulfillmentType(val displayName: String, val description: String) {
+  DINE_IN("Dine-in", "Order now and enjoy your food at the canteen."),
+  TAKEAWAY("Takeaway", "Get your food packed and ready to collect."),
+}
+
 enum class OrderStatus(val displayName: String) {
-  NEW("New Order"),
+  PENDING("Waiting for Confirmation"),
+  NEW("Pending Confirmation"),
+  ACCEPTED("Order Accepted"),
   PREPARING("Preparing at Counter"),
   READY("Ready for Pickup!"),
   COMPLETED("Completed"),
   CANCELLED("Cancelled"),
+  REJECTED("Rejected by Canteen"),
 }
 
 enum class CrowdStatus(val label: String, val colorHex: Long) {
@@ -128,9 +158,26 @@ data class CampusBlockCanteen(
   val closeReason: String? = null,
   val imageUrl: String? = null,
   val timings: String = "7:00 AM – 10:00 PM",
+  val ownerName: String = "",
+  val packagingCharge: Int = 10,
+  val taxRatePercent: Int = 5,
 ) {
   val allItems: List<FoodItem>
     get() = if (rawItems.isNotEmpty()) rawItems else (quickOrderItems + popularItems + readyIn10Items).distinctBy { it.id }
+
+  fun getOwnerDisplayName(): String {
+    if (ownerName.isNotBlank()) return ownerName
+    return when (id) {
+      "canteen_33" -> "Govinda Das"
+      "canteen_34" -> "Ramesh Sharma"
+      "canteen_38" -> "Vikram Malhotra"
+      "canteen_25" -> "Rajesh Gupta"
+      "canteen_26" -> "Govinda Das"
+      "canteen_28" -> "Vishal Singh"
+      "canteen_29" -> "Prashant Roy"
+      else -> "Canteen Incharge"
+    }
+  }
 }
 
 enum class OrdersDateFilterOption(val displayName: String) {
@@ -180,6 +227,16 @@ data class OrderRecord(
   val preparingAt: String = "",
   val readyAt: String = "",
   val completedAt: String = "",
+  val acceptedAt: String = "",
+  val rejectedAt: String = "",
+  val rejectionReason: String = "",
+  val refundStatus: String = "",
+  val fulfillmentType: FulfillmentType = FulfillmentType.TAKEAWAY,
+  val packagingCharge: Int = 0,
+  val taxAmount: Int = 0,
+  val itemsSubtotal: Int = 0,
+  val isScheduled: Boolean = false,
+  val scheduledPickupTime: String = "",
   val placedEpoch: Long = 0L,
   val orderDate: String = "",
 )
@@ -205,7 +262,6 @@ enum class BottomNavTab(val label: String) {
 }
 
 object SampleFoodData {
-  // ── 1. Govinda's Kitchen, 33 - block, 6th floor ─────────────────────────────
   val canteen_33 = CampusBlockCanteen(
     id = "canteen_33",
     name = "Govinda's Kitchen",
@@ -218,12 +274,12 @@ object SampleFoodData {
     icon = "🍲",
     isOpen = true,
     timings = "7:00 AM – 10:00 PM",
+    ownerName = "Govinda Das",
     quickOrderItems = emptyList(),
     popularItems = emptyList(),
     readyIn10Items = emptyList(),
   )
 
-  // ── 2. Talk of the town, 34 - block, 6th floor ──────────────────────────────
   val canteen_34 = CampusBlockCanteen(
     id = "canteen_34",
     name = "Talk of the town",
@@ -236,12 +292,12 @@ object SampleFoodData {
     icon = "🌯",
     isOpen = true,
     timings = "7:30 AM – 10:00 PM",
+    ownerName = "Ramesh Sharma",
     quickOrderItems = emptyList(),
     popularItems = emptyList(),
     readyIn10Items = emptyList(),
   )
 
-  // ── 3. Cafe, 38 - block, (central Link), 5th floor ──────────────────────────
   val canteen_38 = CampusBlockCanteen(
     id = "canteen_38",
     name = "Cafe",
@@ -254,12 +310,12 @@ object SampleFoodData {
     icon = "☕",
     isOpen = true,
     timings = "8:00 AM – 9:00 PM",
+    ownerName = "Vikram Malhotra",
     quickOrderItems = emptyList(),
     popularItems = emptyList(),
     readyIn10Items = emptyList(),
   )
 
-  // ── 4. Gupta Canteen, 25 - block, 6th floor ─────────────────────────────────
   val canteen_25 = CampusBlockCanteen(
     id = "canteen_25",
     name = "Gupta Canteen",
@@ -272,12 +328,12 @@ object SampleFoodData {
     icon = "🥟",
     isOpen = true,
     timings = "7:30 AM – 9:30 PM",
+    ownerName = "Rajesh Gupta",
     quickOrderItems = emptyList(),
     popularItems = emptyList(),
     readyIn10Items = emptyList(),
   )
 
-  // ── 5. Govinda's Kitchen, 26 - block, 6th floor ─────────────────────────────
   val canteen_26 = CampusBlockCanteen(
     id = "canteen_26",
     name = "Govinda's Kitchen",
@@ -290,12 +346,12 @@ object SampleFoodData {
     icon = "🍛",
     isOpen = true,
     timings = "7:00 AM – 10:00 PM",
+    ownerName = "Govinda Das",
     quickOrderItems = emptyList(),
     popularItems = emptyList(),
     readyIn10Items = emptyList(),
   )
 
-  // ── 6. Vishal Dhaba & Cafe, 28 - block, 5th floor ───────────────────────────
   val canteen_28 = CampusBlockCanteen(
     id = "canteen_28",
     name = "Vishal Dhaba & Cafe",
@@ -308,12 +364,12 @@ object SampleFoodData {
     icon = "🥘",
     isOpen = true,
     timings = "8:00 AM – 10:00 PM",
+    ownerName = "Vishal Singh",
     quickOrderItems = emptyList(),
     popularItems = emptyList(),
     readyIn10Items = emptyList(),
   )
 
-  // ── 7. P.R Terrace Cafe, 29 - block, 5th floor ──────────────────────────────
   val canteen_29 = CampusBlockCanteen(
     id = "canteen_29",
     name = "P.R Terrace Cafe",
@@ -326,6 +382,7 @@ object SampleFoodData {
     icon = "🍕",
     isOpen = true,
     timings = "8:00 AM – 9:30 PM",
+    ownerName = "Prashant Roy",
     quickOrderItems = emptyList(),
     popularItems = emptyList(),
     readyIn10Items = emptyList(),

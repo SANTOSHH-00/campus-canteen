@@ -5,7 +5,6 @@ let admin = null;
 let isFcmInitialized = false;
 
 try {
-  // Check if firebase-admin is available
   admin = require('firebase-admin');
 
   let credential = null;
@@ -17,7 +16,6 @@ try {
       console.warn('[FCMService] Could not parse FIREBASE_SERVICE_ACCOUNT env JSON:', e.message);
     }
   } else {
-    // Check if local serviceAccountKey.json exists
     const fs = require('fs');
     const path = require('path');
     const keyPath = path.resolve(__dirname, '../../serviceAccountKey.json');
@@ -85,7 +83,6 @@ async function sendPushToToken(token, { title, body, data = {} }) {
  */
 async function sendPushToUser(userId, { title, body, data = {} }) {
   try {
-    // Look up in User model
     let target = await User.findOne({ $or: [{ uid: userId }, { registrationNumber: userId }] }).lean();
     if (!target) {
       target = await Owner.findOne({ $or: [{ ownerId: userId }, { canteenId: userId }] }).lean();

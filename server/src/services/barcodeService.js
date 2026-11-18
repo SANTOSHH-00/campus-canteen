@@ -56,7 +56,6 @@ async function generateCode128BarcodeDataUrl(token) {
 async function ensureOrderBarcode(order, options = {}) {
   const { forceRotate = false } = options;
 
-  // 1. Fast check if in-memory order object already has an active barcode
   if (
     !forceRotate &&
     order.verificationToken &&
@@ -72,7 +71,6 @@ async function ensureOrderBarcode(order, options = {}) {
     };
   }
 
-  // 2. Check MongoDB to see if this order already has a persistent active barcode
   const dbOrder = await Order.findOne({ orderId: order.orderId });
   if (
     !forceRotate &&

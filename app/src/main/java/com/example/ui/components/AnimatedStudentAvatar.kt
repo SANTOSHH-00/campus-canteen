@@ -1,3 +1,4 @@
+// AnimatedStudentAvatar: Reusable Jetpack Compose UI component
 package com.example.ui.components
 
 import androidx.compose.animation.core.FastOutSlowInEasing

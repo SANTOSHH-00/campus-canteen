@@ -1,3 +1,4 @@
+// AI Routes: Endpoints for streaming chat, standard chat, and feedback evaluation
 /**
  * AI Assistant API Routes
  * Mounts endpoints for QuickBite Gemini AI chat, streaming, feedback, and contextual suggestions.

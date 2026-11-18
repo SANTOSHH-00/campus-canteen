@@ -1,3 +1,4 @@
+// ApiClient: Core utility and helper functions
 package com.example.data.api
 
 import android.content.Context
@@ -30,16 +31,16 @@ object ApiClient {
         || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic"))
         || "google_sdk" == Build.PRODUCT)
 
-  const val DEV_LAN_IP = "192.168.17.26"
+  const val DEV_LAN_IP = "10.35.31.231"
   const val EMULATOR_HOST = "10.0.2.2"
   const val USB_LOCAL_HOST = "127.0.0.1"
   const val PRODUCTION_RENDER_URL = "https://quickbite-server-pjaf.onrender.com/api/"
 
   val candidateHosts: List<String>
     get() = if (isEmulator) {
-      listOf(EMULATOR_HOST, DEV_LAN_IP, "192.168.11.16", "192.168.17.21", USB_LOCAL_HOST)
+      listOf(EMULATOR_HOST, DEV_LAN_IP, USB_LOCAL_HOST)
     } else {
-      listOf(DEV_LAN_IP, "192.168.11.16", "192.168.17.21", USB_LOCAL_HOST, EMULATOR_HOST)
+      listOf(DEV_LAN_IP, USB_LOCAL_HOST, EMULATOR_HOST)
     }
 
   var baseUrl: String = PRODUCTION_RENDER_URL
@@ -50,7 +51,14 @@ object ApiClient {
     }
 
   fun initialize(context: Context) {
-    // No-op: disk response caching removed per requirement
+  }
+
+  private val noCacheInterceptor = Interceptor { chain ->
+    val request = chain.request().newBuilder()
+      .header("Cache-Control", "no-cache, no-store")
+      .header("Pragma", "no-cache")
+      .build()
+    chain.proceed(request)
   }
 
   private val hostFallbackInterceptor = Interceptor { chain ->
@@ -62,43 +70,36 @@ object ApiClient {
 
     try {
       val res = chain.proceed(originalRequest)
-      // If production request succeeded or returned normal 2xx/3xx, return it immediately
-      if (res.isSuccessful || (res.code != 404 && res.code < 500)) {
-        return@Interceptor res
-      }
-      // If Render returned 404 or 5xx, CLOSE the response before attempting local candidate hosts
-      res.close()
+      // Return response immediately - do not delay on 4xx/5xx with slow fallback loops
+      return@Interceptor res
     } catch (e: IOException) {
       originalException = e
     }
 
-    // Try candidate hosts on local dev port 5000
-    val hostsToTry = candidateHosts.toMutableList()
-    hostsToTry.remove(originalHost)
-
-    for (targetHost in hostsToTry) {
-      try {
-        val newUrl = originalUrl.newBuilder()
-          .scheme("http")
-          .host(targetHost)
-          .port(5000)
-          .build()
-        val newRequest = originalRequest.newBuilder()
-          .url(newUrl)
-          .build()
-
-        val response = chain.proceed(newRequest)
-        if (response.isSuccessful || response.code < 500) {
-          Log.i(TAG, "Connected to backend on $targetHost:5000 (auto-fallback from $originalHost)")
-          return@Interceptor response
-        }
-        response.close()
-      } catch (e: Exception) {
-        // Continue to next candidate host
+    // Only attempt local emulator/localhost fallback if not targeting production Render
+    if (!originalHost.contains("onrender.com")) {
+      val targetFallback = if (isEmulator) EMULATOR_HOST else USB_LOCAL_HOST
+      if (targetFallback != originalHost) {
+        try {
+          val newUrl = originalUrl.newBuilder()
+            .scheme("http")
+            .host(targetFallback)
+            .port(5000)
+            .build()
+          val newRequest = originalRequest.newBuilder()
+            .url(newUrl)
+            .build()
+          val response = chain.proceed(newRequest)
+          if (response.isSuccessful || response.code < 500) {
+            Log.i(TAG, "Connected to backend on $targetFallback:5000 (fallback from $originalHost)")
+            return@Interceptor response
+          }
+          response.close()
+        } catch (_: Exception) {}
       }
     }
 
-    throw originalException ?: IOException("Unable to reach backend on Render or local candidate hosts: $hostsToTry:5000")
+    throw originalException ?: IOException("Unable to reach backend: $originalHost")
   }
 
   val moshi: Moshi = Moshi.Builder()
@@ -107,10 +108,11 @@ object ApiClient {
 
   private fun buildOkHttpClient(): OkHttpClient {
     return OkHttpClient.Builder()
-      .connectTimeout(10, TimeUnit.SECONDS)
-      .readTimeout(15, TimeUnit.SECONDS)
-      .writeTimeout(15, TimeUnit.SECONDS)
+      .connectTimeout(8, TimeUnit.SECONDS)
+      .readTimeout(10, TimeUnit.SECONDS)
+      .writeTimeout(10, TimeUnit.SECONDS)
       .retryOnConnectionFailure(true)
+      .addInterceptor(noCacheInterceptor)
       .addInterceptor(hostFallbackInterceptor)
       .addInterceptor(
         HttpLoggingInterceptor().apply {

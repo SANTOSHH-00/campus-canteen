@@ -1,39 +1,30 @@
+// MunchMateIcon: Reusable Jetpack Compose UI component
 package com.example.ui.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.R
 
 /**
- * Recreated native vector fork-and-knife icon for MunchMate AI Assistant.
- * Built from native vector artwork with clean scalable geometry, sharp rendering at any size,
- * and customizable theme tinting.
+ * Recreated native vector Chef Bot icon for MunchMate AI Assistant.
+ * Faithfully extracted from reference design:
+ * - Scalable vector artwork featuring the iconic puffy chef toque, expressive cartoon googly eyes, and circular border.
+ * - Crisp, multi-colored vector asset rendering sharp at any scale (from small chat avatars to hero headers).
  */
 @Composable
 fun MunchMateIcon(
   modifier: Modifier = Modifier,
-  tint: Color? = Color(0xFF2E5A44),
+  tint: Color? = null,
   contentDescription: String? = "MunchMate",
 ) {
-  if (tint != null) {
-    Icon(
-      painter = painterResource(id = R.drawable.ic_munchmate_vector),
-      contentDescription = contentDescription,
-      tint = tint,
-      modifier = modifier,
-    )
-  } else {
-    Image(
-      painter = painterResource(id = R.drawable.ic_munchmate_vector),
-      contentDescription = contentDescription,
-      modifier = modifier,
-    )
-  }
+  Image(
+    painter = painterResource(id = R.drawable.ic_munchmate_vector),
+    contentDescription = contentDescription,
+    modifier = modifier,
+  )
 }

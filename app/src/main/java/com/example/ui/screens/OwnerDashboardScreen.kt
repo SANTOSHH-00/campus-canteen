@@ -1,3 +1,4 @@
+// OwnerDashboardScreen: Jetpack Compose screen for OwnerDashboard user interface
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedContent
@@ -31,10 +32,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CurrencyRupee
 import androidx.compose.material.icons.filled.Fastfood
@@ -56,6 +60,14 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.RateReview
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -72,7 +84,6 @@ import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -103,6 +114,8 @@ import com.example.ui.theme.AccentGreen
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
 import com.example.ui.theme.DeliveryOrange
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberLight
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.TextDark
 import com.example.ui.theme.TextMuted
@@ -111,15 +124,24 @@ import com.example.ui.viewmodel.DashboardUiState
 import com.example.ui.viewmodel.OwnerDashboardViewModel
 import com.example.ui.state.CanteenAppState
 import java.util.Calendar
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
-// ── PRIVATE THEME TOKENS ──────────────────────────────────────────────────────
-private val OrangeAccent = Color(0xFFF59E0B)
-private val AmberBrand = Color(0xFFF59E0B)
-private val CardBackground = Color(0xFFFFFFFF)
+private val OrangeAccent = DrawerAmber
+private val AmberBrand = DrawerAmber
+private val CardBackground = PureWhite
 private val PageBackground = WarmCream
-private val SelectedNavBg = Color(0xFFFEF3C7)
+private val SelectedNavBg = DrawerAmberLight
 
-// ── NAV ITEM MODEL ────────────────────────────────────────────────────────────
 private data class NavItem(
     val label: String,
     val icon: ImageVector,
@@ -127,9 +149,12 @@ private data class NavItem(
     val tag: String = "",
 )
 
-// ─────────────────────────────────────────────────────────────────────────────
+private data class NavSection(
+    val title: String,
+    val items: List<NavItem>,
+)
+
 //  MAIN SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun OwnerDashboardScreen(
@@ -147,8 +172,20 @@ fun OwnerDashboardScreen(
     }
 
     val context = LocalContext.current
+    val isOnline by com.example.util.NetworkMonitor.isOnline.collectAsState()
     val uiState by dashboardViewModel.uiState.collectAsState()
     val ownerOrders by dashboardViewModel.orders.collectAsState()
+
+    if (!isOnline) {
+        NoInternetScreen(
+            onRetrySuccess = {
+                com.example.util.NetworkMonitor.refreshConnectivity()
+                dashboardViewModel.refresh()
+            },
+            modifier = modifier,
+        )
+        return
+    }
 
     var drawerOpen by remember { mutableStateOf(false) }
     var selectedNavItem by remember { mutableStateOf("Dashboard") }
@@ -177,7 +214,6 @@ fun OwnerDashboardScreen(
     ) {
         when (val state = uiState) {
 
-            // ── LOADING ──────────────────────────────────────────────────────
             is DashboardUiState.Loading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -193,7 +229,6 @@ fun OwnerDashboardScreen(
                 }
             }
 
-            // ── ERROR ─────────────────────────────────────────────────────────
             is DashboardUiState.Error -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(
@@ -222,118 +257,199 @@ fun OwnerDashboardScreen(
                 }
             }
 
-            // ── READY ─────────────────────────────────────────────────────────
             is DashboardUiState.Ready -> {
-                val navItems = listOf(
-                    NavItem("Dashboard", Icons.Default.Home, tag = "nav_dashboard"),
-                    NavItem("SCAN & VERIFY ORDER", Icons.Default.QrCodeScanner, tag = "nav_scan_order"),
-                    NavItem("Menu Management", Icons.Default.RestaurantMenu, tag = "nav_menu_mgmt"),
-                    NavItem("Product Suggestions", Icons.Default.Fastfood, tag = "nav_suggestions"),
-                    NavItem("Customers", Icons.Default.Group, tag = "nav_customers"),
-                    NavItem("Discounts & Offers", Icons.Default.LocalOffer, tag = "nav_discounts"),
-                    NavItem("Settings", Icons.Default.Settings, tag = "nav_settings"),
-                    NavItem("Staff Management", Icons.Default.ManageAccounts, tag = "nav_staff"),
+                // Reorganized sidebar sections: duplicate items (Scan & Verify, Menu Mgmt, Customers)
+                // removed from sidebar; accessible prominently from Owner Home & Bottom Bar
+                val navSections = listOf(
+                    NavSection(
+                        title = "MAIN",
+                        items = listOf(
+                            NavItem("Dashboard", Icons.Outlined.Dashboard, tag = "nav_dashboard"),
+                            NavItem("Orders", Icons.AutoMirrored.Outlined.ReceiptLong, badge = state.metrics.newOrdersCount + state.metrics.preparingOrdersCount, tag = "nav_orders"),
+                            NavItem("Order History", Icons.Outlined.History, tag = "nav_order_history"),
+                        ),
+                    ),
+                    NavSection(
+                        title = "MANAGEMENT",
+                        items = listOf(
+                            NavItem("Product Suggestions", Icons.Outlined.Lightbulb, tag = "nav_suggestions"),
+                            NavItem("Reviews & Feedback", Icons.Outlined.RateReview, tag = "nav_reviews"),
+                            NavItem("Notifications", Icons.Outlined.Notifications, tag = "nav_notifications"),
+                        ),
+                    ),
+                    NavSection(
+                        title = "ACCOUNT",
+                        items = listOf(
+                            NavItem("Profile", Icons.Outlined.Person, tag = "nav_profile"),
+                            NavItem("Settings", Icons.Outlined.Settings, tag = "nav_settings"),
+                            NavItem("Help & Support", Icons.Outlined.HelpOutline, tag = "nav_help"),
+                        ),
+                    ),
                 )
 
                 Column(Modifier.fillMaxSize().background(PageBackground)) {
 
-                    // ── TOP BAR (Shown on Dashboard or when drawer is open; hidden when screen has a back arrow)
-                    val showConstantTopBar = drawerOpen || (selectedNavItem != "Profile" && selectedNavItem != "Customers" && selectedNavItem != "Product Suggestions")
+                    val isSubScreenActive = selectedNavItem in listOf(
+                        "Profile", "Customers", "Product Suggestions", "Orders",
+                        "Order History", "Reviews & Feedback", "Notifications", "Settings", "Help & Support"
+                    )
+                    val showConstantTopBar = !drawerOpen && !isSubScreenActive
                     if (showConstantTopBar) {
                         OwnerTopBar(
                             drawerOpen = drawerOpen,
                             onHamburgerClick = { drawerOpen = !drawerOpen },
-                            onProfileClick = {
-                                selectedNavItem = "Profile"
+                            onNotificationsClick = {
+                                selectedNavItem = "Notifications"
                                 drawerOpen = false
                             },
-                            onScanQrClick = { showBarcodeScanner = true },
+                            onHomeClick = {
+                                selectedNavItem = "Dashboard"
+                                drawerOpen = false
+                            },
                         )
                     }
 
-                    // ── ANIMATED CONTENT AREA ────────────────────────────────
-                    AnimatedContent(
-                        targetState = drawerOpen,
-                        transitionSpec = {
-                            if (targetState) {
-                                (fadeIn(tween(280)) + slideInHorizontally(tween(280)) { -it / 5 }) togetherWith
-                                    (fadeOut(tween(220)) + slideOutHorizontally(tween(220)) { it / 5 })
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        AnimatedContent(
+                            targetState = drawerOpen,
+                            transitionSpec = {
+                                if (targetState) {
+                                    (fadeIn(tween(280)) + slideInHorizontally(tween(280)) { -it / 5 }) togetherWith
+                                        (fadeOut(tween(220)) + slideOutHorizontally(tween(220)) { it / 5 })
+                                } else {
+                                    (fadeIn(tween(280)) + slideInHorizontally(tween(280)) { it / 5 }) togetherWith
+                                        (fadeOut(tween(220)) + slideOutHorizontally(tween(220)) { -it / 5 })
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                            label = "drawer_toggle_anim",
+                        ) { isDrawerOpen ->
+                            if (isDrawerOpen) {
+                                OwnerNavDrawer(
+                                    owner = state.owner,
+                                    canteenName = state.canteen.name,
+                                    isCanteenOpen = state.canteen.isOpen,
+                                    closeReason = state.canteen.closeReason,
+                                    selectedItem = selectedNavItem,
+                                    navSections = navSections,
+                                    onCloseDrawer = { drawerOpen = false },
+                                    onItemClick = { item ->
+                                        selectedNavItem = item
+                                        drawerOpen = false
+                                    },
+                                    onToggleCanteen = {
+                                        if (state.canteen.isOpen) showCloseReasonDialog = true
+                                        else dashboardViewModel.setCanteenOpenStatus(true)
+                                    },
+                                    onLogout = onLogout,
+                                )
                             } else {
-                                (fadeIn(tween(280)) + slideInHorizontally(tween(280)) { it / 5 }) togetherWith
-                                    (fadeOut(tween(220)) + slideOutHorizontally(tween(220)) { -it / 5 })
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                        label = "drawer_toggle_anim",
-                    ) { isDrawerOpen ->
-                        if (isDrawerOpen) {
-                            OwnerNavDrawer(
-                                owner = state.owner,
-                                canteenName = state.canteen.name,
-                                isCanteenOpen = state.canteen.isOpen,
-                                closeReason = state.canteen.closeReason,
-                                selectedItem = selectedNavItem,
-                                navItems = navItems,
-                                onItemClick = { item ->
-                                    selectedNavItem = item
-                                    drawerOpen = false
-                                    when (item) {
-                                        "SCAN & VERIFY ORDER", "Scan Pickup QR" -> {
-                                            selectedNavItem = "Dashboard"
-                                            showBarcodeScanner = true
-                                        }
-                                        "Menu Management" -> onNavigateToManageItems()
-                                        else -> {}
+                                when (selectedNavItem) {
+                                    "Profile" -> {
+                                        OwnerProfileScreen(
+                                            owner = state.owner,
+                                            onBack = { selectedNavItem = "Dashboard" },
+                                            onLogout = onLogout,
+                                            onNavigateToManageItems = onNavigateToManageItems,
+                                            onNavigateToOrders = onNavigateToOrders,
+                                            appState = appState,
+                                            dashboardViewModel = dashboardViewModel,
+                                        )
                                     }
-                                },
-                                onToggleCanteen = {
-                                    if (state.canteen.isOpen) showCloseReasonDialog = true
-                                    else dashboardViewModel.setCanteenOpenStatus(true)
-                                },
-                                onLogout = onLogout,
-                            )
-                        } else {
-                            when (selectedNavItem) {
-                                "Profile" -> {
-                                    OwnerProfileScreen(
-                                        owner = state.owner,
-                                        onBack = { selectedNavItem = "Dashboard" },
-                                        onLogout = onLogout,
-                                        onNavigateToManageItems = onNavigateToManageItems,
-                                        onNavigateToOrders = onNavigateToOrders,
-                                        appState = appState,
-                                        dashboardViewModel = dashboardViewModel,
-                                    )
-                                }
-                                "Customers" -> {
-                                    OwnerCustomersScreen(
-                                        orders = ownerOrders.ifEmpty { state.recentOrders },
-                                        onBack = { selectedNavItem = "Dashboard" },
-                                    )
-                                }
-                                "Product Suggestions" -> {
-                                    OwnerSuggestionsScreen(
-                                        owner = state.owner,
-                                        onBack = { selectedNavItem = "Dashboard" },
-                                    )
-                                }
-                                else -> {
-                                    OwnerDashboardBody(
-                                        state = state,
-                                        allOrders = ownerOrders.ifEmpty { state.recentOrders },
-                                        onNavigateToManageItems = onNavigateToManageItems,
-                                        onNavigateToOrders = onNavigateToOrders,
-                                        onToggleCanteen = {
-                                            if (state.canteen.isOpen) showCloseReasonDialog = true
-                                            else dashboardViewModel.setCanteenOpenStatus(true)
-                                        },
-                                        onAdvanceOrderStatus = { orderId, nextStatus ->
-                                            dashboardViewModel.updateOrderStatus(orderId, nextStatus)
-                                        },
-                                        onScanQrClick = { showBarcodeScanner = true },
-                                    )
+                                    "Orders" -> {
+                                        OwnerOrdersScreen(
+                                            canteenId = state.canteen.id,
+                                            onBack = { selectedNavItem = "Dashboard" },
+                                            onNavigateToOrderDetails = { onNavigateToOrders() },
+                                            dashboardViewModel = dashboardViewModel,
+                                            initialTab = "Preparing",
+                                        )
+                                    }
+                                    "Order History" -> {
+                                        OwnerOrdersScreen(
+                                            canteenId = state.canteen.id,
+                                            onBack = { selectedNavItem = "Dashboard" },
+                                            onNavigateToOrderDetails = { onNavigateToOrders() },
+                                            dashboardViewModel = dashboardViewModel,
+                                            initialTab = "Picked Up",
+                                        )
+                                    }
+                                    "Customers" -> {
+                                        OwnerCustomersScreen(
+                                            orders = ownerOrders.ifEmpty { state.recentOrders },
+                                            onBack = { selectedNavItem = "Dashboard" },
+                                        )
+                                    }
+                                    "Product Suggestions" -> {
+                                        OwnerSuggestionsScreen(
+                                            owner = state.owner,
+                                            onBack = { selectedNavItem = "Dashboard" },
+                                        )
+                                    }
+                                    "Reviews & Feedback" -> {
+                                        OwnerReviewsScreen(
+                                            canteenName = state.canteen.name,
+                                            onBack = { selectedNavItem = "Dashboard" },
+                                        )
+                                    }
+                                    "Notifications" -> {
+                                        OwnerNotificationsScreen(
+                                            canteenName = state.canteen.name,
+                                            onBack = { selectedNavItem = "Dashboard" },
+                                        )
+                                    }
+                                    "Settings" -> {
+                                        OwnerSettingsScreen(
+                                            canteenName = state.canteen.name,
+                                            isCanteenOpen = state.canteen.isOpen,
+                                            onToggleCanteenStatus = { isOpen ->
+                                                if (isOpen) {
+                                                    dashboardViewModel.setCanteenOpenStatus(true)
+                                                } else {
+                                                    showCloseReasonDialog = true
+                                                }
+                                            },
+                                            onBack = { selectedNavItem = "Dashboard" },
+                                        )
+                                    }
+                                    "Help & Support" -> {
+                                        OwnerHelpSupportScreen(
+                                            canteenName = state.canteen.name,
+                                            onBack = { selectedNavItem = "Dashboard" },
+                                        )
+                                    }
+                                    else -> {
+                                        OwnerDashboardBody(
+                                            state = state,
+                                            allOrders = ownerOrders.ifEmpty { state.recentOrders },
+                                            onNavigateToManageItems = onNavigateToManageItems,
+                                            onNavigateToOrders = onNavigateToOrders,
+                                            onAdvanceOrderStatus = { orderId, nextStatus ->
+                                                dashboardViewModel.updateOrderStatus(orderId, nextStatus)
+                                            },
+                                        )
+                                    }
                                 }
                             }
+                        }
+
+                        val showBottomBar = !drawerOpen && (selectedNavItem == "Dashboard" || selectedNavItem == "Customers")
+                        if (showBottomBar) {
+                            OwnerBottomBar(
+                                currentSection = selectedNavItem,
+                                onSectionSelected = { section ->
+                                    selectedNavItem = section
+                                },
+                                onAddItemClick = onNavigateToManageItems,
+                                onScanQrClick = { showBarcodeScanner = true },
+                                onOrdersClick = onNavigateToOrders,
+                                activeOrdersCount = state.metrics.newOrdersCount + state.metrics.preparingOrdersCount,
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                            )
                         }
                     }
                 }
@@ -341,7 +457,6 @@ fun OwnerDashboardScreen(
         }
     }
 
-    // ── CLOSE CANTEEN REASON DIALOG ──────────────────────────────────────────
     if (showCloseReasonDialog) {
         val reasons = listOf("Break", "Stock unavailable", "Kitchen maintenance", "End of day", "Other")
         AlertDialog(
@@ -407,7 +522,6 @@ fun OwnerDashboardScreen(
         )
     }
 
-    // ── OWNER BARCODE SCANNER MODAL: SCAN & VERIFY ORDER ───────────────────
     if (showBarcodeScanner) {
         OwnerBarcodeScannerModal(
             onDismiss = { showBarcodeScanner = false },
@@ -418,16 +532,14 @@ fun OwnerDashboardScreen(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 //  TOP BAR (Constant Upper Navigation Bar: 3 lines, QuickBite, notifications, profile)
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun OwnerTopBar(
     drawerOpen: Boolean = false,
     onHamburgerClick: () -> Unit = {},
-    onProfileClick: () -> Unit = {},
-    onScanQrClick: (() -> Unit)? = null,
+    onNotificationsClick: () -> Unit = {},
+    onHomeClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -453,8 +565,14 @@ fun OwnerTopBar(
 
             Spacer(Modifier.width(2.dp))
 
-            // QuickBite logo & app name
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // QuickBite logo & app name (Tappable to return to Dashboard)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onHomeClick() }
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+            ) {
                 Box(
                     modifier = Modifier
                         .size(34.dp)
@@ -480,31 +598,11 @@ fun OwnerTopBar(
 
             Spacer(Modifier.weight(1f))
 
-            // Dedicated QR Scanner button
-            if (onScanQrClick != null) {
-                IconButton(
-                    onClick = onScanQrClick,
-                    modifier = Modifier.testTag("owner_top_scan_qr_button")
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFF5F3FF)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.QrCodeScanner,
-                            contentDescription = "Scan Customer QR",
-                            tint = Color(0xFF7C3AED),
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-            }
-
-            // Notification bell with alert dot
-            IconButton(onClick = {}) {
+            // Notification bell with alert dot (navigates to Notifications screen)
+            IconButton(
+                onClick = onNotificationsClick,
+                modifier = Modifier.testTag("owner_notifications_button"),
+            ) {
                 Box {
                     Icon(
                         imageVector = Icons.Default.Notifications,
@@ -521,36 +619,12 @@ fun OwnerTopBar(
                     )
                 }
             }
-
-            // Owner Profile button
-            IconButton(
-                onClick = onProfileClick,
-                modifier = Modifier.testTag("owner_profile_top_button"),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(OrangeAccent.copy(alpha = 0.12f))
-                        .border(1.5.dp, OrangeAccent, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Profile",
-                        tint = OrangeAccent,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
         }
         HorizontalDivider(thickness = 0.8.dp, color = BorderGray.copy(alpha = 0.45f))
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 //  NAVIGATION DRAWER  (matches Image 1 reference)
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun OwnerNavDrawer(
@@ -559,7 +633,8 @@ private fun OwnerNavDrawer(
     isCanteenOpen: Boolean,
     closeReason: String,
     selectedItem: String,
-    navItems: List<NavItem>,
+    navSections: List<NavSection>,
+    onCloseDrawer: () -> Unit = {},
     onItemClick: (String) -> Unit,
     onToggleCanteen: () -> Unit,
     onLogout: () -> Unit,
@@ -567,90 +642,177 @@ private fun OwnerNavDrawer(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(PureWhite),
+            .background(DrawerAmber)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
     ) {
-        // ── Owner profile section ────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onItemClick("Profile") }
-                .padding(horizontal = 20.dp, vertical = 18.dp),
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
-                    .size(54.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(OrangeAccent.copy(alpha = 0.12f))
-                    .border(2.dp, OrangeAccent.copy(alpha = 0.35f), CircleShape),
+                    .background(PureWhite.copy(alpha = 0.25f))
+                    .border(1.5.dp, PureWhite, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = owner.name.take(1).uppercase().ifBlank { "C" },
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = OrangeAccent,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Black,
+                    color = BlackPrimary,
                 )
             }
 
-            Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(12.dp))
 
             val blockInfo = if (owner.block.isNotBlank()) "Block ${owner.block}" else ""
-            Column {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onItemClick("Profile") },
+            ) {
                 Text(
                     text = owner.name.ifBlank { "Canteen Owner" },
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextDark,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = BlackPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(Modifier.height(3.dp))
-                // Canteen name and Block shown clearly inside the drawer
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(if (isCanteenOpen) BlackPrimary else Color(0xFFDC2626)),
+                    )
+                    Spacer(Modifier.width(6.dp))
                     Text(
                         text = if (blockInfo.isNotBlank()) "${canteenName.ifBlank { "Main Canteen" }} • $blockInfo" else canteenName.ifBlank { "Main Canteen" },
-                        fontSize = 13.sp,
-                        color = TextMuted,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = BlackPrimary.copy(alpha = 0.8f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
+
+            // Close Drawer Icon Button
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(PureWhite.copy(alpha = 0.25f))
+                    .clickable(onClick = onCloseDrawer)
+                    .testTag("owner_drawer_close_button"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close Menu",
+                    tint = BlackPrimary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
 
-        HorizontalDivider(thickness = 0.8.dp, color = Color(0xFFEEEEEE))
-        Spacer(Modifier.height(6.dp))
+        // Canteen Status Toggle Card - App Theme Matched (No creepy neon green)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 6.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(PureWhite.copy(alpha = if (isCanteenOpen) 0.26f else 0.16f))
+                .border(1.dp, PureWhite.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                .clickable { onToggleCanteen() }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(if (isCanteenOpen) BlackPrimary else Color(0xFFDC2626)),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = if (isCanteenOpen) "Canteen is Open" else "Canteen is Closed",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = BlackPrimary,
+                    )
+                    Text(
+                        text = if (isCanteenOpen) "Accepting student orders" else closeReason.ifBlank { "Tap to open canteen" },
+                        fontSize = 11.5.sp,
+                        color = BlackPrimary.copy(alpha = 0.75f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+
+            Switch(
+                checked = isCanteenOpen,
+                onCheckedChange = { onToggleCanteen() },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = PureWhite,
+                    checkedTrackColor = BlackPrimary,
+                    uncheckedThumbColor = PureWhite,
+                    uncheckedTrackColor = PureWhite.copy(alpha = 0.4f),
+                ),
+                modifier = Modifier.testTag("canteen_status_drawer_switch"),
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
 
         var showLogoutConfirmation by remember { mutableStateOf(false) }
 
-        // ── Scrollable nav items ─────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            navItems.forEach { item ->
-                DrawerNavItem(
-                    item = item,
-                    isSelected = item.label == selectedItem,
-                    onClick = { onItemClick(item.label) },
+            navSections.forEachIndexed { index, section ->
+                if (index > 0) {
+                    Spacer(Modifier.height(8.dp))
+                }
+
+                // Section heading matching student drawer style
+                Text(
+                    text = section.title.uppercase(),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = PureWhite.copy(alpha = 0.9f),
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 )
+
+                section.items.forEach { item ->
+                    DrawerNavItem(
+                        item = item,
+                        isSelected = item.label == selectedItem,
+                        onClick = { onItemClick(item.label) },
+                    )
+                }
             }
 
-            Spacer(Modifier.height(6.dp))
-            HorizontalDivider(
-                thickness = 0.8.dp,
-                color = Color(0xFFEEEEEE),
-                modifier = Modifier.padding(horizontal = 12.dp),
-            )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(10.dp))
 
-            // Logout with confirmation
             DrawerNavItem(
-                item = NavItem("Logout", Icons.AutoMirrored.Filled.Logout, tag = "owner_logout_button"),
+                item = NavItem("Logout", Icons.AutoMirrored.Outlined.Logout, tag = "owner_logout_button"),
                 isSelected = false,
                 tintOverride = Color(0xFFDC2626),
                 onClick = { showLogoutConfirmation = true },
@@ -706,57 +868,69 @@ private fun DrawerNavItem(
     onClick: () -> Unit,
     tintOverride: Color? = null,
 ) {
-    val iconTint = tintOverride ?: if (isSelected) OrangeAccent else Color(0xFF6B7280)
-    val textColor = tintOverride ?: if (isSelected) OrangeAccent else TextDark
+    val iconTint = tintOverride ?: if (isSelected) DrawerAmber else BlackPrimary
+    val textColor = tintOverride ?: if (isSelected) DrawerAmber else BlackPrimary
     val tagMod = if (item.tag.isNotBlank()) Modifier.testTag(item.tag) else Modifier
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 2.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) SelectedNavBg else Color.Transparent)
+            .background(if (isSelected) PureWhite else Color.Transparent)
             .clickable(role = Role.Button, onClick = onClick)
             .then(tagMod)
-            .padding(horizontal = 12.dp, vertical = 11.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = item.icon,
-            contentDescription = null,
-            tint = iconTint,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(Modifier.width(14.dp))
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(if (isSelected) DrawerAmberLight else PureWhite.copy(alpha = 0.22f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = item.icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(19.dp),
+            )
+        }
+        Spacer(Modifier.width(13.dp))
         Text(
             text = item.label,
             fontSize = 14.5.sp,
-            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
             color = textColor,
             modifier = Modifier.weight(1f),
         )
         if (item.badge > 0) {
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(OrangeAccent),
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isSelected) DrawerAmber else PureWhite)
+                    .padding(horizontal = 7.dp, vertical = 2.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = "${item.badge}",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = PureWhite,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    color = if (isSelected) PureWhite else DrawerAmber,
                 )
             }
+        } else {
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = if (isSelected) DrawerAmber.copy(alpha = 0.7f) else BlackPrimary.copy(alpha = 0.4f),
+                modifier = Modifier.size(17.dp),
+            )
         }
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 //  MAIN DASHBOARD BODY  (matches Image 2 reference)
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun OwnerDashboardBody(
@@ -764,9 +938,8 @@ private fun OwnerDashboardBody(
     allOrders: List<OrderDocument> = emptyList(),
     onNavigateToManageItems: () -> Unit,
     onNavigateToOrders: () -> Unit,
-    onToggleCanteen: () -> Unit,
     onAdvanceOrderStatus: (String, String) -> Unit,
-    onScanQrClick: () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val greeting = when {
@@ -777,15 +950,14 @@ private fun OwnerDashboardBody(
     val ownerFirstName = state.owner.name.split(" ").firstOrNull().orEmpty().ifBlank { "Owner" }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(PageBackground)
             .verticalScroll(rememberScrollState())
-            .padding(bottom = 36.dp),
+            .padding(bottom = 96.dp),
     ) {
         Spacer(Modifier.height(18.dp))
 
-        // ── Greeting — NO canteen name displayed here ────────────────────────
         Text(
             text = "$greeting, $ownerFirstName 👋",
             fontSize = 22.sp,
@@ -796,9 +968,70 @@ private fun OwnerDashboardBody(
 
         Spacer(Modifier.height(14.dp))
 
-        Spacer(Modifier.height(18.dp))
+        if (state.metrics.pendingOrdersCount > 0) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .clickable { onNavigateToOrders() },
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B)),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFF59E0B)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsActive,
+                                contentDescription = null,
+                                tint = PureWhite,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "${state.metrics.pendingOrdersCount} Incoming Order${if (state.metrics.pendingOrdersCount > 1) "s" else ""}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.5.sp,
+                                color = Color(0xFF92400E),
+                            )
+                            Text(
+                                text = "Action required: Confirm or Reject",
+                                fontSize = 12.sp,
+                                color = Color(0xFFB45309),
+                            )
+                        }
+                    }
+                    Button(
+                        onClick = onNavigateToOrders,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.height(34.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    ) {
+                        Text("Review", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = PureWhite)
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+        }
 
-        // ── Overview & Historical Earnings (Live card with filter) ───────────
         TodayOverviewCard(
             defaultRevenue = state.metrics.todayRevenue,
             defaultOrdersCount = state.metrics.todayOrdersCount,
@@ -807,76 +1040,8 @@ private fun OwnerDashboardBody(
             allOrders = allOrders.ifEmpty { state.recentOrders },
         )
 
-        Spacer(Modifier.height(24.dp))
-
-        // ── Quick Actions ────────────────────────────────────────────────────
-        Text(
-            text = "Quick Actions",
-            fontSize = 17.sp,
-            fontWeight = FontWeight.Bold,
-            color = TextDark,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
-        Spacer(Modifier.height(12.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            QuickDashboardAction(
-                label = "Scan & Verify",
-                icon = Icons.Default.QrCodeScanner,
-                backgroundColor = Color(0xFFF5F3FF),
-                iconColor = Color(0xFF7C3AED),
-                borderColor = Color(0xFFEDE9FE),
-                modifier = Modifier.weight(1f),
-                testTag = "quick_action_scan_barcode",
-                onClick = onScanQrClick,
-            )
-            QuickDashboardAction(
-                label = "Add Item",
-                icon = Icons.Default.Add,
-                backgroundColor = Color(0xFFFFF7ED),
-                iconColor = Color(0xFFEA580C),
-                borderColor = Color(0xFFFFEDD5),
-                modifier = Modifier.weight(1f),
-                testTag = "quick_action_manage_items",
-                onClick = onNavigateToManageItems,
-            )
-            QuickDashboardAction(
-                label = "Orders",
-                icon = Icons.Default.ShoppingBag,
-                backgroundColor = Color(0xFFEFF6FF),
-                iconColor = Color(0xFF2563EB),
-                borderColor = Color(0xFFDBEAFE),
-                modifier = Modifier.weight(1f),
-                testTag = "quick_action_order_queue",
-                onClick = onNavigateToOrders,
-            )
-            QuickDashboardAction(
-                label = "Reports",
-                icon = Icons.Default.Analytics,
-                backgroundColor = Color(0xFFFAF5FF),
-                iconColor = Color(0xFF7C3AED),
-                borderColor = Color(0xFFF3E8FF),
-                modifier = Modifier.weight(1f),
-                onClick = {},
-            )
-            QuickDashboardAction(
-                label = "Canteen",
-                icon = Icons.Default.Storefront,
-                backgroundColor = Color(0xFFFEFCE8),
-                iconColor = Color(0xFFD97706),
-                borderColor = Color(0xFFFEF08A),
-                modifier = Modifier.weight(1f),
-                onClick = onToggleCanteen,
-            )
-        }
-
         Spacer(Modifier.height(26.dp))
 
-        // ── Menu Items Section ───────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1024,8 +1189,8 @@ private fun OwnerDashboardBody(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFFFFF7ED))
-                            .border(1.dp, Color(0xFFFFEDD5), RoundedCornerShape(14.dp))
+                            .background(DrawerAmberLight)
+                            .border(1.dp, BorderGray, RoundedCornerShape(14.dp))
                             .clickable { onNavigateToManageItems() }
                             .padding(vertical = 12.dp),
                         contentAlignment = Alignment.Center,
@@ -1043,7 +1208,6 @@ private fun OwnerDashboardBody(
 
         Spacer(Modifier.height(26.dp))
 
-        // ── Recent Orders (Delivered & Completed Orders Only) ───────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1112,9 +1276,7 @@ private fun OwnerDashboardBody(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 //  TODAY'S OVERVIEW CARD WITH FILTER FOR PREVIOUS DAYS
-// ─────────────────────────────────────────────────────────────────────────────
 
 private enum class DashboardPeriodFilter(val displayName: String, val shortName: String) {
     TODAY("Today's Overview", "Today"),
@@ -1298,60 +1460,7 @@ private fun OverviewStat(label: String, value: String) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  QUICK ACTION ICON BUTTON
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun QuickDashboardAction(
-    label: String,
-    icon: ImageVector,
-    backgroundColor: Color,
-    iconColor: Color,
-    borderColor: Color,
-    modifier: Modifier = Modifier,
-    testTag: String = "",
-    onClick: () -> Unit,
-) {
-    val tagMod = if (testTag.isNotBlank()) Modifier.testTag(testTag) else Modifier
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
-            .clickable(role = Role.Button, onClick = onClick)
-            .then(tagMod)
-            .padding(vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(62.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(backgroundColor)
-                .border(1.2.dp, borderColor, RoundedCornerShape(20.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = iconColor,
-                modifier = Modifier.size(28.dp),
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextDark,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-        )
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 //  DASHBOARD ORDER ROW
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun DashboardOrderRow(
@@ -1370,7 +1479,7 @@ private fun DashboardOrderRow(
             modifier = Modifier
                 .size(46.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFFFFF0E6)),
+                .background(DrawerAmberLight),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -1392,13 +1501,25 @@ private fun DashboardOrderRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(text = "₹${order.totalAmount}", fontSize = 12.sp, color = TextMuted)
+            val fulfillmentLabel = if (order.fulfillmentType.equals("DINE_IN", ignoreCase = true)) "Dine-in" else "Takeaway"
+            Text(text = "₹${order.totalAmount} • $fulfillmentLabel", fontSize = 12.sp, color = TextMuted)
         }
 
         Spacer(Modifier.width(8.dp))
 
-        when (order.status.uppercase()) {
-            "NEW" -> {
+        when (order.status.uppercase().trim()) {
+            "PENDING", "NEW", "WAITING" -> {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0xFFFEF3C7))
+                        .clickable { onAdvanceStatus("ACCEPTED") }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                ) {
+                    Text("Accept Order", color = Color(0xFFD97706), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            "ACCEPTED" -> {
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
@@ -1414,9 +1535,10 @@ private fun DashboardOrderRow(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
                         .background(AmberBrand.copy(alpha = 0.15f))
+                        .clickable { onAdvanceStatus("READY") }
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
-                    Text("Preparing", color = AmberBrand, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Mark Ready", color = AmberBrand, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
             "READY" -> {
@@ -1427,7 +1549,7 @@ private fun DashboardOrderRow(
                         .clickable { onAdvanceStatus("COMPLETED") }
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
-                    Text("Ready", color = AccentGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Picked Up", color = AccentGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
             else -> {
@@ -1444,9 +1566,7 @@ private fun DashboardOrderRow(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 //  DASHBOARD MENU ITEM ROW
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun DashboardMenuItemRow(
@@ -1538,6 +1658,182 @@ private fun DashboardMenuItemRow(
                     fontSize = 10.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = badgeTextColor,
+                )
+            }
+        }
+    }
+}
+
+//  OWNER BOTTOM NAVIGATION BAR
+
+@Composable
+fun OwnerBottomBar(
+    currentSection: String,
+    onSectionSelected: (String) -> Unit,
+    onAddItemClick: () -> Unit,
+    onScanQrClick: () -> Unit,
+    onOrdersClick: () -> Unit,
+    activeOrdersCount: Int = 0,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(28.dp),
+                clip = false,
+            ),
+        shape = RoundedCornerShape(28.dp),
+        color = PureWhite,
+        tonalElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp, vertical = 5.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OwnerBottomNavCell(
+                label = "Add Item",
+                icon = Icons.Default.Add,
+                isSelected = false,
+                onClick = onAddItemClick,
+                modifier = Modifier.weight(1f),
+            )
+
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 6.dp)
+                    .size(46.dp)
+                    .shadow(4.dp, CircleShape, spotColor = DrawerAmber.copy(alpha = 0.45f))
+                    .clip(CircleShape)
+                    .background(PureWhite)
+                    .border(
+                        width = 2.dp,
+                        brush = Brush.sweepGradient(
+                            colors = listOf(
+                                DrawerAmber,
+                                Color(0xFFEA580C),
+                                Color(0xFFE11D48),
+                                Color(0xFF8B5CF6),
+                                DrawerAmber,
+                            )
+                        ),
+                        shape = CircleShape,
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onScanQrClick,
+                    )
+                    .semantics { contentDescription = "Scan Customer QR" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.QrCodeScanner,
+                    contentDescription = null,
+                    tint = BlackPrimary,
+                    modifier = Modifier.size(23.dp),
+                )
+            }
+
+            OwnerBottomNavCell(
+                label = "Orders",
+                icon = Icons.Default.ShoppingBag,
+                isSelected = false,
+                badgeCount = activeOrdersCount,
+                onClick = onOrdersClick,
+                modifier = Modifier.weight(1f),
+            )
+
+            OwnerBottomNavCell(
+                label = "Customers",
+                icon = Icons.Default.Group,
+                isSelected = currentSection == "Customers",
+                onClick = { onSectionSelected("Customers") },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun OwnerBottomNavCell(
+    label: String,
+    icon: ImageVector,
+    isSelected: Boolean,
+    badgeCount: Int = 0,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val iconScale by animateFloatAsState(
+        targetValue = if (isSelected) 1.08f else 1.0f,
+        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        label = "ownerTabScale_$label",
+    )
+
+    val pillAlpha by animateFloatAsState(
+        targetValue = if (isSelected) 1f else 0f,
+        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        label = "ownerTabPillAlpha_$label",
+    )
+
+    val iconTint by animateColorAsState(
+        targetValue = if (isSelected) DrawerAmber else Color(0xFF8E8E93),
+        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        label = "ownerTabIconTint_$label",
+    )
+
+    Box(
+        modifier = modifier
+            .height(44.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        // App theme subtle selected pill indicator
+        Box(
+            modifier = Modifier
+                .size(width = 46.dp, height = 34.dp)
+                .clip(RoundedCornerShape(17.dp))
+                .background(DrawerAmberLight.copy(alpha = pillAlpha)),
+        )
+
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = iconTint,
+            modifier = Modifier
+                .size(24.dp)
+                .scale(iconScale),
+        )
+
+        // Live badge for Orders
+        if (badgeCount > 0) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .offset(x = 12.dp, y = (-10).dp)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(DrawerAmber),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (badgeCount > 99) "99+" else badgeCount.toString(),
+                    color = PureWhite,
+                    fontSize = 8.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
                 )
             }
         }

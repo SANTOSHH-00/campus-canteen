@@ -1,3 +1,4 @@
+// QuickbiteApiService: Background service handling order lifecycle notifications and background synchronization
 package com.example.data.api
 
 import okhttp3.MultipartBody
@@ -16,7 +17,9 @@ import retrofit2.http.Streaming
 
 interface QuickbiteApiService {
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
+  @GET("health")
+  suspend fun getHealth(): Response<Map<String, Any>>
+
   @POST("auth/login")
   suspend fun loginUser(@Body body: LoginRequestDto): Response<LoginResponseDto>
 
@@ -29,7 +32,6 @@ interface QuickbiteApiService {
   @POST("auth/reset-password")
   suspend fun resetPassword(@Body body: ResetPasswordRequestDto): Response<SimpleMessageResponseDto>
 
-  // ── Owner Auth ────────────────────────────────────────────────────────────
   @POST("owner/login")
   suspend fun ownerLogin(@Body body: OwnerLoginRequestDto): Response<OwnerLoginResponseDto>
 
@@ -57,7 +59,6 @@ interface QuickbiteApiService {
     @retrofit2.http.Header("Authorization") authHeader: String? = null,
   ): Response<ConfirmPickupResponseDto>
 
-  // ── Canteens ──────────────────────────────────────────────────────────────
   @GET("canteens")
   suspend fun getCanteens(): Response<List<MongoCanteenDto>>
 
@@ -79,7 +80,6 @@ interface QuickbiteApiService {
     @Body body: ProfileUpdateDto,
   ): Response<MongoCanteenDto>
 
-  // ── Items ─────────────────────────────────────────────────────────────────
   @GET("items/canteen/{canteenId}")
   suspend fun getCanteenItems(@Path("canteenId") canteenId: String): Response<List<MongoItemDto>>
 
@@ -95,6 +95,12 @@ interface QuickbiteApiService {
     @Body body: StockUpdateDto,
   ): Response<MongoItemDto>
 
+  @PATCH("items/{id}/availability")
+  suspend fun updateItemAvailability(
+    @Path("id") id: String,
+    @Body body: AvailabilityUpdateDto,
+  ): Response<Map<String, Any>>
+
   @DELETE("items/{id}")
   suspend fun deleteItem(@Path("id") id: String): Response<Map<String, Any>>
 
@@ -104,7 +110,22 @@ interface QuickbiteApiService {
     @Part image: MultipartBody.Part,
   ): Response<ImageUploadResponseDto>
 
-  // ── Orders ────────────────────────────────────────────────────────────────
+  @POST("items/generate-description")
+  suspend fun generateItemDescription(
+    @Body body: GenerateDescriptionRequestDto,
+  ): Response<GenerateDescriptionResponseDto>
+
+  @GET("items/{id}/reviews")
+  suspend fun getItemReviews(
+    @Path("id") id: String,
+  ): Response<ItemReviewsResponseDto>
+
+  @POST("items/{id}/reviews")
+  suspend fun submitItemReview(
+    @Path("id") id: String,
+    @Body body: CreateReviewRequestDto,
+  ): Response<CreateReviewResponseDto>
+
   @GET("orders/student/{studentId}")
   suspend fun getStudentOrders(
     @Path("studentId") studentId: String,
@@ -147,7 +168,18 @@ interface QuickbiteApiService {
     @Body body: StatusUpdateDto,
   ): Response<MongoOrderDto>
 
-  // ── Users ─────────────────────────────────────────────────────────────────
+  @POST("orders/{id}/accept")
+  suspend fun acceptOrder(
+    @Path("id") id: String,
+    @Body body: Map<String, String> = emptyMap(),
+  ): Response<MongoOrderDto>
+
+  @POST("orders/{id}/reject")
+  suspend fun rejectOrder(
+    @Path("id") id: String,
+    @Body body: Map<String, String>,
+  ): Response<MongoOrderDto>
+
   @GET("users/{uid}")
   suspend fun getUser(@Path("uid") uid: String): Response<MongoUserDto>
 
@@ -160,7 +192,6 @@ interface QuickbiteApiService {
     @Body body: FcmTokenDto,
   ): Response<MongoUserDto>
 
-  // ── Owners ────────────────────────────────────────────────────────────────
   @GET("owners/{uid}")
   suspend fun getOwner(@Path("uid") uid: String): Response<MongoOwnerDto>
 
@@ -173,7 +204,6 @@ interface QuickbiteApiService {
     @Body body: Map<String, @JvmSuppressWildcards Any>,
   ): Response<MongoOwnerDto>
 
-  // ── Inventory ─────────────────────────────────────────────────────────────
   @GET("inventory/canteen/{canteenId}")
   suspend fun getCanteenInventory(@Path("canteenId") canteenId: String): Response<List<MongoInventoryDto>>
 
@@ -186,7 +216,6 @@ interface QuickbiteApiService {
   @POST("inventory")
   suspend fun addInventoryItem(@Body item: MongoInventoryDto): Response<MongoInventoryDto>
 
-  // ── Notifications ─────────────────────────────────────────────────────────
   @GET("notifications/user/{userId}")
   suspend fun getUserNotifications(@Path("userId") userId: String): Response<List<MongoNotificationDto>>
 
@@ -196,7 +225,6 @@ interface QuickbiteApiService {
   @PATCH("notifications/{id}/read")
   suspend fun markNotificationRead(@Path("id") id: String): Response<MongoNotificationDto>
 
-  // ── Favorites ─────────────────────────────────────────────────────────────
   @GET("users/{uid}/favorites")
   suspend fun getUserFavorites(@Path("uid") uid: String): Response<UserFavoritesResponseDto>
 
@@ -212,7 +240,6 @@ interface QuickbiteApiService {
     @Path("itemId") itemId: String,
   ): Response<UserFavoritesResponseDto>
 
-  // ── AI Assistant (Gemini) ─────────────────────────────────────────────────
   @Streaming
   @POST("ai/stream")
   suspend fun streamAiMessage(
@@ -243,7 +270,6 @@ interface QuickbiteApiService {
     @retrofit2.http.Header("Authorization") authHeader: String? = null,
   ): Response<AiFeedbackResponseDto>
 
-  // ── Product Suggestions & Canteen Routing ─────────────────────────────────
   @POST("suggestions")
   suspend fun submitProductSuggestion(
     @Body body: CreateSuggestionRequestDto,
@@ -276,5 +302,20 @@ interface QuickbiteApiService {
     @retrofit2.http.Header("Authorization") authHeader: String? = null,
     @retrofit2.http.Header("x-owner-token") ownerToken: String? = null,
   ): Response<ResponseBody>
+
+  @GET("payments/config")
+  suspend fun getPaymentConfig(): Response<PaymentConfigResponseDto>
+
+  @POST("payments/create-order")
+  suspend fun createPaymentOrder(
+    @Body body: CreatePaymentOrderRequestDto,
+    @retrofit2.http.Header("Authorization") authHeader: String? = null,
+  ): Response<CreatePaymentOrderResponseDto>
+
+  @POST("payments/verify-payment")
+  suspend fun verifyPayment(
+    @Body body: VerifyPaymentRequestDto,
+    @retrofit2.http.Header("Authorization") authHeader: String? = null,
+  ): Response<VerifyPaymentResponseDto>
 }
 

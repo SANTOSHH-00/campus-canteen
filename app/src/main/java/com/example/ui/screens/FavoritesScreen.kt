@@ -1,3 +1,4 @@
+// FavoritesScreen: Jetpack Compose screen for Favorites user interface
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
@@ -122,7 +123,6 @@ fun FavoritesScreen(
     Column(
       modifier = Modifier.fillMaxSize()
     ) {
-      // ── 1. Top Header Bar ──────────────────────────────────────────────────
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -189,7 +189,6 @@ fun FavoritesScreen(
         }
       }
 
-      // ── 2. Content Area: Grid or Empty State ──────────────────────────────
       if (favoriteItemsWithCanteen.isEmpty()) {
         // Empty State matching requirement 8
         Box(
@@ -321,7 +320,6 @@ private fun FavoriteFoodCard(
     border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray.copy(alpha = 0.8f)),
   ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-      // ── Large Prominent Food Image with Floating Heart Button ─────────────
       Box(
         modifier = Modifier
           .fillMaxWidth()
@@ -375,7 +373,6 @@ private fun FavoriteFoodCard(
         }
       }
 
-      // ── Food Item Details ──────────────────────────────────────────────────
       Column(
         modifier = Modifier
           .fillMaxWidth()

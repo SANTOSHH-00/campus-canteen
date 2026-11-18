@@ -24,6 +24,7 @@ const itemSchema = new mongoose.Schema(
     preparationTime: { type: String, default: '5-7 min' },
     prepMinutes: { type: Number, default: 7 },
     rating: { type: Number, default: 4.5 },
+    reviewCount: { type: Number, default: 0 },
     ingredients: { type: [String], default: [] },
     customizationTitle: { type: String, default: '' },
     customizationOptions: { type: [String], default: [] },

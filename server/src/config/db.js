@@ -1,18 +1,15 @@
+// Database Configuration: Establishes and manages resilient MongoDB Atlas connection with pooling and auto-reconnect
 const mongoose = require('mongoose');
 const path = require('path');
 const dotenv = require('dotenv');
 
-// Load environment variables from project root .env
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
-dotenv.config(); // fallback to local .env if present
+dotenv.config();
 
 let isInitialConnectionSetup = false;
 let retryTimeout = null;
 
-/**
- * Register connection listeners once to prevent duplicate listeners
- * and to prevent unhandled 'error' events on Mongoose EventEmitter from crashing Node.js
- */
+// Registers connection lifecycle listeners to handle disconnects and prevent unhandled EventEmitter errors
 function registerConnectionListeners() {
   if (isInitialConnectionSetup) return;
   isInitialConnectionSetup = true;
@@ -22,8 +19,6 @@ function registerConnectionListeners() {
   });
 
   mongoose.connection.on('error', (err) => {
-    // CRITICAL: Unhandled 'error' events on EventEmitter crash the Node.js process.
-    // Handling it here prevents unexpected server crashes during network hiccups or Atlas failovers.
     console.error(`[${new Date().toISOString()}] [ERROR] [DB] MongoDB connection error:`, err.message);
   });
 
@@ -36,6 +31,7 @@ function registerConnectionListeners() {
   });
 }
 
+// Connects to MongoDB Atlas with connection pool configuration and automatic retry
 const connectDB = async () => {
   registerConnectionListeners();
 
@@ -44,24 +40,21 @@ const connectDB = async () => {
 
   if (!mongoURI) {
     console.error(`[${new Date().toISOString()}] [ERROR] [DB] MONGODB_URI is not defined in environment variables. Database operations will fail.`);
-    // Do not call process.exit(1) - allowing Express to start ensures /health can respond,
-    // logs can be inspected on Render, and services won't enter a silent CrashLoopBackOff.
     return;
   }
 
   try {
     const conn = await mongoose.connect(mongoURI, {
       dbName: dbName,
-      maxPoolSize: 20,                // Sized appropriately for Render free/starter instances & Atlas M0 connection limit
-      minPoolSize: 2,                 // Keep a modest warm pool without overwhelming idle socket limits
-      maxIdleTimeMS: 30000,           // Close idle connections after 30s
-      serverSelectionTimeoutMS: 5000, // Fail fast (5s) instead of hanging requests indefinitely
-      socketTimeoutMS: 45000,         // Close sockets inactive for 45s
+      maxPoolSize: 20,
+      minPoolSize: 2,
+      maxIdleTimeMS: 30000,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
     });
     console.log(`[${new Date().toISOString()}] [INFO] [DB] ✅ MongoDB Atlas Connected: ${conn.connection.host} [Database: ${dbName}]`);
   } catch (error) {
     console.error(`[${new Date().toISOString()}] [ERROR] [DB] ❌ MongoDB Connection Error: ${error.message}`);
-    // Auto-retry initial connection after 5 seconds if initially unreachable (e.g. Atlas cold start or DNS lag)
     if (!retryTimeout) {
       console.log(`[${new Date().toISOString()}] [INFO] [DB] Scheduling MongoDB reconnect attempt in 5 seconds...`);
       retryTimeout = setTimeout(() => {

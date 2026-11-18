@@ -17,7 +17,6 @@ async function runTests() {
   const otherCanteenId = 'canteen_other_' + Date.now();
 
   try {
-    // ── Test 1: Order creation records exact server orderPlacedAt & statusHistory
     const fakeClientDate = new Date('2020-01-01T00:00:00.000Z'); // spoofed client time
     const order1 = await Order.create({
       orderId: 'ORD-TIME-1-' + Date.now(),
@@ -38,7 +37,6 @@ async function runTests() {
     console.assert(order1.statusHistory.length >= 1, 'Expected statusHistory to contain PLACED');
     console.log('✅ TEST 1 PASSED: Server-authoritative orderPlacedAt and statusHistory recorded');
 
-    // ── Test 2: Order 2 placed after Order 1
     await new Promise(r => setTimeout(r, 150));
 
     const order2 = await Order.create({
@@ -58,7 +56,6 @@ async function runTests() {
       ],
     });
 
-    // ── Test 3: Queue ordering by orderPlacedAt
     const activeOrders = await Order.find({
       canteenId: testCanteenId,
       status: { $in: ordersRouter.ACTIVE_QUEUE_STATUSES },
@@ -77,7 +74,6 @@ async function runTests() {
     console.assert(metrics2.queuePosition === 2 && metrics2.ordersAhead === 1, 'Order 2 metrics incorrect');
     console.log('✅ TEST 2 & 3 PASSED: Queue position #1 and #2 strictly ordered by server orderPlacedAt');
 
-    // ── Test 4: Status progression updates server timestamps
     await new Promise(r => setTimeout(r, 100));
     const prepTime = new Date();
     await Order.updateOne(
@@ -104,7 +100,6 @@ async function runTests() {
     console.assert(new Date(readyOrder1.readyAt).getTime() >= new Date(readyOrder1.preparingAt).getTime(), 'readyAt must be >= preparingAt');
     console.log('✅ TEST 4 PASSED: Specific status timestamps (preparingAt, readyAt) recorded accurately');
 
-    // ── Test 5: Dynamic Queue advancement when Order 1 becomes READY
     const activeAfterReady = await Order.find({
       canteenId: testCanteenId,
       status: { $in: ordersRouter.ACTIVE_QUEUE_STATUSES },
@@ -120,7 +115,6 @@ async function runTests() {
     console.assert(metrics2After.ordersAhead === 0, 'Order 2 must have 0 orders ahead');
     console.log('✅ TEST 5 PASSED: Order 2 automatically advanced to #1 with 0 ahead after Order 1 ready');
 
-    // ── Test 6: Cross-canteen queue isolation
     const otherOrder = await Order.create({
       orderId: 'ORD-OTHER-' + Date.now(),
       studentId: 'student_other',

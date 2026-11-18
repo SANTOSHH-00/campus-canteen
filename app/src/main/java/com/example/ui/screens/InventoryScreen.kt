@@ -1,3 +1,4 @@
+// InventoryScreen: Jetpack Compose screen for Inventory user interface
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
@@ -96,7 +97,6 @@ fun InventoryScreen(
         .fillMaxSize()
         .padding(bottom = 88.dp), // Space for bottom button
     ) {
-      // ── Top Bar (matches Image 2) ─────────────────────────────────────────
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -127,7 +127,6 @@ fun InventoryScreen(
 
       Spacer(modifier = Modifier.height(6.dp))
 
-      // ── Inventory List ──────────────────────────────────────────────────
       if (items.isEmpty()) {
         Box(
           modifier = Modifier
@@ -171,7 +170,6 @@ fun InventoryScreen(
       }
     }
 
-    // ── Bottom Fixed Button: + Add Inventory Item (matches Image 2) ─────────
     Box(
       modifier = Modifier
         .align(Alignment.BottomCenter)
@@ -206,7 +204,6 @@ fun InventoryScreen(
     }
   }
 
-  // ── ADD / EDIT INVENTORY ITEM DIALOG ──────────────────────────────────────
   if (showAddDialog || itemToEdit != null) {
     val isEdit = itemToEdit != null
     val initial = itemToEdit ?: InventoryItem()
@@ -234,7 +231,6 @@ fun InventoryScreen(
       },
       text = {
         Column(modifier = Modifier.fillMaxWidth()) {
-          // Icon Picker Row
           Text(text = "Select Icon", fontSize = 12.sp, color = TextMuted)
           Spacer(modifier = Modifier.height(4.dp))
           Row(
@@ -400,7 +396,6 @@ fun InventoryScreen(
     )
   }
 
-  // ── DELETE CONFIRMATION DIALOG ────────────────────────────────────────────
   if (itemToDelete != null) {
     val target = itemToDelete!!
     AlertDialog(
@@ -431,7 +426,6 @@ fun InventoryScreen(
   }
 }
 
-// ── ROW ITEM MATCHING IMAGE 2 EXACTLY ────────────────────────────────────────
 
 @Composable
 private fun InventoryItemRow(

@@ -1,3 +1,4 @@
+// SuggestProductSheet: Reusable Jetpack Compose UI component
 package com.example.ui.components
 
 import android.widget.Toast
@@ -54,15 +55,14 @@ import com.example.ui.state.CanteenAppState
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
 import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberLight
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.TextDark
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.WarmCream
 import kotlinx.coroutines.launch
 
-private val PinkAccent = Color(0xFFFA2E67)
-private val PinkButtonBg = Color(0xFFFFB6C1)
-private val InputBoxBg = Color(0xFFF5F3F7)
+private val InputBoxBg = Color(0xFFF9F6F0)
 
 /**
  * Suggest Products Modal Sheet designed exactly per Reference Image 2:
@@ -267,9 +267,9 @@ fun SuggestProductSheet(
 
           Spacer(modifier = Modifier.height(20.dp))
 
-          // Send Button per Reference Image 2
+          // Send Button with Theme Palette (DrawerAmber)
           val isSendEnabled = isEligible && suggestionText.trim().length >= 2 && !isSubmitting
-          val buttonBg = if (isSendEnabled) PinkButtonBg else PinkButtonBg.copy(alpha = 0.5f)
+          val buttonBg = if (isSendEnabled) DrawerAmber else DrawerAmber.copy(alpha = 0.45f)
 
           Button(
             onClick = {
@@ -317,7 +317,7 @@ fun SuggestProductSheet(
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
               containerColor = buttonBg,
-              disabledContainerColor = PinkButtonBg.copy(alpha = 0.45f),
+              disabledContainerColor = DrawerAmber.copy(alpha = 0.4f),
             ),
           ) {
             if (isSubmitting) {
@@ -328,7 +328,7 @@ fun SuggestProductSheet(
               )
             } else {
               Text(
-                text = "Send",
+                text = "Send Suggestion",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = PureWhite,

@@ -1,3 +1,4 @@
+// OwnerBarcodeScannerModal: Jetpack Compose screen for OwnerBarcodeScannerModal user interface
 package com.example.ui.screens
 
 import android.Manifest
@@ -94,8 +95,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import com.example.data.api.ConfirmPickupResponseDto
+import com.example.data.api.MongoOrderDto
 import com.example.data.api.MongoRepository
 import com.example.data.api.VerifyBarcodeResponseDto
+import com.example.data.api.WebSocketManager
 import com.example.data.session.SessionManager
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.PureWhite
@@ -176,20 +179,24 @@ fun OwnerBarcodeScannerModal(
         val msg = err.message ?: "Unable to verify the order. Please check your internet connection and try again."
         val code = when {
           msg.contains("WRONG_OWNER", ignoreCase = true) || msg.contains("not belong to your canteen", ignoreCase = true) -> "WRONG_OWNER"
-          msg.contains("ORDER_NOT_READY", ignoreCase = true) || msg.contains("not ready", ignoreCase = true) -> "ORDER_NOT_READY"
-          msg.contains("ALREADY_COLLECTED", ignoreCase = true) || msg.contains("already been collected", ignoreCase = true) -> "ALREADY_COLLECTED"
           msg.contains("EXPIRED_BARCODE", ignoreCase = true) || msg.contains("expired", ignoreCase = true) -> "EXPIRED_BARCODE"
-          msg.contains("ORDER_CANCELLED", ignoreCase = true) || msg.contains("cancelled", ignoreCase = true) -> "ORDER_CANCELLED"
-          msg.contains("connection", ignoreCase = true) || msg.contains("timeout", ignoreCase = true) || msg.contains("connect", ignoreCase = true) -> "NETWORK_ERROR"
+          msg.contains("ALREADY_COLLECTED", ignoreCase = true) || msg.contains("already been collected", ignoreCase = true) -> "ALREADY_COLLECTED"
+          msg.contains("UNAUTHORIZED", ignoreCase = true) || msg.contains("sign in", ignoreCase = true) || msg.contains("401", ignoreCase = true) -> "UNAUTHORIZED"
+          msg.contains("REJECTED", ignoreCase = true) -> "ORDER_REJECTED"
+          msg.contains("CANCELLED", ignoreCase = true) -> "ORDER_CANCELLED"
+          msg.contains("connection", ignoreCase = true) || msg.contains("timeout", ignoreCase = true) || msg.contains("connect", ignoreCase = true) || msg.contains("Unable to resolve host", ignoreCase = true) -> "NETWORK_ERROR"
+          msg.contains("No order found", ignoreCase = true) || msg.contains("invalid", ignoreCase = true) || msg.contains("404", ignoreCase = true) -> "INVALID_BARCODE"
           else -> "INVALID_BARCODE"
         }
         val userFriendlyMessage = when (code) {
-          "INVALID_BARCODE" -> "This barcode is invalid. Please scan a valid Quick Bite order barcode."
+          "WRONG_OWNER" -> if (msg.contains("This order belongs to", ignoreCase = true)) msg else "This order does not belong to your canteen."
+          "EXPIRED_BARCODE" -> "This barcode has expired. Please contact support."
           "ALREADY_COLLECTED" -> "This order has already been collected."
-          "WRONG_OWNER" -> "This order does not belong to your canteen."
-          "ORDER_NOT_READY" -> "This order is not ready for collection yet."
-          "EXPIRED_BARCODE" -> "This barcode has expired. Please contact the canteen owner."
-          "NETWORK_ERROR" -> "Unable to verify the order. Please check your internet connection and try again."
+          "UNAUTHORIZED" -> "Session expired. Please sign in again as canteen owner."
+          "ORDER_REJECTED" -> "This order was rejected and cannot be collected."
+          "ORDER_CANCELLED" -> "This order was cancelled."
+          "NETWORK_ERROR" -> "Network error: Unable to verify order. Please check your internet connection and try again."
+          "INVALID_BARCODE" -> "No order found matching this barcode. Please scan a valid QuickBite order barcode."
           else -> msg
         }
         workflowState = BarcodeScanWorkflowState.Error(code, userFriendlyMessage)
@@ -232,7 +239,6 @@ fun OwnerBarcodeScannerModal(
       color = Color(0xFF0F172A) // Dark theater slate
     ) {
       Box(modifier = Modifier.fillMaxSize()) {
-        // ── Camera Preview (active only when in Scanning state) ──────
         if (hasCameraPermission) {
           AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -290,7 +296,6 @@ fun OwnerBarcodeScannerModal(
           )
         }
 
-        // ── Top Navigation & Controls Bar ───────────────────────────
         Row(
           modifier = Modifier
             .fillMaxWidth()
@@ -361,7 +366,6 @@ fun OwnerBarcodeScannerModal(
           }
         }
 
-        // ── Camera Overlay & Viewfinder Reticle ──────────────────────
         if (workflowState is BarcodeScanWorkflowState.Scanning) {
           if (!hasCameraPermission) {
             Box(
@@ -470,7 +474,6 @@ fun OwnerBarcodeScannerModal(
           }
         }
 
-        // ── Loading Indicator while verifying ───────────────────────
         if (workflowState is BarcodeScanWorkflowState.Verifying) {
           Box(
             modifier = Modifier
@@ -500,11 +503,126 @@ fun OwnerBarcodeScannerModal(
           }
         }
 
-        // ── Step 1: Green Success Screen: ORDER VERIFIED SUCCESSFULLY ──
         if (workflowState is BarcodeScanWorkflowState.VerifiedSuccess) {
           val verified = (workflowState as BarcodeScanWorkflowState.VerifiedSuccess).response
           val order = verified.order
           val currentToken = (workflowState as BarcodeScanWorkflowState.VerifiedSuccess).token
+          val activeOrderId = order?.orderId ?: ""
+
+          // Real-time synchronization while scanner modal is open
+          DisposableEffect(activeOrderId) {
+            if (activeOrderId.isNotBlank()) {
+              WebSocketManager.subscribe("order:$activeOrderId")
+            }
+            onDispose {
+              if (activeOrderId.isNotBlank()) {
+                WebSocketManager.unsubscribe("order:$activeOrderId")
+              }
+            }
+          }
+
+          LaunchedEffect(activeOrderId) {
+            if (activeOrderId.isNotBlank()) {
+              WebSocketManager.observeOrder(activeOrderId).collect { updatedDto ->
+                if (workflowState is BarcodeScanWorkflowState.VerifiedSuccess) {
+                  val current = workflowState as BarcodeScanWorkflowState.VerifiedSuccess
+                  val updatedCat = when (updatedDto.status.uppercase().trim()) {
+                    "READY" -> "READY"
+                    "PREPARING" -> "PREPARING"
+                    "COMPLETED", "PICKED_UP", "COLLECTED" -> "COLLECTED"
+                    "CANCELLED" -> "CANCELLED"
+                    "CONFIRMED", "ACCEPTED" -> "ACCEPTED"
+                    "NEW", "WAITING", "PLACED", "ORDER_PLACED" -> "ORDER_PLACED"
+                    else -> updatedDto.status
+                  }
+                  val updatedMsg = when (updatedCat) {
+                    "ORDER_PLACED" -> "Your order has been received. Waiting for owner acceptance."
+                    "ACCEPTED" -> "Your order has been accepted. Preparation will begin shortly."
+                    "PREPARING" -> "Your order is currently being prepared. Please wait until it is ready for pickup."
+                    "READY" -> "Your order is ready! Please verify the customer before handing over the order."
+                    "COLLECTED" -> "This order has already been collected."
+                    "CANCELLED" -> "This order has been cancelled and cannot be collected."
+                    else -> "Your order is currently being prepared. Please wait until it is ready for pickup."
+                  }
+                  workflowState = BarcodeScanWorkflowState.VerifiedSuccess(
+                    response = current.response.copy(
+                      order = updatedDto,
+                      code = updatedCat,
+                      currentStatus = updatedDto.status,
+                      statusMessage = updatedMsg,
+                      message = updatedMsg,
+                      eligibleForPickup = (updatedCat == "READY")
+                    ),
+                    token = current.token
+                  )
+                }
+              }
+            }
+          }
+
+          val rawStatus = order?.status ?: verified.currentStatus ?: verified.code ?: "PREPARING"
+          val statusCategory = when (rawStatus.uppercase().trim()) {
+            "READY" -> "READY"
+            "PREPARING" -> "PREPARING"
+            "COMPLETED", "PICKED_UP", "COLLECTED" -> "COLLECTED"
+            "CANCELLED" -> "CANCELLED"
+            "CONFIRMED", "ACCEPTED" -> "ACCEPTED"
+            "NEW", "WAITING", "PLACED", "ORDER_PLACED" -> "ORDER_PLACED"
+            else -> verified.code?.uppercase()?.trim() ?: "PREPARING"
+          }
+
+          val statusDisplayMessage = verified.statusMessage?.ifBlank { null }
+            ?: verified.message?.ifBlank { null }
+            ?: when (statusCategory) {
+              "ORDER_PLACED" -> "Your order has been received. Waiting for owner acceptance."
+              "ACCEPTED" -> "Your order has been accepted. Preparation will begin shortly."
+              "PREPARING" -> "Your order is currently being prepared. Please wait until it is ready for pickup."
+              "READY" -> "Your order is ready! Please verify the customer before handing over the order."
+              "COLLECTED" -> "This order has already been collected."
+              "CANCELLED" -> "This order has been cancelled and cannot be collected."
+              else -> "Your order is currently being prepared. Please wait until it is ready for pickup."
+            }
+
+          val isReadyForPickup = (statusCategory == "READY")
+          val isPreparing = (statusCategory == "PREPARING")
+
+          val badgeLabel = when (statusCategory) {
+            "READY" -> "Ready for Pickup"
+            "PREPARING" -> "Order is being prepared"
+            "COLLECTED" -> "Already Collected"
+            "CANCELLED" -> "Order Cancelled"
+            "ACCEPTED" -> "Order Accepted"
+            "ORDER_PLACED" -> "Order Placed"
+            else -> rawStatus
+          }
+
+          val badgeBgColor = when (statusCategory) {
+            "READY" -> Color(0xFFDCFCE7)
+            "PREPARING" -> Color(0xFFFEF3C7)
+            "COLLECTED" -> Color(0xFFF1F5F9)
+            "CANCELLED" -> Color(0xFFFEE2E2)
+            "ACCEPTED" -> Color(0xFFE0E7FF)
+            "ORDER_PLACED" -> Color(0xFFE0F2FE)
+            else -> Color(0xFFFEF3C7)
+          }
+
+          val badgeTextColor = when (statusCategory) {
+            "READY" -> Color(0xFF15803D)
+            "PREPARING" -> Color(0xFFB45309)
+            "COLLECTED" -> Color(0xFF475569)
+            "CANCELLED" -> Color(0xFFB91C1C)
+            "ACCEPTED" -> Color(0xFF4338CA)
+            "ORDER_PLACED" -> Color(0xFF0369A1)
+            else -> Color(0xFFB45309)
+          }
+
+          val badgeIcon = when (statusCategory) {
+            "READY" -> Icons.Default.CheckCircle
+            "PREPARING" -> Icons.Default.Warning
+            "COLLECTED" -> Icons.Default.Check
+            "CANCELLED" -> Icons.Default.ErrorOutline
+            else -> Icons.Default.CheckCircle
+          }
 
           Box(
             modifier = Modifier
@@ -527,41 +645,104 @@ fun OwnerBarcodeScannerModal(
                   .fillMaxWidth()
                   .padding(20.dp)
               ) {
-                // Green Header Badge
+                // Status Visual Indicator Header
                 Row(
                   modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFDCFCE7))
+                    .background(badgeBgColor)
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Icon(
-                    imageVector = Icons.Default.CheckCircle,
+                    imageVector = badgeIcon,
                     contentDescription = null,
-                    tint = Color(0xFF16A34A),
-                    modifier = Modifier.size(28.dp)
+                    tint = badgeTextColor,
+                    modifier = Modifier.size(26.dp)
                   )
                   Spacer(Modifier.width(10.dp))
                   Column {
                     Text(
-                      text = "ORDER VERIFIED SUCCESSFULLY",
-                      fontSize = 14.sp,
+                      text = badgeLabel.uppercase(),
+                      fontSize = 13.5.sp,
                       fontWeight = FontWeight.ExtraBold,
-                      color = Color(0xFF15803D),
+                      color = badgeTextColor,
                       letterSpacing = 0.5.sp
                     )
                     Text(
-                      text = "Eligible for collection at Counter 1",
-                      fontSize = 11.5.sp,
-                      color = Color(0xFF16A34A)
+                      text = when (statusCategory) {
+                        "READY" -> "Eligible for customer handover"
+                        "PREPARING" -> "Preparation in kitchen"
+                        "COLLECTED" -> "Order already handed over"
+                        "CANCELLED" -> "Order cannot be collected"
+                        else -> "Current status: $rawStatus"
+                      },
+                      fontSize = 11.sp,
+                      color = badgeTextColor.copy(alpha = 0.85f)
                     )
                   }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(10.dp))
 
-                // Order Meta Details
+                // Exact Status Message Banner
+                Box(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(badgeBgColor.copy(alpha = 0.35f))
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                  Text(
+                    text = statusDisplayMessage,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = badgeTextColor,
+                    lineHeight = 17.sp
+                  )
+                }
+
+                if (isPreparing) {
+                  Spacer(Modifier.height(8.dp))
+                  Box(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .clip(RoundedCornerShape(8.dp))
+                      .background(Color(0xFFFFFBEB))
+                      .border(1.dp, Color(0xFFFDE68A), RoundedCornerShape(8.dp))
+                      .padding(horizontal = 10.dp, vertical = 6.dp)
+                  ) {
+                    Text(
+                      text = "Order is still being prepared. Pickup confirmation is disabled.",
+                      fontSize = 11.5.sp,
+                      color = Color(0xFF92400E),
+                      fontWeight = FontWeight.Medium
+                    )
+                  }
+                }
+
+                if (isReadyForPickup) {
+                  Spacer(Modifier.height(8.dp))
+                  Box(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .clip(RoundedCornerShape(8.dp))
+                      .background(Color(0xFFF0FDF4))
+                      .border(1.dp, Color(0xFFBBF7D0), RoundedCornerShape(8.dp))
+                      .padding(horizontal = 10.dp, vertical = 6.dp)
+                  ) {
+                    Text(
+                      text = "Verify that the correct student is collecting this order.",
+                      fontSize = 12.sp,
+                      color = Color(0xFF166534),
+                      fontWeight = FontWeight.SemiBold
+                    )
+                  }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // Order Meta Details (Order ID, Token, Student Name, Roll Number, Order Time)
                 Row(
                   modifier = Modifier.fillMaxWidth(),
                   horizontalArrangement = Arrangement.SpaceBetween
@@ -570,7 +751,7 @@ fun OwnerBarcodeScannerModal(
                     Text("Order ID", fontSize = 11.sp, color = TextMuted)
                     Text(
                       text = "#${order?.orderId ?: "---"}",
-                      fontSize = 14.sp,
+                      fontSize = 13.5.sp,
                       fontWeight = FontWeight.Bold,
                       color = TextDark
                     )
@@ -586,9 +767,9 @@ fun OwnerBarcodeScannerModal(
                   }
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
 
-                // Student Name
+                // Student Name & Roll Number
                 Row(
                   modifier = Modifier.fillMaxWidth(),
                   horizontalArrangement = Arrangement.SpaceBetween
@@ -601,56 +782,65 @@ fun OwnerBarcodeScannerModal(
                       fontWeight = FontWeight.SemiBold,
                       color = TextDark
                     )
+                    val rollNumber = order?.studentRollNumber?.ifBlank { null }
+                    if (!rollNumber.isNullOrBlank()) {
+                      Text(
+                        text = "Roll No: $rollNumber",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF0369A1)
+                      )
+                    }
                   }
                   Column(horizontalAlignment = Alignment.End) {
-                    Text("Current Status", fontSize = 11.sp, color = TextMuted)
+                    Text("Status", fontSize = 11.sp, color = TextMuted)
                     Box(
                       modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFFDCFCE7))
+                        .background(badgeBgColor)
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                       Text(
-                        text = order?.status ?: "READY",
+                        text = order?.status ?: rawStatus,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF16A34A)
+                        color = badgeTextColor
                       )
                     }
                   }
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
 
                 // Order Creation Time
                 Text("Order Placed At", fontSize = 11.sp, color = TextMuted)
                 Text(
                   text = order?.orderPlacedAtLocal ?: order?.orderDate ?: "Today",
-                  fontSize = 12.5.sp,
+                  fontSize = 12.sp,
                   fontWeight = FontWeight.Medium,
                   color = TextDark
                 )
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
                 HorizontalDivider(color = Color(0xFFF1F5F9))
                 Spacer(Modifier.height(8.dp))
 
-                // Ordered Items List
-                Text("Ordered Items", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextDark)
-                Spacer(Modifier.height(6.dp))
+                // Ordered Food Items List
+                Text("Food Items", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextDark)
+                Spacer(Modifier.height(4.dp))
 
                 val itemsList = order?.items ?: emptyList()
-                LazyColumn(modifier = Modifier.height(100.dp)) {
+                LazyColumn(modifier = Modifier.height(85.dp)) {
                   items(itemsList) { item ->
                     Row(
                       modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 3.dp),
+                        .padding(vertical = 2.5.dp),
                       horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                       Text(
                         text = "${item.quantity}x ${item.name}",
-                        fontSize = 13.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = FontWeight.Medium,
                         color = TextDark,
                         maxLines = 1,
@@ -659,7 +849,7 @@ fun OwnerBarcodeScannerModal(
                       )
                       Text(
                         text = "₹${item.price * item.quantity}",
-                        fontSize = 13.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = TextDark
                       )
@@ -667,9 +857,9 @@ fun OwnerBarcodeScannerModal(
                   }
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 HorizontalDivider(color = Color(0xFFF1F5F9))
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
 
                 // Total Amount
                 Row(
@@ -677,51 +867,74 @@ fun OwnerBarcodeScannerModal(
                   horizontalArrangement = Arrangement.SpaceBetween,
                   verticalAlignment = Alignment.CenterVertically
                 ) {
-                  Text("Total Amount", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextDark)
+                  Text("Total Amount", fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = TextDark)
                   Text(
                     text = "₹${order?.totalAmount ?: 0}",
-                    fontSize = 18.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color(0xFFEA580C)
                   )
                 }
 
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(16.dp))
 
-                // ── Prominent Action Button: CONFIRM ORDER PICKUP ──
-                Button(
-                  onClick = { performPickupConfirmation(currentToken) },
-                  colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
-                  shape = RoundedCornerShape(14.dp),
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-                ) {
-                  Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = PureWhite)
-                  Spacer(Modifier.width(8.dp))
-                  Text(
-                    text = "CONFIRM ORDER PICKUP",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = PureWhite,
-                    letterSpacing = 0.5.sp
-                  )
-                }
+                if (isReadyForPickup) {
+                  Button(
+                    onClick = { performPickupConfirmation(currentToken) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .height(50.dp)
+                  ) {
+                    Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = PureWhite)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                      text = "CONFIRM HANDOVER",
+                      fontSize = 14.sp,
+                      fontWeight = FontWeight.ExtraBold,
+                      color = PureWhite,
+                      letterSpacing = 0.5.sp
+                    )
+                  }
 
-                Spacer(Modifier.height(8.dp))
+                  Spacer(Modifier.height(8.dp))
 
-                TextButton(
-                  onClick = { resetScannerForNext() },
-                  modifier = Modifier.fillMaxWidth()
-                ) {
-                  Text("Cancel / Scan Another", color = TextMuted, fontSize = 13.sp)
+                  TextButton(
+                    onClick = { resetScannerForNext() },
+                    modifier = Modifier.fillMaxWidth()
+                  ) {
+                    Text("Cancel", color = TextMuted, fontSize = 13.sp)
+                  }
+                } else {
+                  // Non-ready states: Pickup disabled, provide Scan Again & Close Scanner
+                  Button(
+                    onClick = { resetScannerForNext() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .height(48.dp)
+                  ) {
+                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = PureWhite)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Scan Again", fontWeight = FontWeight.Bold, color = PureWhite)
+                  }
+
+                  Spacer(Modifier.height(6.dp))
+
+                  TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth()
+                  ) {
+                    Text("Close Scanner", color = TextMuted, fontSize = 13.sp)
+                  }
                 }
               }
             }
           }
         }
 
-        // ── Loading Pickup Confirmation ─────────────────────────────
         if (workflowState is BarcodeScanWorkflowState.ConfirmingPickup) {
           Box(
             modifier = Modifier
@@ -738,7 +951,6 @@ fun OwnerBarcodeScannerModal(
           }
         }
 
-        // ── Step 2: Successfully Collected Screen ───────────────────
         if (workflowState is BarcodeScanWorkflowState.SuccessfullyCollected) {
           val res = (workflowState as BarcodeScanWorkflowState.SuccessfullyCollected).response
           val order = res.order
@@ -842,7 +1054,6 @@ fun OwnerBarcodeScannerModal(
           }
         }
 
-        // ── Error State Screen ──────────────────────────────────────
         if (workflowState is BarcodeScanWorkflowState.Error) {
           val errorState = workflowState as BarcodeScanWorkflowState.Error
 
@@ -888,11 +1099,13 @@ fun OwnerBarcodeScannerModal(
                 Text(
                   text = when (errorState.code) {
                     "WRONG_OWNER" -> "Wrong Canteen"
-                    "ORDER_NOT_READY" -> "Order Not Ready"
-                    "ALREADY_COLLECTED" -> "Already Collected"
                     "EXPIRED_BARCODE" -> "Barcode Expired"
+                    "ALREADY_COLLECTED" -> "Already Collected"
+                    "UNAUTHORIZED" -> "Authentication Required"
+                    "ORDER_REJECTED" -> "Order Rejected"
+                    "ORDER_CANCELLED" -> "Order Cancelled"
                     "NETWORK_ERROR" -> "Network Error"
-                    else -> "Verification Failed"
+                    else -> "Invalid Barcode"
                   },
                   fontSize = 18.sp,
                   fontWeight = FontWeight.Bold,
@@ -921,7 +1134,7 @@ fun OwnerBarcodeScannerModal(
                 ) {
                   Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = PureWhite)
                   Spacer(Modifier.width(8.dp))
-                  Text("Restart Scanning", fontWeight = FontWeight.Bold)
+                  Text("Scan Again", fontWeight = FontWeight.Bold, color = PureWhite)
                 }
 
                 Spacer(Modifier.height(6.dp))
@@ -930,7 +1143,7 @@ fun OwnerBarcodeScannerModal(
                   onClick = onDismiss,
                   modifier = Modifier.fillMaxWidth()
                 ) {
-                  Text("Close", color = TextMuted)
+                  Text("Close Scanner", color = TextMuted)
                 }
               }
             }
@@ -940,7 +1153,6 @@ fun OwnerBarcodeScannerModal(
     }
   }
 
-  // ── Manual Input Dialog Fallback ──────────────────────────────────
   if (showManualInputDialog) {
     Dialog(onDismissRequest = { showManualInputDialog = false }) {
       Surface(

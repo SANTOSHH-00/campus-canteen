@@ -1,3 +1,4 @@
+// Order Management Routes: FIFO queue calculation, Code 128 barcode & QR generation, order placement, and status tracking
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
@@ -5,15 +6,76 @@ const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Canteen = require('../models/Canteen');
 const Item = require('../models/Item');
+const User = require('../models/User');
 const IdempotencyKey = require('../models/IdempotencyKey');
 const { broadcastOrderStatus, broadcastNewOrder, broadcastQueueUpdate } = require('../services/socketService');
 const { sendPushToUser } = require('../services/fcmService');
 const { getIstDate, formatIstDateTime, formatIstTime, formatIstDate } = require('../utils/timeHelper');
 const { createOrRotateOrderVerification, generateQrDataUrl } = require('../services/qrVerificationService');
 const { ensureOrderBarcode, generateCode128BarcodeDataUrl } = require('../services/barcodeService');
+const { processRefund } = require('./payments');
 
-// Active kitchen preparation statuses (case-insensitive fallback coverage)
-const ACTIVE_QUEUE_STATUSES = ['NEW', 'WAITING', 'CONFIRMED', 'PREPARING', 'new', 'waiting', 'confirmed', 'preparing'];
+const ACTIVE_QUEUE_STATUSES = ['PENDING', 'ACCEPTED', 'NEW', 'WAITING', 'CONFIRMED', 'PREPARING', 'pending', 'accepted', 'new', 'waiting', 'confirmed', 'preparing'];
+
+/**
+ * Validates a scheduled pickup time string against current campus time and canteen operating hours.
+ */
+function validatePickupSchedule(pickupTimeStr, canteenTimings, now = new Date()) {
+  if (!pickupTimeStr || /asap/i.test(pickupTimeStr)) {
+    return { valid: true };
+  }
+
+  const match = pickupTimeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) {
+    return { valid: true }; // non-standard string, allow gracefully
+  }
+
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const ampm = match[3].toUpperCase();
+  if (ampm === 'PM' && hours < 12) hours += 12;
+  if (ampm === 'AM' && hours === 12) hours = 0;
+
+  // Convert current time to IST minutes since midnight
+  const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+  const nowHours = istNow.getUTCHours();
+  const nowMinutes = istNow.getUTCMinutes();
+  const requestedTotalMinutes = hours * 60 + minutes;
+  const currentTotalMinutes = nowHours * 60 + nowMinutes;
+
+  // Do not allow times in the past (with a 2-minute clock skew grace window)
+  if (requestedTotalMinutes < currentTotalMinutes - 2) {
+    return {
+      valid: false,
+      error: `Requested pickup time (${pickupTimeStr}) cannot be in the past. Please select an upcoming pickup time.`,
+    };
+  }
+
+  // Validate against canteen closing time (e.g., "7:00 AM – 10:00 PM")
+  if (canteenTimings) {
+    const parts = canteenTimings.split(/[–\-—]/);
+    if (parts.length >= 2) {
+      const closingStr = parts[1].trim();
+      const closeMatch = closingStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+      if (closeMatch) {
+        let closeHours = parseInt(closeMatch[1], 10);
+        const closeMinutes = parseInt(closeMatch[2], 10);
+        if (closeMatch[3].toUpperCase() === 'PM' && closeHours < 12) closeHours += 12;
+        if (closeMatch[3].toUpperCase() === 'AM' && closeHours === 12) closeHours = 0;
+        const closeTotalMinutes = closeHours * 60 + closeMinutes;
+
+        if (requestedTotalMinutes > closeTotalMinutes) {
+          return {
+            valid: false,
+            error: `Requested pickup time (${pickupTimeStr}) is after the canteen closes at ${closingStr}.`,
+          };
+        }
+      }
+    }
+  }
+
+  return { valid: true };
+}
 
 /**
  * Helper to compute an order's estimated prep time in minutes based on its individual items.
@@ -43,17 +105,14 @@ async function findOrderByIdOrToken(idParam, canteenId = null) {
   if (!idParam) return null;
   const cleanId = decodeURIComponent(idParam).trim();
 
-  // 1. Exact orderId match
   let order = await Order.findOne({ orderId: cleanId }).lean();
   if (order) return order;
 
-  // 2. MongoDB _id match
   if (mongoose.Types.ObjectId.isValid(cleanId)) {
     order = await Order.findOne({ _id: cleanId }).lean();
     if (order) return order;
   }
 
-  // 3. Fallback: match by tokenNumber (strip non-digits like #, Q, #Q)
   const rawNum = cleanId.replace(/^[^0-9]+/g, '').trim();
   const tokenCandidates = [cleanId];
   if (rawNum) {
@@ -108,7 +167,6 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, serve
   const targetPlacedAt = targetOrder.orderPlacedAt || targetOrder.createdAt;
   const targetCreatedAtMs = targetPlacedAt ? new Date(targetPlacedAt).getTime() : nowMs;
 
-  // Determine ahead orders in FIFO sequence (scoped strictly to this canteen)
   let aheadOrders = [];
   if (targetIndex === -1) {
     if (targetOrder.orderId === 'CART_PREVIEW' || targetOrder.orderId === 'CART_ITEM_PREVIEW') {
@@ -124,17 +182,14 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, serve
     aheadOrders = activeOrders.slice(0, targetIndex);
   }
 
-  // Count active orders ahead in canteen
   const ordersAhead = aheadOrders.length;
   const queuePosition = ordersAhead + 1;
 
-  // Distinct customers ahead (do not count multiple orders from the same student as multiple customers)
   const distinctCustomerSet = new Set(
     aheadOrders.map(o => (o.studentId || '').trim().toLowerCase()).filter(id => id && id !== 'student_guest' && !id.includes('guest'))
   );
   const distinctCustomersAhead = distinctCustomerSet.size;
 
-  // Item summaries
   const targetItems = targetOrder.items && Array.isArray(targetOrder.items) ? targetOrder.items : [];
   const primaryItemName = targetItems.length > 0 ? (targetItems[0].name || 'Item') : 'Item';
   const itemSummary = targetItems.length > 0
@@ -143,7 +198,6 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, serve
         : `${targetItems[0].name} + ${targetItems.length - 1} other${targetItems.length > 2 ? 's' : ''}`)
     : 'Order Items';
 
-  // Calculate similar items and orders ahead matching this specific food item
   const targetItemIds = new Set(targetItems.map(it => it.itemId).filter(Boolean));
   const targetItemNames = new Set(targetItems.map(it => (it.name || '').toLowerCase().trim()).filter(Boolean));
 
@@ -168,7 +222,6 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, serve
     }
   }
 
-  // Calculate sum of remaining preparation time of active queue items ahead
   let totalRemainingAheadMinutes = 0;
   for (const ahead of aheadOrders) {
     const aheadPrep = getOrderPrepTime(ahead, defaultWait);
@@ -179,7 +232,6 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, serve
     totalRemainingAheadMinutes += remainingMin;
   }
 
-  // Current order's required preparation time
   let currentOrderPrepMinutes = getOrderPrepTime(targetOrder, defaultWait);
   if (targetOrder.orderId !== 'CART_PREVIEW' && targetOrder.orderId !== 'CART_ITEM_PREVIEW') {
     if (targetOrder.status === 'PREPARING') {
@@ -189,10 +241,8 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, serve
     }
   }
 
-  // Authoritative total wait time = remaining prep time of orders ahead + current order prep time
   const totalWaitMinutes = Math.max(1, totalRemainingAheadMinutes + currentOrderPrepMinutes);
 
-  // Authoritative estimated completion time based on server time
   const completionDate = new Date(nowMs + totalWaitMinutes * 60000);
   const estimatedCompletionTime = formatIstTime(completionDate);
   const estimatedCompletionAt = completionDate.toISOString();
@@ -234,6 +284,7 @@ function calculateQueueMetrics(targetOrder, activeOrders, defaultWait = 7, serve
 }
 
 // POST /api/orders/queue/cart - Get item-specific queue and wait time preview for Cart
+// Cart Queue Preview: Computes estimated wait time and items ahead for items currently in cart
 router.post('/queue/cart', async (req, res) => {
   try {
     const { canteenId, items = [] } = req.body;
@@ -255,7 +306,6 @@ router.post('/queue/cart', async (req, res) => {
       .select('orderId studentId canteenId status createdAt orderPlacedAt confirmedAt preparingAt readyAt completedAt estimatedPrepMinutes items')
       .lean();
 
-    // Auto-populate prepMinutes from Item collection if not provided in cart items
     let enrichedItems = items;
     if (Array.isArray(items) && items.length > 0) {
       const itemIds = items.map(it => it.itemId).filter(Boolean);
@@ -284,7 +334,6 @@ router.post('/queue/cart', async (req, res) => {
 
     const metrics = calculateQueueMetrics(mockCartOrder, activeOrders, defaultWait, serverNow);
 
-    // Compute per-item breakdown
     const itemsQueue = (enrichedItems || []).map(cartItem => {
       const singleItemMock = {
         orderId: 'CART_ITEM_PREVIEW',
@@ -368,16 +417,15 @@ router.get('/queue/item/:itemId', async (req, res) => {
 });
 
 // GET /api/orders/queue/canteen/:canteenId - Get live queue depth & avg wait time
+// Live Canteen Queue Depth: Retrieves active queue count and average preparation time
 router.get('/queue/canteen/:canteenId', async (req, res) => {
   try {
     const { canteenId } = req.params;
     const canteen = await Canteen.findOne({ id: canteenId }).select('avgWaitMinutes').lean();
     const defaultWait = (canteen && canteen.avgWaitMinutes) ? canteen.avgWaitMinutes : 5;
 
-    // Filter active orders from the last 24 hours to prevent stale past-day orders
     const activeCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    // Single server-authoritative active queue for this canteen sorted by server placement time
     const activeOrders = await Order.find({
       canteenId,
       status: { $in: ACTIVE_QUEUE_STATUSES },
@@ -421,11 +469,11 @@ router.get('/queue/canteen/:canteenId', async (req, res) => {
 });
 
 // GET /api/orders/:id/qr - Dynamic QR Code retrieval & secure rotation for student order verification
+// Dynamic QR Code: Generates and returns rotating QR verification token for student order
 router.get('/:id/qr', async (req, res) => {
   try {
     const targetOrder = await findOrderByIdOrToken(req.params.id);
     if (!targetOrder) {
-      // Dynamic on-the-fly QR code generation for guest, local, or unpersisted orders
       const rawId = decodeURIComponent(req.params.id).trim();
       const numMatch = rawId.replace(/^[^0-9]+/g, '');
       const tokenNum = numMatch ? numMatch.slice(-4) : '101';
@@ -473,7 +521,6 @@ router.get('/:id/qr', async (req, res) => {
       });
     }
 
-    // Generate or rotate verification token atomically without storing plaintext tokens in DB
     const verification = await createOrRotateOrderVerification({
       orderId: targetOrder.orderId,
       studentId: targetOrder.studentId,
@@ -505,11 +552,11 @@ router.get('/:id/qr', async (req, res) => {
 });
 
 // GET /api/orders/:id/barcode - Dynamic Code 128 Barcode retrieval & display for student order tracking
+// Dynamic 1D Barcode: Generates Code 128 barcode for counter scanner verification
 router.get('/:id/barcode', async (req, res) => {
   try {
     const targetOrder = await findOrderByIdOrToken(req.params.id);
     if (!targetOrder) {
-      // Dynamic on-the-fly Code 128 barcode generation for guest, local, or unpersisted orders
       const rawId = decodeURIComponent(req.params.id).trim();
       const numMatch = rawId.replace(/^[^0-9]+/g, '');
       const tokenNum = numMatch ? numMatch.slice(-4) : '101';
@@ -556,7 +603,6 @@ router.get('/:id/barcode', async (req, res) => {
 
     const isCollected = targetOrder.status === 'PICKED_UP' || targetOrder.status === 'COMPLETED' || targetOrder.barcodeStatus === 'USED';
 
-    // Retrieve or generate persistent Code 128 barcode
     let barcodeData = null;
     if (!isCollected) {
       barcodeData = await ensureOrderBarcode(targetOrder);
@@ -599,6 +645,7 @@ router.get('/:id/barcode', async (req, res) => {
 });
 
 // GET /api/orders/:id/queue - Get queue position and wait time for a specific order
+// Order Queue Tracking: Returns real-time queue position and estimated completion time
 router.get('/:id/queue', async (req, res) => {
   try {
     const canteenHint = req.query.canteenId || null;
@@ -620,7 +667,6 @@ router.get('/:id/queue', async (req, res) => {
       ? `${targetOrder.items[0].name} × ${targetOrder.items[0].quantity || 1}`
       : `${firstItemName}`;
 
-    // Derive local human-readable time strings for frontend consumption
     const orderDate = targetOrder.orderDate || (orderPlacedAt ? formatIstDate(orderPlacedAt) : '');
     const orderTime = targetOrder.orderTime || (orderPlacedAt ? formatIstTime(orderPlacedAt) : '');
     const orderPlacedAtLocal = targetOrder.orderPlacedAtLocal || (orderPlacedAt ? formatIstDateTime(orderPlacedAt) : '');
@@ -744,10 +790,8 @@ router.get('/:id/queue', async (req, res) => {
     const canteen = await Canteen.findOne({ id: targetOrder.canteenId }).select('avgWaitMinutes').lean();
     const defaultWait = (canteen && canteen.avgWaitMinutes) ? canteen.avgWaitMinutes : 7;
 
-    // Filter active orders from the last 24 hours to prevent stale past-day orders
     const activeCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    // Fetch all active orders for the SAME canteen, sorted deterministically by orderPlacedAt ASC, createdAt ASC, orderId ASC
     const activeOrders = await Order.find({
       canteenId: targetOrder.canteenId,
       status: { $in: ACTIVE_QUEUE_STATUSES },
@@ -830,21 +874,64 @@ router.get('/:id/queue', async (req, res) => {
   }
 });
 
-// GET /api/orders/student/:studentId - List orders for student with optional filters
+/**
+ * Helper to resolve all associated student IDs (uid, registrationNumber, email)
+ * given any single identifier passed by the client.
+ */
+async function resolveStudentIdentities(studentIdParam) {
+  if (!studentIdParam) return [];
+  const clean = String(studentIdParam).trim();
+  if (!clean || clean.toLowerCase() === 'student_guest' || clean.toLowerCase().includes('guest')) {
+    return [];
+  }
+
+  const ids = new Set([clean]);
+  try {
+    const user = await User.findOne({
+      $or: [
+        { uid: clean },
+        { registrationNumber: clean },
+        { email: clean.toLowerCase() },
+      ],
+    }).lean();
+
+    if (user) {
+      if (user.uid) ids.add(user.uid);
+      if (user.registrationNumber) ids.add(user.registrationNumber);
+      if (user.email) ids.add(user.email);
+    }
+  } catch (err) {
+    console.warn('[Orders] Student resolution warning:', err.message);
+  }
+  return Array.from(ids);
+}
+
+// GET /api/orders/student/:studentId - List orders for student with multi-identifier resolution
+// Student Order History: Retrieves order history across student IDs and registration numbers
 router.get('/student/:studentId', async (req, res) => {
   try {
+    const rawStudentId = req.params.studentId ? req.params.studentId.trim() : '';
     const { canteenId, dateOption, startDate, endDate } = req.query;
-    const filter = { studentId: req.params.studentId };
+
+    if (!rawStudentId) {
+      return res.status(400).json({ error: 'studentId is required' });
+    }
+
+    const resolvedIds = await resolveStudentIdentities(rawStudentId);
+    const idList = resolvedIds.length > 0 ? resolvedIds : [rawStudentId];
+
+    const andConditions = [
+      { studentId: { $in: idList } }
+    ];
 
     if (canteenId) {
       if (canteenId.includes(',')) {
-        filter.canteenId = { $in: canteenId.split(',').map(c => c.trim()).filter(Boolean) };
+        andConditions.push({ canteenId: { $in: canteenId.split(',').map(c => c.trim()).filter(Boolean) } });
       } else {
-        filter.canteenId = canteenId.trim();
+        andConditions.push({ canteenId: canteenId.trim() });
       }
     }
 
-    // Date filtering (aligned with Indian Standard Time / local campus midnight boundaries)
     const now = new Date();
     const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
     const istNow = new Date(now.getTime() + IST_OFFSET_MS);
@@ -856,29 +943,37 @@ router.get('/student/:studentId', async (req, res) => {
     if (dateOption) {
       const opt = dateOption.toUpperCase().trim();
       if (opt === 'TODAY') {
-        filter.$or = [
-          { orderPlacedAt: { $gte: todayStartUtc, $lte: todayEndUtc } },
-          { orderPlacedAt: null, createdAt: { $gte: todayStartUtc, $lte: todayEndUtc } }
-        ];
+        andConditions.push({
+          $or: [
+            { orderPlacedAt: { $gte: todayStartUtc, $lte: todayEndUtc } },
+            { orderPlacedAt: null, createdAt: { $gte: todayStartUtc, $lte: todayEndUtc } }
+          ]
+        });
       } else if (opt === 'YESTERDAY') {
         const yesterdayStartUtc = new Date(todayStartUtc.getTime() - 24 * 60 * 60 * 1000);
         const yesterdayEndUtc = new Date(todayStartUtc.getTime() - 1);
-        filter.$or = [
-          { orderPlacedAt: { $gte: yesterdayStartUtc, $lte: yesterdayEndUtc } },
-          { orderPlacedAt: null, createdAt: { $gte: yesterdayStartUtc, $lte: yesterdayEndUtc } }
-        ];
+        andConditions.push({
+          $or: [
+            { orderPlacedAt: { $gte: yesterdayStartUtc, $lte: yesterdayEndUtc } },
+            { orderPlacedAt: null, createdAt: { $gte: yesterdayStartUtc, $lte: yesterdayEndUtc } }
+          ]
+        });
       } else if (opt === 'LAST_7_DAYS' || opt === '7DAYS') {
         const sevenDaysAgoStart = new Date(todayStartUtc.getTime() - 6 * 24 * 60 * 60 * 1000);
-        filter.$or = [
-          { orderPlacedAt: { $gte: sevenDaysAgoStart, $lte: todayEndUtc } },
-          { orderPlacedAt: null, createdAt: { $gte: sevenDaysAgoStart, $lte: todayEndUtc } }
-        ];
+        andConditions.push({
+          $or: [
+            { orderPlacedAt: { $gte: sevenDaysAgoStart, $lte: todayEndUtc } },
+            { orderPlacedAt: null, createdAt: { $gte: sevenDaysAgoStart, $lte: todayEndUtc } }
+          ]
+        });
       } else if (opt === 'LAST_30_DAYS' || opt === '30DAYS') {
         const thirtyDaysAgoStart = new Date(todayStartUtc.getTime() - 29 * 24 * 60 * 60 * 1000);
-        filter.$or = [
-          { orderPlacedAt: { $gte: thirtyDaysAgoStart, $lte: todayEndUtc } },
-          { orderPlacedAt: null, createdAt: { $gte: thirtyDaysAgoStart, $lte: todayEndUtc } }
-        ];
+        andConditions.push({
+          $or: [
+            { orderPlacedAt: { $gte: thirtyDaysAgoStart, $lte: todayEndUtc } },
+            { orderPlacedAt: null, createdAt: { $gte: thirtyDaysAgoStart, $lte: todayEndUtc } }
+          ]
+        });
       }
     } else if (startDate || endDate) {
       const dateCondition = {};
@@ -891,15 +986,43 @@ router.get('/student/:studentId', async (req, res) => {
         if (!isNaN(e.getTime())) dateCondition.$lte = e;
       }
       if (Object.keys(dateCondition).length > 0) {
-        filter.$or = [
-          { orderPlacedAt: dateCondition },
-          { orderPlacedAt: null, createdAt: dateCondition }
-        ];
+        andConditions.push({
+          $or: [
+            { orderPlacedAt: dateCondition },
+            { orderPlacedAt: null, createdAt: dateCondition }
+          ]
+        });
       }
     }
 
+    const query = andConditions.length === 1 ? andConditions[0] : { $and: andConditions };
+
+    const orders = await Order.find(query)
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json(orders);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/orders - List all orders campus-wide (for admin portal & reporting)
+router.get('/', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 150;
+    const filter = {
+      studentId: { $ne: 'student_guest', $not: /guest/i },
+      studentName: { $not: /guest/i },
+    };
+    if (req.query.canteenId && req.query.canteenId !== 'all') {
+      filter.canteenId = req.query.canteenId;
+    }
+    if (req.query.status && req.query.status !== 'all') {
+      filter.status = req.query.status;
+    }
     const orders = await Order.find(filter)
       .sort({ createdAt: -1 })
+      .limit(limit)
       .lean();
     res.json(orders);
   } catch (err) {
@@ -934,12 +1057,15 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/orders - Place a new order with authoritative server timestamps and idempotency
+// POST /api/orders - Place a new order with authoritative server timestamps, validation, and idempotency
+// Order Placement: Validates items, calculates server-authoritative timestamps, and creates order with barcode/QR
 router.post('/', async (req, res) => {
+  const correlationId = 'ORD-REQ-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
   const idempotencyKey = req.headers['idempotency-key'] || req.body?.idempotencyKey;
-  const rawStudentId = (req.body?.studentId || '').toLowerCase().trim();
+  const rawStudentId = (req.body?.studentId || req.headers['x-student-id'] || req.headers['x-student-reg'] || '').toLowerCase().trim();
 
-  // 1. Check & reserve Idempotency Key atomically if provided
+  console.log(`[${new Date().toISOString()}] [INFO] [Orders:${correlationId}] Order submission started for studentId="${rawStudentId}", canteenId="${req.body?.canteenId}"`);
+
   if (idempotencyKey) {
     try {
       const existingKey = await IdempotencyKey.findOneAndUpdate(
@@ -950,15 +1076,16 @@ router.post('/', async (req, res) => {
 
       if (existingKey) {
         if (existingKey.inProgress) {
+          console.warn(`[${new Date().toISOString()}] [WARN] [Orders:${correlationId}] Order request with idempotencyKey="${idempotencyKey}" already in progress`);
           return res.status(409).json({
             error: 'Order is currently being processed. Please wait.',
             status: 'PROCESSING',
           });
         }
+        console.log(`[${new Date().toISOString()}] [INFO] [Orders:${correlationId}] Returning cached idempotent response for key="${idempotencyKey}"`);
         return res.status(existingKey.statusCode || 200).json(existingKey.responseBody);
       }
     } catch (err) {
-      // Catch unique index race condition
       const stored = await IdempotencyKey.findOne({ key: idempotencyKey }).lean();
       if (stored && !stored.inProgress) {
         return res.status(stored.statusCode || 200).json(stored.responseBody);
@@ -968,82 +1095,191 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    const orderData = req.body;
+    const orderData = req.body || {};
     const now = new Date();
 
-    // The backend/server is the authoritative source of time: discard client timestamps
     delete orderData._id;
     delete orderData.createdAt;
     delete orderData.updatedAt;
+
+    const isGuest = !rawStudentId || rawStudentId === 'student_guest' || rawStudentId.includes('guest') || (orderData.studentName || '').toLowerCase().includes('guest');
+    if (isGuest) {
+      console.warn(`[${new Date().toISOString()}] [WARN] [Orders:${correlationId}] Order rejected: Guest orders are not permitted without student login`);
+      if (idempotencyKey) await IdempotencyKey.deleteOne({ key: idempotencyKey }).catch(() => {});
+      return res.status(401).json({
+        error: 'Please log in as a student to place an order that saves permanently to your account.',
+        requiresLogin: true,
+      });
+    }
+
+    const studentUser = await User.findOne({
+      $or: [
+        { registrationNumber: rawStudentId },
+        { uid: rawStudentId },
+        { email: rawStudentId.toLowerCase() },
+      ],
+    }).lean();
+
+    const studentUid = studentUser ? (studentUser.registrationNumber || studentUser.uid) : rawStudentId;
+    orderData.studentId = studentUid;
+    if (studentUser) {
+      orderData.studentName = orderData.studentName || studentUser.name || 'Student';
+      orderData.studentPhone = orderData.studentPhone || studentUser.phone || '';
+      orderData.studentCourse = orderData.studentCourse || studentUser.course || '';
+      orderData.studentRollNumber = studentUser.registrationNumber || '';
+    } else {
+      orderData.studentRollNumber = orderData.studentRollNumber || '';
+    }
+
+    if (!orderData.canteenId) {
+      if (idempotencyKey) await IdempotencyKey.deleteOne({ key: idempotencyKey }).catch(() => {});
+      return res.status(400).json({ error: 'canteenId is required.' });
+    }
+
+    const canteen = await Canteen.findOne({ id: orderData.canteenId }).select('id name isOpen closeReason avgWaitMinutes betweenBlocks floorInfo location').lean();
+    if (!canteen) {
+      console.warn(`[${new Date().toISOString()}] [WARN] [Orders:${correlationId}] Canteen ${orderData.canteenId} not found`);
+      if (idempotencyKey) await IdempotencyKey.deleteOne({ key: idempotencyKey }).catch(() => {});
+      return res.status(404).json({ error: 'Selected canteen not found.' });
+    }
+    if (canteen.isOpen === false) {
+      console.warn(`[${new Date().toISOString()}] [WARN] [Orders:${correlationId}] Canteen ${canteen.name} is closed: ${canteen.closeReason}`);
+      if (idempotencyKey) await IdempotencyKey.deleteOne({ key: idempotencyKey }).catch(() => {});
+      return res.status(400).json({
+        error: `${canteen.name || 'Canteen'} is currently closed. ${canteen.closeReason || 'New orders are paused.'}`,
+        canteenClosed: true,
+      });
+    }
+
+    orderData.pickupCanteenName = orderData.pickupCanteenName || canteen.name;
+    if (!orderData.pickupLocation) {
+      orderData.pickupLocation = canteen.betweenBlocks ? `${canteen.betweenBlocks} (${canteen.floorInfo})` : (canteen.location || '');
+    }
+
+    if (!orderData.items || !Array.isArray(orderData.items) || orderData.items.length === 0) {
+      if (idempotencyKey) await IdempotencyKey.deleteOne({ key: idempotencyKey }).catch(() => {});
+      return res.status(400).json({ error: 'Order must contain at least one food item.' });
+    }
+
+    const itemIds = orderData.items.map(it => it.itemId).filter(Boolean);
+    const itemNames = orderData.items.map(it => it.name).filter(Boolean);
+
+    const dbItems = await Item.find({
+      canteenId: orderData.canteenId,
+      $or: [
+        { id: { $in: itemIds } },
+        { name: { $in: itemNames } },
+      ],
+    }).select('id name price prepMinutes available stock canteenId').lean();
+
+    const prepMapById = new Map(dbItems.map(d => [d.id, d]));
+    const prepMapByName = new Map(dbItems.map(d => [(d.name || '').toLowerCase().trim(), d]));
+
+    let computedTotal = 0;
+    const validatedItems = [];
+
+    for (const it of orderData.items) {
+      const q = Math.max(1, parseInt(it.quantity, 10) || 1);
+      const matchItem = (it.itemId && prepMapById.get(it.itemId)) ||
+                        (it.name && prepMapByName.get((it.name || '').toLowerCase().trim()));
+
+      if (!matchItem) {
+        console.warn(`[${new Date().toISOString()}] [WARN] [Orders:${correlationId}] Item "${it.name || it.itemId}" does not belong to ${canteen.name}`);
+        if (idempotencyKey) await IdempotencyKey.deleteOne({ key: idempotencyKey }).catch(() => {});
+        return res.status(400).json({
+          error: `Item "${it.name || it.itemId}" does not belong to ${canteen.name || 'this canteen'} or is not on the menu.`,
+        });
+      }
+
+      if (matchItem.available === false) {
+        console.warn(`[${new Date().toISOString()}] [WARN] [Orders:${correlationId}] Item "${matchItem.name}" is marked unavailable`);
+        if (idempotencyKey) await IdempotencyKey.deleteOne({ key: idempotencyKey }).catch(() => {});
+        return res.status(400).json({
+          error: `"${matchItem.name}" is currently unavailable in the kitchen.`,
+        });
+      }
+
+      if (typeof matchItem.stock === 'number' && matchItem.stock > 0 && matchItem.stock < q) {
+        console.warn(`[${new Date().toISOString()}] [WARN] [Orders:${correlationId}] Insufficient stock for "${matchItem.name}"`);
+        if (idempotencyKey) await IdempotencyKey.deleteOne({ key: idempotencyKey }).catch(() => {});
+        return res.status(400).json({
+          error: `Insufficient stock for "${matchItem.name}". Only ${matchItem.stock} item(s) remaining.`,
+        });
+      }
+
+      const authoritativePrice = typeof matchItem.price === 'number' ? matchItem.price : (Number(it.price) || 0);
+      const subtotal = authoritativePrice * q;
+      computedTotal += subtotal;
+
+      validatedItems.push({
+        itemId: matchItem.id,
+        name: matchItem.name,
+        price: authoritativePrice,
+        quantity: q,
+        subtotal: subtotal,
+        prepMinutes: matchItem.prepMinutes || it.prepMinutes || 7,
+        selectedOption: it.selectedOption || null,
+        selectedAddons: Array.isArray(it.selectedAddons) ? it.selectedAddons : [],
+      });
+    }
+
+    // Authoritative pricing breakdown: Items Subtotal, Conditional Packaging, and GST Taxes
+    const rawFulfillment = (orderData.fulfillmentType || '').trim().toUpperCase();
+    const fulfillmentType = rawFulfillment === 'DINE_IN' ? 'DINE_IN' : 'TAKEAWAY';
+    orderData.fulfillmentType = fulfillmentType;
+
+    const itemsSubtotal = computedTotal;
+    orderData.itemsSubtotal = itemsSubtotal;
+
+    // Packaging charge is strictly ₹0 for Dine-in; applied only for Takeaway orders
+    let packagingCharge = 0;
+    if (fulfillmentType === 'TAKEAWAY') {
+      packagingCharge = typeof canteen.packagingCharge === 'number' ? canteen.packagingCharge : 10;
+    }
+    orderData.packagingCharge = packagingCharge;
+
+    // GST Tax calculation (5% food GST or canteen-configured rate)
+    const taxRate = typeof canteen.taxRate === 'number' ? canteen.taxRate : 0.05;
+    const taxAmount = Math.round(itemsSubtotal * taxRate);
+    orderData.taxAmount = taxAmount;
+
+    // Authoritative grand total calculated on backend
+    const finalCalculatedTotal = itemsSubtotal + packagingCharge + taxAmount;
+    orderData.items = validatedItems;
+    orderData.totalAmount = finalCalculatedTotal;
+    orderData.totalPrice = finalCalculatedTotal;
 
     if (!orderData.orderId) {
       orderData.orderId = 'ORD-' + now.getTime() + '-' + Math.floor(1000 + Math.random() * 9000);
     }
 
-    // Determine exact orderPlacedAt: prioritize client placed timestamp or embedded orderId timestamp
-    let placedDate = now;
-    if (orderData.orderPlacedAt) {
-      const parsed = new Date(orderData.orderPlacedAt);
-      if (!isNaN(parsed.getTime())) placedDate = parsed;
-    } else if (orderData.orderId) {
-      const match = orderData.orderId.match(/ORD-(\d{10,14})(?:-\d+)?/);
-      if (match && match[1]) {
-        const parsed = new Date(parseInt(match[1], 10));
-        if (!isNaN(parsed.getTime())) placedDate = parsed;
-      }
-    }
+    // Student orders MUST enter initial 'PENDING' state awaiting owner confirmation.
+    orderData.status = 'PENDING';
 
-    const studentId = (orderData.studentId || '').toLowerCase().trim();
-    const studentName = (orderData.studentName || '').toLowerCase().trim();
-    const isGuest = studentId === 'student_guest' || studentId.includes('guest') || studentName.includes('guest');
-
-    // DO NOT save guest orders to the database or show them on the owner's section
-    if (isGuest) {
-      console.log(`[Orders] Skipping DB persistence for guest order (${orderData.orderId}, studentId: ${studentId})`);
-      return res.status(201).json({
-        ...orderData,
-        orderId: orderData.orderId,
-        status: (orderData.status || 'NEW').toUpperCase().trim(),
-        orderPlacedAt: placedDate,
-        isGuest: true,
-        message: 'Guest order processed locally, not saved to database.'
-      });
-    }
-
-    const initialStatus = (orderData.status || 'NEW').toUpperCase().trim();
-    orderData.status = initialStatus;
-
-    // The backend/server is the sole authority of time: generate true UTC Date
     orderData.orderPlacedAt = now;
     orderData.orderDate = formatIstDate(now);
     orderData.orderTime = formatIstTime(now);
     orderData.orderPlacedAtLocal = formatIstDateTime(now);
+    orderData.confirmedAt = null;
+    orderData.confirmedAtLocal = '';
+    orderData.acceptedAt = null;
+    orderData.acceptedAtLocal = '';
+    orderData.preparingAt = null;
+    orderData.preparingAtLocal = '';
 
-    // ConfirmedAt
-    orderData.confirmedAt = now;
-    orderData.confirmedAtLocal = formatIstDateTime(now);
-
-    // Server-authoritative status history and milestone timestamps
     const statusHistory = [
-      { status: 'PLACED', timestamp: now, timestampLocal: formatIstDateTime(now), changedBy: studentId || 'STUDENT', changedByRole: 'STUDENT' },
-      { status: 'CONFIRMED', timestamp: now, timestampLocal: formatIstDateTime(now), changedBy: 'SYSTEM', changedByRole: 'SYSTEM' },
+      {
+        status: 'PENDING',
+        previousStatus: '',
+        timestamp: now,
+        timestampLocal: formatIstDateTime(now),
+        changedBy: studentUid,
+        changedByRole: 'STUDENT',
+      },
     ];
-    if (initialStatus === 'PREPARING') {
-      orderData.preparingAt = now;
-      orderData.preparingAtLocal = formatIstDateTime(now);
-      statusHistory.push({ status: 'PREPARING', timestamp: now, timestampLocal: formatIstDateTime(now), changedBy: 'SYSTEM', changedByRole: 'SYSTEM' });
-    }
     orderData.statusHistory = statusHistory;
 
-    // Snapshot item subtotals for immutable historical accuracy
-    if (orderData.items && Array.isArray(orderData.items)) {
-      orderData.items.forEach(it => {
-        it.subtotal = (it.price || 0) * (it.quantity || 1);
-      });
-    }
-
-    // Customer Pickup Time: preserve user's explicit selection
-    let customerPickup = (orderData.customerPickupTime || '').trim();
+    let customerPickup = (orderData.customerPickupTime || orderData.scheduledPickupTime || '').trim();
     if (!customerPickup && orderData.pickupPreference) {
       if (/pickup\s+at\s+/i.test(orderData.pickupPreference)) {
         customerPickup = orderData.pickupPreference.replace(/^pickup\s+at\s+/i, '').trim();
@@ -1054,40 +1290,30 @@ router.post('/', async (req, res) => {
     if (!customerPickup) {
       customerPickup = orderData.isPickupAsap === false ? '' : 'ASAP';
     }
+
+    // Validate scheduled pickup time against canteen operating hours and past times
+    const isScheduledOrder = Boolean(customerPickup && !customerPickup.toUpperCase().includes('ASAP'));
+    if (isScheduledOrder) {
+      const timeValidation = validatePickupSchedule(customerPickup, canteen.timings, now);
+      if (!timeValidation.valid) {
+        if (idempotencyKey) await IdempotencyKey.deleteOne({ key: idempotencyKey }).catch(() => {});
+        return res.status(400).json({ error: timeValidation.error });
+      }
+      orderData.isScheduled = true;
+      orderData.scheduledPickupTime = customerPickup;
+      orderData.pickupPreference = `Pickup at ${customerPickup}`;
+    } else {
+      orderData.isScheduled = false;
+      orderData.scheduledPickupTime = '';
+      orderData.pickupPreference = 'Pickup ASAP';
+    }
     orderData.customerPickupTime = customerPickup;
 
-    // Auto-populate item prepMinutes from Item collection if missing or default
-    if (orderData.items && Array.isArray(orderData.items) && orderData.items.length > 0) {
-      const itemIds = orderData.items.map(it => it.itemId).filter(Boolean);
-      const itemNames = orderData.items.map(it => it.name).filter(Boolean);
-      if (itemIds.length > 0 || itemNames.length > 0) {
-        const dbItems = await Item.find({
-          $or: [
-            { id: { $in: itemIds } },
-            { name: { $in: itemNames } },
-          ],
-        }).select('id name prepMinutes').lean();
-        const prepMapById = new Map(dbItems.map(d => [d.id, d.prepMinutes]));
-        const prepMapByName = new Map(dbItems.map(d => [(d.name || '').toLowerCase().trim(), d.prepMinutes]));
-        for (const it of orderData.items) {
-          if (!it.prepMinutes || it.prepMinutes === 7) {
-            if (it.itemId && prepMapById.has(it.itemId)) {
-              it.prepMinutes = prepMapById.get(it.itemId);
-            } else if (it.name && prepMapByName.has((it.name || '').toLowerCase().trim())) {
-              it.prepMinutes = prepMapByName.get((it.name || '').toLowerCase().trim());
-            }
-          }
-        }
-      }
-    }
-
-    const canteen = await Canteen.findOne({ id: orderData.canteenId }).select('avgWaitMinutes').lean();
     const defaultWait = (canteen && canteen.avgWaitMinutes) ? canteen.avgWaitMinutes : 7;
     if (!orderData.estimatedPrepMinutes || orderData.estimatedPrepMinutes <= 0) {
       orderData.estimatedPrepMinutes = getOrderPrepTime(orderData, defaultWait);
     }
 
-    // Authoritative Queue Calculation for this new order
     const activeCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const activeOrders = await Order.find({
       canteenId: orderData.canteenId,
@@ -1102,17 +1328,17 @@ router.post('/', async (req, res) => {
     orderData.estimatedCompletionTime = metrics.estimatedCompletionTime;
     orderData.estimatedReadyTime = metrics.estimatedCompletionTime;
 
+    console.log(`[${new Date().toISOString()}] [INFO] [Orders:${correlationId}] Persisting order ${orderData.orderId} (₹${orderData.totalAmount}) to MongoDB...`);
     const order = await Order.create(orderData);
+    console.log(`[${new Date().toISOString()}] [INFO] [Orders:${correlationId}] ✅ Order ${order.orderId} successfully persisted with _id=${order._id}`);
 
-    // Dynamic Code 128 Barcode generation stored securely in MongoDB
     let barcodePayload = null;
     try {
       barcodePayload = await ensureOrderBarcode(order);
     } catch (bErr) {
-      console.warn('[Orders] Barcode generation warning:', bErr.message);
+      console.warn(`[${new Date().toISOString()}] [WARN] [Orders:${correlationId}] Barcode generation warning:`, bErr.message);
     }
 
-    // Dynamic QR Verification Token generation (persisting only SHA-256 hash in MongoDB)
     let qrPayload = null;
     try {
       qrPayload = await createOrRotateOrderVerification({
@@ -1121,7 +1347,7 @@ router.post('/', async (req, res) => {
         canteenId: order.canteenId,
       });
     } catch (qrErr) {
-      console.warn('[Orders] Verification QR generation warning:', qrErr.message);
+      console.warn(`[${new Date().toISOString()}] [WARN] [Orders:${correlationId}] Verification QR generation warning:`, qrErr.message);
     }
 
     const responseOrder = order.toObject ? order.toObject() : { ...order };
@@ -1140,7 +1366,6 @@ router.post('/', async (req, res) => {
       responseOrder.verificationExpiresAt = qrPayload.expiresAt;
     }
 
-    // Real-time WebSocket Broadcast & Push Trigger
     try {
       broadcastNewOrder(order);
       if (order.canteenId) {
@@ -1152,10 +1377,9 @@ router.post('/', async (req, res) => {
         }).catch(() => {});
       }
     } catch (e) {
-      console.warn('[Orders] Realtime dispatch warning:', e.message);
+      console.warn(`[${new Date().toISOString()}] [WARN] [Orders:${correlationId}] Realtime dispatch warning:`, e.message);
     }
 
-    // Save final response in Idempotency store
     if (idempotencyKey) {
       await IdempotencyKey.updateOne(
         { key: idempotencyKey },
@@ -1163,16 +1387,244 @@ router.post('/', async (req, res) => {
       ).catch(() => {});
     }
 
-    res.status(201).json(responseOrder);
+    return res.status(201).json(responseOrder);
   } catch (err) {
+    console.error(`[${new Date().toISOString()}] [ERROR] [Orders:${correlationId}] Order creation failed:`, err);
     if (idempotencyKey) {
       await IdempotencyKey.deleteOne({ key: idempotencyKey }).catch(() => {});
     }
-    res.status(400).json({ error: err.message });
+    return res.status(400).json({ error: err.message || 'Failed to place order.' });
+  }
+});
+
+// POST /api/orders/:id/accept - Owner accepts a pending order
+router.post('/:id/accept', async (req, res) => {
+  try {
+    const targetOrder = await findOrderByIdOrToken(req.params.id);
+    if (!targetOrder) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    const currentStatus = (targetOrder.status || '').toUpperCase().trim();
+    if (currentStatus === 'ACCEPTED') {
+      return res.json({ success: true, message: 'Order is already accepted', order: targetOrder });
+    }
+
+    if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(currentStatus)) {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot accept order: Already in terminal status "${currentStatus}".`,
+      });
+    }
+
+    const changedBy = req.body.changedBy || req.headers['x-owner-id'] || 'OWNER';
+    const changedByRole = req.body.changedByRole || 'OWNER';
+    const now = new Date();
+    const nowLocal = formatIstDateTime(now);
+
+    const updated = await Order.findOneAndUpdate(
+      { _id: targetOrder._id, status: { $in: ['PENDING', 'NEW', 'WAITING'] } },
+      {
+        $set: {
+          status: 'ACCEPTED',
+          confirmedAt: now,
+          confirmedAtLocal: nowLocal,
+          acceptedAt: now,
+          acceptedAtLocal: nowLocal,
+          acceptedByOwnerId: changedBy,
+        },
+        $push: {
+          statusHistory: {
+            status: 'ACCEPTED',
+            previousStatus: currentStatus,
+            timestamp: now,
+            timestampLocal: nowLocal,
+            changedBy,
+            changedByRole,
+          },
+        },
+      },
+      { new: true }
+    );
+
+    const resultOrder = updated || (await Order.findById(targetOrder._id));
+
+    try {
+      broadcastOrderStatus(resultOrder);
+      if (resultOrder.canteenId) {
+        broadcastQueueUpdate(resultOrder.canteenId);
+      }
+
+      const isGuest = (resultOrder.studentId || '').toLowerCase().includes('guest') || (resultOrder.studentName || '').toLowerCase().includes('guest');
+      if (!isGuest && resultOrder.studentId) {
+        const canteen = await Canteen.findOne({ id: resultOrder.canteenId }).lean();
+        const canteenName = (canteen && canteen.name) || resultOrder.pickupCanteenName || 'Canteen Kitchen';
+        const cleanToken = (resultOrder.tokenNumber || resultOrder.orderId.slice(-4)).replace(/^#+/, '');
+        const title = `Order #${cleanToken}: Order Accepted!`;
+        const body = `Your order has been confirmed by ${canteenName}. Preparation will begin soon.`;
+
+        const Notification = require('../models/Notification');
+        await Notification.findOneAndUpdate(
+          { notificationId: `NOTIF-${resultOrder.orderId}-ACCEPTED` },
+          {
+            $set: {
+              notificationId: `NOTIF-${resultOrder.orderId}-ACCEPTED`,
+              userId: resultOrder.studentId,
+              title,
+              message: body,
+              type: 'ORDER_STATUS',
+              orderId: resultOrder.orderId,
+              canteenId: resultOrder.canteenId,
+              read: false,
+              createdAt: now,
+            },
+          },
+          { upsert: true, new: true }
+        ).catch(() => {});
+
+        sendPushToUser(resultOrder.studentId, {
+          title,
+          body,
+          data: { orderId: resultOrder.orderId, status: 'ACCEPTED', type: 'ORDER_STATUS' },
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('[Orders:Accept] Realtime notification warning:', e.message);
+    }
+
+    return res.json({ success: true, order: resultOrder });
+  } catch (err) {
+    console.error('[Orders:Accept] Error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to accept order.' });
+  }
+});
+
+// POST /api/orders/:id/reject - Owner rejects a pending order with reason and initiates refund
+router.post('/:id/reject', async (req, res) => {
+  try {
+    const targetOrder = await findOrderByIdOrToken(req.params.id);
+    if (!targetOrder) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    const currentStatus = (targetOrder.status || '').toUpperCase().trim();
+    if (currentStatus === 'REJECTED') {
+      return res.json({ success: true, message: 'Order is already rejected', order: targetOrder });
+    }
+
+    if (['COMPLETED', 'PICKED_UP'].includes(currentStatus)) {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot reject order: Already collected by student.`,
+      });
+    }
+
+    const changedBy = req.body.changedBy || req.headers['x-owner-id'] || 'OWNER';
+    const changedByRole = req.body.changedByRole || 'OWNER';
+    const rejectionReason = (req.body.reason || req.body.rejectionReason || 'Canteen kitchen is currently unable to accept new orders.').trim();
+    const now = new Date();
+    const nowLocal = formatIstDateTime(now);
+
+    // Process refund if online payment was made
+    let refundInfo = { status: 'NONE', refundId: '' };
+    if (targetOrder.paymentStatus === 'PAID' && targetOrder.refundStatus !== 'PROCESSED') {
+      try {
+        const refundResult = await processRefund(targetOrder, rejectionReason);
+        refundInfo = {
+          status: refundResult.status || (refundResult.success ? 'PROCESSED' : 'PENDING'),
+          refundId: refundResult.refundId || '',
+        };
+      } catch (refErr) {
+        console.error('[Orders:Reject] Refund trigger error:', refErr);
+        refundInfo = { status: 'PENDING', refundId: '' };
+      }
+    }
+
+    const updated = await Order.findOneAndUpdate(
+      { _id: targetOrder._id },
+      {
+        $set: {
+          status: 'REJECTED',
+          rejectedAt: now,
+          rejectedAtLocal: nowLocal,
+          rejectedByOwnerId: changedBy,
+          rejectionReason,
+          barcodeStatus: 'CANCELLED',
+          refundStatus: refundInfo.status,
+          refundId: refundInfo.refundId,
+          refundAmount: targetOrder.totalAmount,
+        },
+        $push: {
+          statusHistory: {
+            status: 'REJECTED',
+            previousStatus: currentStatus,
+            timestamp: now,
+            timestampLocal: nowLocal,
+            changedBy,
+            changedByRole,
+          },
+        },
+      },
+      { new: true }
+    );
+
+    const resultOrder = updated || (await Order.findById(targetOrder._id));
+
+    try {
+      broadcastOrderStatus(resultOrder);
+      if (resultOrder.canteenId) {
+        broadcastQueueUpdate(resultOrder.canteenId);
+      }
+
+      const isGuest = (resultOrder.studentId || '').toLowerCase().includes('guest') || (resultOrder.studentName || '').toLowerCase().includes('guest');
+      if (!isGuest && resultOrder.studentId) {
+        const cleanToken = (resultOrder.tokenNumber || resultOrder.orderId.slice(-4)).replace(/^#+/, '');
+        const title = `Order #${cleanToken}: Order Rejected`;
+        const refundMsg = refundInfo.status === 'PROCESSED'
+          ? ` A refund of ₹${resultOrder.totalAmount} has been processed.`
+          : refundInfo.status === 'PENDING'
+          ? ` A refund of ₹${resultOrder.totalAmount} has been scheduled to your original payment method.`
+          : '';
+        const body = `Reason: ${rejectionReason}.${refundMsg}`;
+
+        const Notification = require('../models/Notification');
+        await Notification.findOneAndUpdate(
+          { notificationId: `NOTIF-${resultOrder.orderId}-REJECTED` },
+          {
+            $set: {
+              notificationId: `NOTIF-${resultOrder.orderId}-REJECTED`,
+              userId: resultOrder.studentId,
+              title,
+              message: body,
+              type: 'ORDER_STATUS',
+              orderId: resultOrder.orderId,
+              canteenId: resultOrder.canteenId,
+              read: false,
+              createdAt: now,
+            },
+          },
+          { upsert: true, new: true }
+        ).catch(() => {});
+
+        sendPushToUser(resultOrder.studentId, {
+          title,
+          body,
+          data: { orderId: resultOrder.orderId, status: 'REJECTED', type: 'ORDER_STATUS' },
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('[Orders:Reject] Realtime notification warning:', e.message);
+    }
+
+    return res.json({ success: true, order: resultOrder, refundStatus: resultOrder.refundStatus });
+  } catch (err) {
+    console.error('[Orders:Reject] Error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to reject order.' });
   }
 });
 
 // PATCH /api/orders/:id/status - Update order status with server-authoritative timestamps
+// Status Transition: Updates order lifecycle status, emits WebSocket events, and sends push notifications
 router.patch('/:id/status', async (req, res) => {
   try {
     let normalizedStatus = (req.body.status || '').toUpperCase().trim();
@@ -1186,13 +1638,28 @@ router.patch('/:id/status', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Prevent invalid transitions: reject transitions out of terminal states (COMPLETED, CANCELLED, REJECTED)
     const currentStatus = (targetOrder.status || '').toUpperCase().trim();
+
+    // Idempotent: If already in requested status, return success immediately
+    if (currentStatus === normalizedStatus) {
+      return res.json(targetOrder);
+    }
+
+    // Terminal states cannot be changed
     if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(currentStatus)) {
-      if (currentStatus !== normalizedStatus) {
+      return res.status(400).json({
+        error: `Invalid transition: Order ${targetOrder.orderId} is already in terminal state "${currentStatus}".`,
+        currentStatus: currentStatus,
+      });
+    }
+
+    // Workflow validation: Order in PENDING/NEW cannot jump directly to PREPARING or READY without acceptance
+    if (['PENDING', 'NEW', 'WAITING'].includes(currentStatus)) {
+      if (!['ACCEPTED', 'REJECTED', 'CANCELLED'].includes(normalizedStatus)) {
         return res.status(400).json({
-          error: `Invalid transition: Order ${targetOrder.orderId} is already in terminal state "${currentStatus}".`,
+          error: `Order must be accepted by the canteen before it can move to status "${normalizedStatus}".`,
           currentStatus: currentStatus,
+          requiredNextStatus: 'ACCEPTED',
         });
       }
     }
@@ -1211,9 +1678,13 @@ router.patch('/:id/status', async (req, res) => {
       updateFields.estimatedPrepMinutes = Number(req.body.estimatedPrepMinutes);
     }
 
-    if (normalizedStatus === 'CONFIRMED') {
+    if (normalizedStatus === 'ACCEPTED' || normalizedStatus === 'CONFIRMED') {
+      updateFields.status = 'ACCEPTED';
       updateFields.confirmedAt = now;
       updateFields.confirmedAtLocal = nowLocal;
+      updateFields.acceptedAt = now;
+      updateFields.acceptedAtLocal = nowLocal;
+      updateFields.acceptedByOwnerId = changedBy;
     }
     if (normalizedStatus === 'PREPARING') {
       updateFields.preparingAt = now;
@@ -1228,18 +1699,44 @@ router.patch('/:id/status', async (req, res) => {
     if (normalizedStatus === 'COMPLETED') {
       updateFields.completedAt = now;
       updateFields.completedAtLocal = nowLocal;
+      updateFields.collectedAt = now;
       updateFields.estimatedCompletionTime = 'Completed';
       updateFields.estimatedReadyTime = 'Completed';
+      if (targetOrder.barcodeStatus === 'ACTIVE') {
+        updateFields.barcodeStatus = 'USED';
+        updateFields.usedAt = now;
+      }
     }
     if (normalizedStatus === 'CANCELLED') {
       updateFields.cancelledAt = now;
       updateFields.cancelledAtLocal = nowLocal;
+      updateFields.barcodeStatus = 'CANCELLED';
       updateFields.estimatedCompletionTime = 'Cancelled';
       updateFields.estimatedReadyTime = 'Cancelled';
     }
+    if (normalizedStatus === 'REJECTED') {
+      const rejectionReason = (req.body.reason || req.body.rejectionReason || 'Canteen kitchen is unable to accept order').trim();
+      updateFields.rejectedAt = now;
+      updateFields.rejectedAtLocal = nowLocal;
+      updateFields.rejectedByOwnerId = changedBy;
+      updateFields.rejectionReason = rejectionReason;
+      updateFields.barcodeStatus = 'CANCELLED';
+
+      if (targetOrder.paymentStatus === 'PAID' && targetOrder.refundStatus !== 'PROCESSED') {
+        try {
+          const refundResult = await processRefund(targetOrder, rejectionReason);
+          updateFields.refundStatus = refundResult.status || 'PENDING';
+          updateFields.refundId = refundResult.refundId || '';
+          updateFields.refundAmount = targetOrder.totalAmount;
+        } catch (_) {
+          updateFields.refundStatus = 'PENDING';
+          updateFields.refundAmount = targetOrder.totalAmount;
+        }
+      }
+    }
 
     const pushUpdate = normalizedStatus
-      ? { $push: { statusHistory: { status: normalizedStatus, timestamp: now, timestampLocal: nowLocal, changedBy, changedByRole } } }
+      ? { $push: { statusHistory: { status: normalizedStatus, previousStatus: currentStatus, timestamp: now, timestampLocal: nowLocal, changedBy, changedByRole } } }
       : {};
 
     const updated = await Order.findOneAndUpdate(
@@ -1251,18 +1748,15 @@ router.patch('/:id/status', async (req, res) => {
       { new: true }
     );
 
-    // Real-time WebSocket Broadcast & Push Trigger
     try {
       broadcastOrderStatus(updated);
       if (updated.canteenId) {
         broadcastQueueUpdate(updated.canteenId);
       }
 
-      // Only send push notifications for PREPARING, READY, COMPLETED, CANCELLED
-      const shouldNotify = ['PREPARING', 'READY', 'COMPLETED', 'CANCELLED'].includes(normalizedStatus);
+      const shouldNotify = ['ACCEPTED', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED', 'REJECTED'].includes(normalizedStatus);
       const isGuest = (updated.studentId || '').toLowerCase().includes('guest') || (updated.studentName || '').toLowerCase().includes('guest');
       if (!isGuest && shouldNotify && updated.studentId) {
-        // Fetch canteen details for kitchen name and block number
         const canteen = await Canteen.findOne({ id: updated.canteenId }).lean();
         const canteenName = (canteen && canteen.name) || updated.pickupCanteenName || 'Canteen Kitchen';
         const rawBlock = (canteen && (canteen.block || canteen.location)) || updated.pickupLocation || '';
@@ -1271,23 +1765,30 @@ router.patch('/:id/status', async (req, res) => {
         const counter = updated.pickupCounter || 'Counter 1';
         const cleanToken = (updated.tokenNumber || updated.orderId.slice(-4)).replace(/^#+/, '');
 
-        const statusTitle = normalizedStatus === 'PREPARING'
+        const statusTitle = normalizedStatus === 'ACCEPTED'
+          ? `Order #${cleanToken}: Order Accepted!`
+          : normalizedStatus === 'PREPARING'
           ? `Order #${cleanToken}: Preparing`
           : normalizedStatus === 'READY'
           ? `Order #${cleanToken}: Ready for Pickup`
           : normalizedStatus === 'COMPLETED'
           ? `Order #${cleanToken}: Picked Up`
+          : normalizedStatus === 'REJECTED'
+          ? `Order #${cleanToken}: Order Rejected`
           : `Order #${cleanToken}: Cancelled`;
 
-        const statusBody = normalizedStatus === 'PREPARING'
+        const statusBody = normalizedStatus === 'ACCEPTED'
+          ? `Your order has been confirmed by ${canteenName}. Preparation will begin soon.`
+          : normalizedStatus === 'PREPARING'
           ? `Your meal is being prepared by ${canteenName} at ${blockDisplay}, ${counter}.`
           : normalizedStatus === 'READY'
           ? `Your order is ready! Please collect your food at ${counter} from ${canteenName} at ${blockDisplay}.`
           : normalizedStatus === 'COMPLETED'
           ? 'Your order has been picked up. Enjoy your food!'
+          : normalizedStatus === 'REJECTED'
+          ? `Reason: ${updated.rejectionReason || 'Canteen kitchen unable to accept'}. Refund scheduled.`
           : 'Your order has been cancelled by the canteen kitchen.';
 
-        // Authoritative Database Sync: Save notification in MongoDB at this exact moment
         const Notification = require('../models/Notification');
         await Notification.findOneAndUpdate(
           { notificationId: `NOTIF-${updated.orderId}-${normalizedStatus}` },
@@ -1301,8 +1802,8 @@ router.patch('/:id/status', async (req, res) => {
               orderId: updated.orderId,
               canteenId: updated.canteenId,
               read: false,
-              createdAt: istNow,
-            }
+              createdAt: now,
+            },
           },
           { upsert: true, new: true }
         ).catch(err => console.warn('[Orders] Notification persist warning:', err.message));

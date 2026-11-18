@@ -1,3 +1,4 @@
+// PickupTimePickerSheet: Reusable Jetpack Compose UI component
 package com.example.ui.components
 
 import androidx.compose.foundation.background
@@ -16,9 +17,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -38,46 +40,52 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.example.ui.theme.BlackPrimary
+import androidx.compose.ui.platform.LocalContext
 import com.example.ui.theme.BorderGray
-import com.example.ui.theme.DeliveryOrange
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberLight
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.SoftGray
 import com.example.ui.theme.TextDark
 import com.example.ui.theme.TextMuted
+import com.example.ui.theme.WarmCream
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-data class PickupTimeSlot(
-  val minutesFromNow: Int,
+data class SimplePickupSlot(
+  val minutes: Int,
   val label: String,
 )
 
 /**
- * Clean, modern Pickup Time Selector with clear chronological order
- * and elegant typography (no awkward emojis or creepy text).
+ * Clean, minimal, student-friendly pickup arrival time selector.
+ * Simple layout, readable typography, no robotic or creepy text.
  */
 @Composable
 fun PickupTimePickerSheet(
   initialTimeStr: String = "12:45 PM",
   canteenName: String = "Campus Canteen",
+  canteenTimings: String = "7:00 AM – 10:00 PM",
   onTimeConfirmed: (String) -> Unit,
   onDismiss: () -> Unit,
 ) {
+  val context = LocalContext.current
   val timeFormat = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
 
-  // Chronological ordered slots
-  val slots = remember {
+  val quickSlots = remember {
     listOf(
-      PickupTimeSlot(15, "15 mins"),
-      PickupTimeSlot(30, "30 mins"),
-      PickupTimeSlot(45, "45 mins"),
-      PickupTimeSlot(60, "1 hour"),
+      SimplePickupSlot(15, "15m"),
+      SimplePickupSlot(30, "30m"),
+      SimplePickupSlot(45, "45m"),
+      SimplePickupSlot(60, "1h"),
+      SimplePickupSlot(120, "2h"),
+      SimplePickupSlot(180, "3h"),
     )
   }
 
   var selectedSlotMinutes by remember { mutableIntStateOf(30) }
+  var validationError by remember { mutableStateOf<String?>(null) }
 
   var targetCal by remember {
     val cal = Calendar.getInstance()
@@ -85,31 +93,57 @@ fun PickupTimePickerSheet(
     mutableStateOf(cal)
   }
 
-  fun updateTime(minutesToAdd: Int) {
-    val safeMinutes = minutesToAdd.coerceIn(5, 180)
+  fun validateTime(cal: Calendar): String? {
+    val nowCal = Calendar.getInstance()
+    nowCal.add(Calendar.MINUTE, -2) // 2 min grace
+    if (cal.before(nowCal)) {
+      return "Pickup time cannot be in the past"
+    }
+
+    val closing = extractClosingTime(canteenTimings)
+    val parsed = try {
+      SimpleDateFormat("h:mm a", Locale.getDefault()).parse(closing)
+    } catch (_: Exception) { null }
+
+    if (parsed != null) {
+      val closeCal = Calendar.getInstance().apply {
+        val temp = Calendar.getInstance().apply { time = parsed }
+        set(Calendar.HOUR_OF_DAY, temp.get(Calendar.HOUR_OF_DAY))
+        set(Calendar.MINUTE, temp.get(Calendar.MINUTE))
+        set(Calendar.SECOND, 0)
+      }
+      if (cal.after(closeCal)) {
+        return "Canteen closes at $closing"
+      }
+    }
+    return null
+  }
+
+  fun updateMinutes(minutesToAdd: Int) {
+    val safeMinutes = minutesToAdd.coerceIn(5, 360)
     val newCal = Calendar.getInstance()
     newCal.add(Calendar.MINUTE, safeMinutes)
     targetCal = newCal
     selectedSlotMinutes = safeMinutes
+    validationError = validateTime(newCal)
   }
 
   val displayPickupTime = timeFormat.format(targetCal.time)
 
   Dialog(onDismissRequest = onDismiss) {
     Surface(
-      shape = RoundedCornerShape(26.dp),
+      shape = RoundedCornerShape(24.dp),
       color = PureWhite,
-      shadowElevation = 18.dp,
+      shadowElevation = 16.dp,
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 4.dp),
+        .padding(horizontal = 6.dp),
     ) {
       Column(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(22.dp),
+          .padding(20.dp),
       ) {
-        // ── Top Header Row ──────────────────────────────────────────────────
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.SpaceBetween,
@@ -118,289 +152,270 @@ fun PickupTimePickerSheet(
           Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
               modifier = Modifier
-                .size(40.dp)
+                .size(36.dp)
                 .clip(CircleShape)
-                .background(SoftGray),
+                .background(DrawerAmberLight),
               contentAlignment = Alignment.Center,
             ) {
               Icon(
-                imageVector = Icons.Default.AccessTime,
-                contentDescription = "Pickup Time",
-                tint = BlackPrimary,
-                modifier = Modifier.size(20.dp),
+                imageVector = Icons.Outlined.AccessTime,
+                contentDescription = null,
+                tint = DrawerAmber,
+                modifier = Modifier.size(18.dp),
               )
             }
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
             Column {
               Text(
-                text = "Choose Pickup Time",
-                fontSize = 17.5.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = BlackPrimary,
+                text = "Pickup Time",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark,
               )
               Text(
-                text = "Ready at $canteenName counter",
+                text = "Collect at $canteenName",
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
                 color = TextMuted,
               )
             }
           }
 
           IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
+            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted, modifier = Modifier.size(20.dp))
           }
         }
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // ── Hero Time Display Card ──────────────────────────────────────────
         Box(
           modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(Color(0xFFF9F7F4))
-            .border(1.dp, BorderGray.copy(alpha = 0.6f), RoundedCornerShape(18.dp))
-            .padding(vertical = 16.dp, horizontal = 18.dp),
+            .clip(RoundedCornerShape(16.dp))
+            .background(WarmCream)
+            .border(1.dp, DrawerAmber.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+            .padding(vertical = 18.dp, horizontal = 16.dp),
           contentAlignment = Alignment.Center,
         ) {
           Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-              text = "CUSTOMER PICKUP TIME",
-              fontSize = 10.5.sp,
-              fontWeight = FontWeight.ExtraBold,
-              color = TextMuted,
-              letterSpacing = 0.8.sp,
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
               text = displayPickupTime,
               fontSize = 32.sp,
-              fontWeight = FontWeight.Black,
-              color = BlackPrimary,
+              fontWeight = FontWeight.ExtraBold,
+              color = TextDark,
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-              text = "Pickup in ~$selectedSlotMinutes mins from now",
-              fontSize = 12.5.sp,
-              fontWeight = FontWeight.SemiBold,
-              color = DeliveryOrange,
+              text = "Ready in ~$selectedSlotMinutes mins from now",
+              fontSize = 13.sp,
+              fontWeight = FontWeight.Medium,
+              color = DrawerAmber,
             )
           }
         }
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // ── Chronological Quick Intervals ───────────────────────────────────
         Text(
-          text = "SELECT AN INTERVAL",
-          fontSize = 11.sp,
-          fontWeight = FontWeight.ExtraBold,
+          text = "Quick Select",
+          fontSize = 12.5.sp,
+          fontWeight = FontWeight.SemiBold,
           color = TextDark,
-          letterSpacing = 0.5.sp,
         )
+        Spacer(modifier = Modifier.height(8.dp))
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // 2x2 Grid of clean time slot cards
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          slots.chunked(2).forEach { rowSlots ->
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          quickSlots.forEach { slot ->
+            val isSelected = selectedSlotMinutes == slot.minutes
+            Box(
+              modifier = Modifier
+                .weight(1f)
+                .height(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (isSelected) DrawerAmber else SoftGray.copy(alpha = 0.5f))
+                .border(
+                  width = 1.dp,
+                  color = if (isSelected) DrawerAmber else BorderGray.copy(alpha = 0.5f),
+                  shape = RoundedCornerShape(12.dp),
+                )
+                .clickable { updateMinutes(slot.minutes) },
+              contentAlignment = Alignment.Center,
             ) {
-              rowSlots.forEach { slot ->
-                val isSelected = selectedSlotMinutes == slot.minutesFromNow
-                val slotCal = remember(slot.minutesFromNow) {
-                  val c = Calendar.getInstance()
-                  c.add(Calendar.MINUTE, slot.minutesFromNow)
-                  timeFormat.format(c.time)
-                }
-
-                Box(
-                  modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(if (isSelected) BlackPrimary else PureWhite)
-                    .border(
-                      width = if (isSelected) 1.5.dp else 1.dp,
-                      color = if (isSelected) BlackPrimary else BorderGray.copy(alpha = 0.7f),
-                      shape = RoundedCornerShape(14.dp),
-                    )
-                    .clickable { updateTime(slot.minutesFromNow) }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                ) {
-                  Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                  ) {
-                    Column {
-                      Text(
-                        text = slot.label,
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isSelected) PureWhite else TextDark,
-                      )
-                      Text(
-                        text = slotCal,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (isSelected) PureWhite.copy(alpha = 0.75f) else TextMuted,
-                      )
-                    }
-
-                    if (isSelected) {
-                      Box(
-                        modifier = Modifier
-                          .size(18.dp)
-                          .clip(CircleShape)
-                          .background(PureWhite),
-                        contentAlignment = Alignment.Center,
-                      ) {
-                        Icon(
-                          imageVector = Icons.Default.Check,
-                          contentDescription = "Selected",
-                          tint = BlackPrimary,
-                          modifier = Modifier.size(12.dp),
-                        )
-                      }
-                    }
-                  }
-                }
-              }
+              Text(
+                text = slot.label,
+                fontSize = 13.5.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) PureWhite else TextDark,
+              )
             }
           }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ── Fine-Tune Steppers ──────────────────────────────────────────────
         Row(
-          modifier = Modifier.fillMaxWidth(),
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(SoftGray.copy(alpha = 0.35f))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically,
         ) {
           Text(
-            text = "ADJUST MINUTES",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.ExtraBold,
+            text = "Adjust timing",
+            fontSize = 12.5.sp,
             color = TextDark,
-            letterSpacing = 0.5.sp,
+            fontWeight = FontWeight.Medium,
           )
 
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // - 5m chip
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            // [- 5m]
             Box(
               modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(SoftGray)
-                .clickable {
-                  if (selectedSlotMinutes > 5) {
-                    updateTime(selectedSlotMinutes - 5)
-                  }
-                }
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                .size(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (selectedSlotMinutes > 5) PureWhite else Color.Transparent)
+                .border(1.dp, BorderGray.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                .clickable(enabled = selectedSlotMinutes > 5) {
+                  updateMinutes(selectedSlotMinutes - 5)
+                },
               contentAlignment = Alignment.Center,
             ) {
-              Text(
-                text = "- 5 min",
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextDark,
+              Icon(
+                imageVector = Icons.Default.Remove,
+                contentDescription = "Minus 5 mins",
+                tint = if (selectedSlotMinutes > 5) TextDark else BorderGray,
+                modifier = Modifier.size(16.dp),
               )
             }
 
-            // + 5m chip
-            Box(
-              modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(SoftGray)
-                .clickable {
-                  updateTime(selectedSlotMinutes + 5)
-                }
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-              contentAlignment = Alignment.Center,
-            ) {
-              Text(
-                text = "+ 5 min",
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextDark,
-              )
-            }
+            Text(
+              text = "$selectedSlotMinutes m",
+              fontSize = 13.sp,
+              fontWeight = FontWeight.Bold,
+              color = TextDark,
+              modifier = Modifier.width(42.dp),
+              textAlign = TextAlign.Center,
+            )
 
-            // + 15m chip
+            // [+ 5m]
             Box(
               modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(SoftGray)
+                .size(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(PureWhite)
+                .border(1.dp, BorderGray.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
                 .clickable {
-                  updateTime(selectedSlotMinutes + 15)
-                }
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                  updateMinutes(selectedSlotMinutes + 5)
+                },
               contentAlignment = Alignment.Center,
             ) {
-              Text(
-                text = "+ 15 min",
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextDark,
+              Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Plus 5 mins",
+                tint = TextDark,
+                modifier = Modifier.size(16.dp),
               )
             }
           }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // ── Clean Assurance Note ───────────────────────────────────────────
+        // Exact Clock Time Picker Button (Useful for class schedules, e.g. "12:30 PM")
         Box(
           modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFF3F4F6))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .background(PureWhite)
+            .border(1.dp, DrawerAmber.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+            .clickable {
+              val hour = targetCal.get(Calendar.HOUR_OF_DAY)
+              val min = targetCal.get(Calendar.MINUTE)
+              android.app.TimePickerDialog(
+                context,
+                { _, selectedHour, selectedMinute ->
+                  val newCal = Calendar.getInstance()
+                  newCal.set(Calendar.HOUR_OF_DAY, selectedHour)
+                  newCal.set(Calendar.MINUTE, selectedMinute)
+                  newCal.set(Calendar.SECOND, 0)
+                  val diffMinutes = ((newCal.timeInMillis - Calendar.getInstance().timeInMillis) / 60000).toInt()
+                  targetCal = newCal
+                  selectedSlotMinutes = diffMinutes.coerceAtLeast(0)
+                  validationError = validateTime(newCal)
+                },
+                hour,
+                min,
+                false,
+              ).show()
+            }
+            .padding(vertical = 9.dp),
+          contentAlignment = Alignment.Center,
         ) {
           Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-              imageVector = Icons.Default.AccessTime,
+              imageVector = Icons.Outlined.AccessTime,
               contentDescription = null,
-              tint = Color(0xFF6B7280),
+              tint = DrawerAmber,
               modifier = Modifier.size(16.dp),
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
             Text(
-              text = "Your order will be freshly prepared for your chosen time.",
-              fontSize = 11.5.sp,
-              fontWeight = FontWeight.Medium,
-              color = Color(0xFF4B5563),
+              text = "Pick Custom Clock Time (e.g. after class)",
+              fontSize = 12.5.sp,
+              fontWeight = FontWeight.SemiBold,
+              color = DrawerAmber,
             )
           }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        if (validationError != null) {
+          Spacer(modifier = Modifier.height(8.dp))
+          Text(
+            text = validationError!!,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color(0xFFDC2626),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+          )
+        }
 
-        // ── Confirm Button ─────────────────────────────────────────────────
+        Spacer(modifier = Modifier.height(16.dp))
+
+        val isConfirmEnabled = validationError == null
+
         Box(
           modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(BlackPrimary)
-            .clickable {
+            .height(46.dp)
+            .clip(RoundedCornerShape(23.dp))
+            .background(if (isConfirmEnabled) DrawerAmber else BorderGray)
+            .clickable(enabled = isConfirmEnabled) {
               onTimeConfirmed(displayPickupTime)
               onDismiss()
-            }
-            .padding(vertical = 14.dp),
+            },
           contentAlignment = Alignment.Center,
         ) {
           Text(
-            text = "Confirm Pickup for $displayPickupTime →",
+            text = "Confirm · $displayPickupTime",
             fontSize = 14.5.sp,
-            fontWeight = FontWeight.ExtraBold,
+            fontWeight = FontWeight.Bold,
             color = PureWhite,
           )
         }
       }
     }
   }
+}
+
+private fun extractClosingTime(timings: String): String {
+  val parts = timings.split("–", "-", "—")
+  return if (parts.size >= 2) parts[1].trim() else "10:00 PM"
 }

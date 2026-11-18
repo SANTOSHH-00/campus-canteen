@@ -1,38 +1,36 @@
+// Express Application Server: Configures middleware, security rate limiting, API routes, and WebSocket gateway
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const path = require('path');
 const dotenv = require('dotenv');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const http = require('http');
 
-// Load environment variables
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config();
 
 const connectDB = require('./config/db');
-
-// Connect to MongoDB Atlas
 connectDB();
 
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-
 const app = express();
-
-// Trust first reverse proxy (Render, Cloudflare, Heroku, Nginx) so client IP is accurately extracted
 app.set('trust proxy', 1);
 
-// Security Middlewares (Option 3B: Helmet HTTP Security Headers)
+// Security Headers: Helmet protection against common web vulnerabilities
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
 }));
 app.use(cors());
 app.use(express.json());
+
 const isDev = process.env.NODE_ENV !== 'production';
 const morganFormat = isDev
   ? 'dev'
   : '[:date[iso]] :method :url :status :response-time ms - :res[content-length]';
 app.use(morgan(morganFormat));
+
 const isLocalOrPrivateIp = (ip) => {
   if (!ip) return false;
   return (
@@ -46,8 +44,7 @@ const isLocalOrPrivateIp = (ip) => {
   );
 };
 
-// Option 3A: Campus-friendly & Proxy-aware Rate Limiting
-// 1. General API Rate Limiter (15,000 requests / 15 mins, keyed per student/token when present)
+// Rate Limiting: General API limiter keyed per user token or student ID to support campus NAT
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 15000,
@@ -55,7 +52,6 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
   validate: { keyGeneratorIpFallback: false },
   keyGenerator: (req) => {
-    // Prioritize user authorization token or student ID so campus Wi-Fi NAT doesn't throttle all students
     const authHeader = req.headers['authorization'];
     if (authHeader) return `auth_${authHeader.slice(-24)}`;
     const studentId = req.headers['x-student-id'] || req.body?.studentId;
@@ -72,7 +68,7 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
-// 2. Sensitive Authentication & OTP Rate Limiter (Keyed by target email/account + IP fallback)
+// Rate Limiting: Sensitive authentication and OTP verification limiter
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -107,10 +103,10 @@ app.use('/api/owners/admin/login', authLimiter);
 app.use('/api/owners/admin/register', authLimiter);
 app.use('/api/owners/admin/resend-otp', authLimiter);
 
-// 3. Order Verification & Barcode Scanning Rate Limiter (Protects against brute-force token scanning)
+// Rate Limiting: Order verification and counter barcode scanner limiter
 const verifyLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
-  max: 300, // Generous 300 scans per 10 minutes per owner/IP during lunch rush
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   validate: { keyGeneratorIpFallback: false },
@@ -133,10 +129,10 @@ app.use('/api/owners/orders/confirm-pickup', verifyLimiter);
 app.use('/api/owner/orders/verify-qr', verifyLimiter);
 app.use('/api/owners/orders/verify-qr', verifyLimiter);
 
-// 4. AI Assistant Chat Rate Limiter (Protects Gemini API quota)
+// Rate Limiting: AI assistant chat queries to protect API quotas
 const aiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 120, // 120 queries per 15 mins per student/IP
+  max: 120,
   standardHeaders: true,
   legacyHeaders: false,
   validate: { keyGeneratorIpFallback: false },
@@ -154,7 +150,6 @@ const aiLimiter = rateLimit({
 });
 app.use('/api/ai', aiLimiter);
 
-// Google Play Mandatory Compliance Pages
 app.get('/privacy-policy', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/privacy-policy.html'));
 });
@@ -163,13 +158,11 @@ app.get('/delete-account', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/delete-account.html'));
 });
 
-// Static Admin Portal
 app.get(['/admin', '/admin/'], (req, res) => {
   res.sendFile(path.join(__dirname, '../public/admin/index.html'));
 });
 app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
 
-// Root homepage endpoint
 app.get('/', (req, res) => {
   res.json({
     status: 'online',
@@ -187,10 +180,9 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check handler (supports GET and HEAD on /health and /api/health for cron-job.org and Render health probes)
+// Health Probe: Provides uptime, database connectivity state, and memory usage for monitoring
 const healthCheckHandler = (req, res) => {
   const mongoose = require('mongoose');
-  // readyState: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
   const dbStatusMap = {
     0: 'disconnected',
     1: 'connected',
@@ -217,18 +209,23 @@ const healthCheckHandler = (req, res) => {
     environment: process.env.NODE_ENV || 'development',
   };
 
-  // Always return HTTP 200 so monitors (cron-job.org, UptimeRobot, Render health check)
-  // do not treat temporary DB reconnection lag as a dead server or trigger crash restarts.
   return res.status(200).json(healthData);
 };
 
-// Health check endpoints for external monitors and Render zero-downtime health probes
 app.get('/health', healthCheckHandler);
 app.head('/health', healthCheckHandler);
 app.get('/api/health', healthCheckHandler);
 app.head('/api/health', healthCheckHandler);
 
-// Mount Routes
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.set('Surrogate-Control', 'no-store');
+  next();
+});
+
+// Route Mounts: REST API endpoints
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/owner', require('./routes/owners'));
 app.use('/api/owners', require('./routes/owners'));
@@ -241,8 +238,8 @@ app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/ai', require('./routes/aiRoutes'));
 app.use('/api/suggestions', require('./routes/suggestions'));
+app.use('/api/payments', require('./routes/payments'));
 
-// 404 handler for unmatched routes
 app.use((req, res) => {
   res.status(404).json({
     error: 'Not Found',
@@ -251,7 +248,7 @@ app.use((req, res) => {
   });
 });
 
-// Centralized structured error handler
+// Centralized error handler
 app.use((err, req, res, next) => {
   if (res.headersSent) {
     return next(err);
@@ -267,15 +264,13 @@ app.use((err, req, res, next) => {
   });
 });
 
-const http = require('http');
+// WebSocket Server & Process Lifecycle: Initializes socket gateway and handles graceful termination
 const { initWebSocket } = require('./services/socketService');
-
 const server = http.createServer(app);
 initWebSocket(server).catch((err) => {
   console.error(`[${new Date().toISOString()}] [ERROR] WebSocket Init Error:`, err.message);
 });
 
-// Process-level safety: Catch unhandled promise rejections and uncaught exceptions to prevent silent crashes
 process.on('uncaughtException', (err) => {
   console.error(`[${new Date().toISOString()}] [FATAL] Uncaught Exception:`, err.message, err.stack);
 });
@@ -284,7 +279,6 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error(`[${new Date().toISOString()}] [WARN] Unhandled Promise Rejection at:`, promise, 'reason:', reason);
 });
 
-// Graceful shutdown handling for Render deploys, scale events, and restarts
 const handleShutdown = (signal) => {
   console.log(`[${new Date().toISOString()}] [INFO] Received ${signal}. Initiating graceful shutdown...`);
   server.close(async () => {
@@ -301,7 +295,6 @@ const handleShutdown = (signal) => {
     process.exit(0);
   });
 
-  // Force close after 10s if graceful shutdown hangs
   setTimeout(() => {
     console.error(`[${new Date().toISOString()}] [ERROR] Graceful shutdown timed out. Forcing process exit.`);
     process.exit(1);

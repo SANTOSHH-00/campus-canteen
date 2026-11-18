@@ -1,3 +1,4 @@
+// ModernNotificationsSheet: Reusable Jetpack Compose UI component
 package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
@@ -25,6 +26,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -32,6 +34,9 @@ import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsNone
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -76,6 +81,7 @@ import kotlinx.coroutines.delay
 fun ModernNotificationsSheet(
   appState: CanteenAppState,
   onDismiss: () -> Unit,
+  onLoginClick: () -> Unit = {},
 ) {
   var isVisible by remember { mutableStateOf(false) }
   var selectedTab by remember { mutableStateOf("All") } // "All" or "Unread"
@@ -141,7 +147,6 @@ fun ModernNotificationsSheet(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Header Row: Icon + Title + Actions
             Row(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.SpaceBetween,
@@ -171,7 +176,7 @@ fun ModernNotificationsSheet(
                       fontWeight = FontWeight.Black,
                       color = BlackPrimary,
                     )
-                    val unreadCount = appState.notifications.count { it.isUnread }
+                    val unreadCount = if (appState.isGuest) 0 else appState.notifications.count { it.isUnread }
                     if (unreadCount > 0) {
                       Spacer(modifier = Modifier.width(8.dp))
                       Box(
@@ -191,7 +196,7 @@ fun ModernNotificationsSheet(
                     }
                   }
                   Text(
-                    text = "Order alerts, tokens & kitchen messages",
+                    text = if (appState.isGuest) "Personal updates & order alerts" else "Order alerts, tokens & kitchen messages",
                     fontSize = 11.5.sp,
                     color = TextMuted,
                     fontWeight = FontWeight.Medium,
@@ -199,81 +204,65 @@ fun ModernNotificationsSheet(
                 }
               }
 
-              // Close circular button
-              Box(
-                modifier = Modifier
-                  .size(34.dp)
-                  .clip(CircleShape)
-                  .background(PureWhite)
-                  .border(1.dp, BorderGray.copy(alpha = 0.6f), CircleShape)
-                  .clickable { triggerDismiss() },
-                contentAlignment = Alignment.Center,
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
               ) {
-                Icon(
-                  imageVector = Icons.Default.Close,
-                  contentDescription = "Close",
-                  tint = TextDark,
-                  modifier = Modifier.size(18.dp),
-                )
+                if (!appState.isGuest) {
+                  var isRefreshingNotifs by remember { mutableStateOf(false) }
+                  Box(
+                    modifier = Modifier
+                      .size(34.dp)
+                      .clip(CircleShape)
+                      .background(PureWhite)
+                      .border(1.dp, BorderGray.copy(alpha = 0.6f), CircleShape)
+                      .clickable {
+                        isRefreshingNotifs = true
+                        appState.refreshNotifications { isRefreshingNotifs = false }
+                      },
+                    contentAlignment = Alignment.Center,
+                  ) {
+                    if (isRefreshingNotifs) {
+                      CircularProgressIndicator(
+                        color = TextDark,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(16.dp),
+                      )
+                    } else {
+                      Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Refresh Notifications",
+                        tint = TextDark,
+                        modifier = Modifier.size(18.dp),
+                      )
+                    }
+                  }
+                }
+
+                // Close circular button
+                Box(
+                  modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(PureWhite)
+                    .border(1.dp, BorderGray.copy(alpha = 0.6f), CircleShape)
+                    .clickable { triggerDismiss() },
+                  contentAlignment = Alignment.Center,
+                ) {
+                  Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close",
+                    tint = TextDark,
+                    modifier = Modifier.size(18.dp),
+                  )
+                }
               }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Filter Tabs & "Mark all read" row
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NotificationTabChip(
-                  label = "All (${appState.notifications.size})",
-                  isSelected = selectedTab == "All",
-                  onClick = { selectedTab = "All" },
-                )
-                val unreadTotal = appState.notifications.count { it.isUnread }
-                if (unreadTotal > 0) {
-                  NotificationTabChip(
-                    label = "Unread ($unreadTotal)",
-                    isSelected = selectedTab == "Unread",
-                    onClick = { selectedTab = "Unread" },
-                  )
-                }
-              }
-
-              if (appState.notifications.any { it.isUnread }) {
-                TextButton(
-                  onClick = { appState.markNotificationsRead() },
-                ) {
-                  Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                      imageVector = Icons.Default.DoneAll,
-                      contentDescription = null,
-                      tint = DrawerAmberDark,
-                      modifier = Modifier.size(15.dp),
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                      text = "Mark all read",
-                      fontSize = 12.5.sp,
-                      fontWeight = FontWeight.Bold,
-                      color = DrawerAmberDark,
-                    )
-                  }
-                }
-              }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            val filteredList = if (selectedTab == "Unread") {
-              appState.notifications.filter { it.isUnread }
-            } else {
-              appState.notifications
-            }
-
-            if (filteredList.isEmpty()) {
+            if (appState.isGuest) {
+              // Guest Mode: strictly enforce data privacy and zero user notification leak
               Box(
                 modifier = Modifier
                   .fillMaxWidth()
@@ -282,51 +271,194 @@ fun ModernNotificationsSheet(
               ) {
                 Column(
                   horizontalAlignment = Alignment.CenterHorizontally,
-                  modifier = Modifier.padding(24.dp),
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 20.dp),
                 ) {
                   Box(
                     modifier = Modifier
-                      .size(64.dp)
+                      .size(68.dp)
                       .clip(CircleShape)
-                      .background(WarmCream),
+                      .background(DrawerAmberLight),
                     contentAlignment = Alignment.Center,
                   ) {
                     Icon(
-                      imageVector = Icons.Default.NotificationsNone,
+                      imageVector = Icons.Outlined.Lock,
                       contentDescription = null,
-                      tint = Color(0xFF94A3B8),
+                      tint = DrawerAmberDark,
                       modifier = Modifier.size(32.dp),
                     )
                   }
-                  Spacer(modifier = Modifier.height(12.dp))
+                  Spacer(modifier = Modifier.height(16.dp))
                   Text(
-                    text = if (selectedTab == "Unread") "No unread notifications" else "No notifications yet",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                    text = "Notifications are Private",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
                     color = BlackPrimary,
+                    textAlign = TextAlign.Center,
                   )
-                  Spacer(modifier = Modifier.height(4.dp))
+                  Spacer(modifier = Modifier.height(8.dp))
                   Text(
-                    text = "When canteen owners update your order, prepare meals, or rush status changes, they'll appear right here.",
-                    fontSize = 12.5.sp,
+                    text = "You are currently browsing QuickBite in Guest Mode. Order tracking alerts, kitchen tokens, and personal messages are strictly private to registered campus accounts.\n\nSign in with your student email to receive instant order notifications.",
+                    fontSize = 13.5.sp,
                     color = TextMuted,
                     textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Medium,
+                    lineHeight = 20.sp,
                   )
+                  Spacer(modifier = Modifier.height(24.dp))
+                  Surface(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .clip(RoundedCornerShape(14.dp))
+                      .clickable {
+                        triggerDismiss()
+                        onLoginClick()
+                      },
+                    shape = RoundedCornerShape(14.dp),
+                    color = BlackPrimary,
+                  ) {
+                    Row(
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 14.dp),
+                      horizontalArrangement = Arrangement.Center,
+                      verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                      Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Login,
+                        contentDescription = "Log In",
+                        tint = PureWhite,
+                        modifier = Modifier.size(20.dp),
+                      )
+                      Spacer(modifier = Modifier.width(10.dp))
+                      Text(
+                        text = "Log In to QuickBite",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PureWhite,
+                      )
+                    }
+                  }
+                  Spacer(modifier = Modifier.height(10.dp))
+                  TextButton(onClick = { triggerDismiss() }) {
+                    Text(
+                      text = "Continue as Guest",
+                      fontSize = 13.sp,
+                      color = TextMuted,
+                      fontWeight = FontWeight.Medium,
+                    )
+                  }
                 }
               }
             } else {
-              LazyColumn(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+              // Registered User: Filter Tabs & Notifications List
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
               ) {
-                items(filteredList, key = { it.id }) { notif ->
-                  NotificationCardItem(item = notif)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                  NotificationTabChip(
+                    label = "All (${appState.notifications.size})",
+                    isSelected = selectedTab == "All",
+                    onClick = { selectedTab = "All" },
+                  )
+                  val unreadTotal = appState.notifications.count { it.isUnread }
+                  if (unreadTotal > 0) {
+                    NotificationTabChip(
+                      label = "Unread ($unreadTotal)",
+                      isSelected = selectedTab == "Unread",
+                      onClick = { selectedTab = "Unread" },
+                    )
+                  }
                 }
-                item {
-                  Spacer(modifier = Modifier.height(16.dp))
+
+                if (appState.notifications.any { it.isUnread }) {
+                  TextButton(
+                    onClick = { appState.markNotificationsRead() },
+                  ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                      Icon(
+                        imageVector = Icons.Default.DoneAll,
+                        contentDescription = null,
+                        tint = DrawerAmberDark,
+                        modifier = Modifier.size(15.dp),
+                      )
+                      Spacer(modifier = Modifier.width(4.dp))
+                      Text(
+                        text = "Mark all read",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DrawerAmberDark,
+                      )
+                    }
+                  }
+                }
+              }
+
+              Spacer(modifier = Modifier.height(10.dp))
+
+              val filteredList = if (selectedTab == "Unread") {
+                appState.notifications.filter { it.isUnread }
+              } else {
+                appState.notifications
+              }
+
+              if (filteredList.isEmpty()) {
+                Box(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                  contentAlignment = Alignment.Center,
+                ) {
+                  Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(24.dp),
+                  ) {
+                    Box(
+                      modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(WarmCream),
+                      contentAlignment = Alignment.Center,
+                    ) {
+                      Icon(
+                        imageVector = Icons.Default.NotificationsNone,
+                        contentDescription = null,
+                        tint = Color(0xFF94A3B8),
+                        modifier = Modifier.size(32.dp),
+                      )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                      text = if (selectedTab == "Unread") "No unread notifications" else "No notifications yet",
+                      fontSize = 16.sp,
+                      fontWeight = FontWeight.ExtraBold,
+                      color = BlackPrimary,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                      text = "When canteen owners update your order, prepare meals, or rush status changes, they'll appear right here.",
+                      fontSize = 12.5.sp,
+                      color = TextMuted,
+                      textAlign = TextAlign.Center,
+                      fontWeight = FontWeight.Medium,
+                    )
+                  }
+                }
+              } else {
+                LazyColumn(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                  verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                  items(filteredList, key = { it.id }) { notif ->
+                    NotificationCardItem(item = notif)
+                  }
+                  item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                  }
                 }
               }
             }

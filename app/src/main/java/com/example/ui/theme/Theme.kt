@@ -1,3 +1,4 @@
+// Theme: Application design system theme styling and color definitions
 package com.example.ui.theme
 
 import android.os.Build

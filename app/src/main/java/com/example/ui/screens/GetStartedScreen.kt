@@ -1,3 +1,4 @@
+// GetStartedScreen: Jetpack Compose screen for GetStarted user interface
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
@@ -150,7 +151,6 @@ fun GetStartedScreen(
         )
       }
 
-      // 2. Carousel of Onboarding Screens
       HorizontalPager(
         state = pagerState,
         modifier =
@@ -210,7 +210,6 @@ fun GetStartedScreen(
         }
       }
 
-      // 3. Page Indicator Dots (3 dots with smooth pill transition)
       Row(
         modifier = Modifier.padding(vertical = 16.dp).testTag("pager_indicator"),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -240,7 +239,6 @@ fun GetStartedScreen(
         }
       }
 
-      // 4. Primary Action Button: "Next ->" on early screens, "Login ->" ONLY on the last screen
       Box(
         modifier =
           Modifier
@@ -309,7 +307,6 @@ fun GetStartedScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // 5. Bottom Navigation Control:
       // On early screens: "Skip to login" or next indicator.
       // On last screen: "Don't have an account? Sign up"
       if (!isLastPage) {
@@ -456,7 +453,6 @@ fun GetStartedScreen(
       }
     }
 
-    // 6. Dimmed Scrim Overlay + Login Screen Bottom Sheet (Only when triggered)
     AnimatedVisibility(
       visible = showLoginSheet,
       enter = fadeIn(animationSpec = tween(200)),

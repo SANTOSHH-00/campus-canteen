@@ -19,7 +19,6 @@ async function runTests() {
   const testCanteenId = 'canteen_33';
 
   try {
-    // 1. Ensure test canteen exists with Block number
     let canteen = await Canteen.findOne({ id: testCanteenId });
     if (!canteen) {
       canteen = await Canteen.create({
@@ -31,7 +30,6 @@ async function runTests() {
       });
     }
 
-    // 2. Create an order placed at this exact moment
     const placedTime = new Date();
     const order = await Order.create({
       orderId: testOrderId,
@@ -48,7 +46,6 @@ async function runTests() {
     });
     console.log('✅ TEST 1: Order created with instant server timestamp orderPlacedAt =', order.orderPlacedAt.toISOString());
 
-    // 3. Test Notification Generation & Database Persistence
     const cleanToken = order.tokenNumber.replace(/^#+/, '');
     const canteenName = canteen.name || 'Canteen Kitchen';
     const rawBlock = canteen.block || canteen.location || '';
@@ -85,7 +82,6 @@ async function runTests() {
     }
     console.log('✅ TEST 2: Preparing notification has kitchen name and block number:', savedNotif.message);
 
-    // 4. Update order to READY and persist ready notification
     const readyTime = new Date();
     await Order.updateOne(
       { orderId: testOrderId },
@@ -119,14 +115,12 @@ async function runTests() {
     }
     console.log('✅ TEST 3: Ready for Pickup notification verified:', savedReadyNotif.title, '-', savedReadyNotif.message);
 
-    // 5. Verify NO duplicate notifications exist for same milestone
     const notifsForOrder = await Notification.find({ orderId: testOrderId });
     if (notifsForOrder.length !== 2) {
       throw new Error(`Expected exactly 2 notifications (1 PREPARING, 1 READY), but found ${notifsForOrder.length}`);
     }
     console.log('✅ TEST 4: Strict single notification per milestone verified (exactly 1 PREPARING, 1 READY).');
 
-    // 6. Test Queue estimated time calculation from present time with 0, 1, and multiple orders
     const nowMs = Date.now();
     const singleOrderMetrics = calculateQueueMetrics(
       { orderId: 'CART_PREVIEW', canteenId: testCanteenId, items: [{ name: 'Burger', prepMinutes: 8 }] },

@@ -1,3 +1,4 @@
+// ProductSuggestionRepository: Repository managing data synchronization between remote API and local storage
 package com.example.data.api
 
 import android.util.Log

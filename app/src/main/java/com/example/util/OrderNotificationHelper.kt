@@ -25,6 +25,7 @@ object OrderNotificationHelper {
     canteenName: String = "Canteen Kitchen",
     block: String = "Campus",
   ) {
+    if (!com.example.data.session.SessionManager.isStudentLoggedIn()) return
     try {
       val rawStatus = status.uppercase().trim()
 
@@ -86,6 +87,7 @@ object OrderNotificationHelper {
     title: String,
     body: String,
   ) {
+    if (!com.example.data.session.SessionManager.isStudentLoggedIn()) return
     try {
       val cleanToken = tokenNumber.filter { it.isDigit() }.takeLast(4).ifBlank { tokenNumber.replace("#", "").trim() }
       val dedupKey = "$cleanToken:${title.trim().lowercase()}"

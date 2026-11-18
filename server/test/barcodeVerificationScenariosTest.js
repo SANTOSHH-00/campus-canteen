@@ -49,7 +49,6 @@ async function runTests() {
 
   await connectDB();
 
-  // 1. Setup Test Owners (Owner 1 for canteen_33, Owner 2 for canteen_34)
   const testOwner33 = await Owner.findOneAndUpdate(
     { email: 'test_canteen33_barcode@quickbite.test' },
     {
@@ -96,7 +95,6 @@ async function runTests() {
 
   console.log('📋 Test Setup: Authenticated owners prepared for canteen_33 and canteen_34.\n');
 
-  // ── TEST 1: Two different orders generate different unique barcodes ──
   console.log('▶ Test 1: Two different orders generate different unique barcodes');
   const token1 = generateVerificationToken();
   const token2 = generateVerificationToken();
@@ -104,7 +102,6 @@ async function runTests() {
   assert(token1.startsWith('QB-') && token2.startsWith('QB-'), 'Tokens follow standard QB- prefix format');
   assert(token1.length >= 19, 'Token length is at least 19 characters for high entropy');
 
-  // ── TEST 2: Repeated generation never reuses previous tokens ──
   console.log('\n▶ Test 2: Repeated order token generation entropy test (1000 tokens collision test)');
   const tokenSet = new Set();
   for (let i = 0; i < 1000; i++) {
@@ -113,7 +110,6 @@ async function runTests() {
   }
   assert(tokenSet.size === 1000, 'All 1,000 generated tokens were 100% unique with zero collisions');
 
-  // ── TEST 3: Code 128 Barcode Image Generation ──
   console.log('\n▶ Test 3: Code 128 Barcode Data URL rendering');
   const sampleDataUrl = await generateCode128BarcodeDataUrl(token1);
   assert(sampleDataUrl.startsWith('data:image/png;base64,'), 'Barcode rendered as a valid base64 PNG Data URL');
@@ -145,7 +141,6 @@ async function runTests() {
     items: [{ itemId: 'item_2', name: 'Chana Bhatura', price: 60, quantity: 1 }],
   });
 
-  // ── TEST 4: Automatic backend barcode attachment to orders ──
   console.log('\n▶ Test 4: Automatic barcode generation and persistence in MongoDB');
   const barcode1 = await ensureOrderBarcode(order1);
   const barcode2 = await ensureOrderBarcode(order2);
@@ -154,13 +149,11 @@ async function runTests() {
   assert(barcode1.token !== barcode2.token, 'Order 1 and Order 2 have completely distinct verification tokens');
   assert(barcode1.format === 'CODE128' && barcode1.barcodeStatus === 'ACTIVE', 'Barcode format is CODE128 and status is ACTIVE');
 
-  // ── TEST 5: Idempotency across refresh (Dashboard refresh test) ──
   console.log('\n▶ Test 5: Refreshing student dashboard does NOT change the barcode (Persistence)');
   const refreshedBarcode1 = await ensureOrderBarcode(order1);
   assert(refreshedBarcode1.token === barcode1.token, 'Token remains strictly identical after refresh');
   assert(refreshedBarcode1.barcodeDataUrl === barcode1.barcodeDataUrl, 'Barcode image data remains identical');
 
-  // ── TEST 6: Order Not Ready Check (ORDER_NOT_READY) ──
   console.log('\n▶ Test 6: Orders cannot be collected before reaching Ready for Pickup');
   const fetchedOrder1 = await Order.findOne({ orderId: orderId1 });
   assert(fetchedOrder1.status === 'PREPARING', 'Order 1 is in PREPARING status');
@@ -172,7 +165,6 @@ async function runTests() {
   fetchedOrder1.status = 'READY';
   await fetchedOrder1.save();
 
-  // ── TEST 7: Wrong Owner Check (WRONG_OWNER) ──
   console.log('\n▶ Test 7: One owner cannot verify another owner\'s order');
   const isOwner34AuthorizedForOrder1 = (fetchedOrder1.canteenId === testOwner34.canteenId);
   assert(!isOwner34AuthorizedForOrder1, 'Owner 34 (assigned to canteen_34) is rejected for canteen_33 order (WRONG_OWNER)');
@@ -180,12 +172,10 @@ async function runTests() {
   const isOwner33AuthorizedForOrder1 = (fetchedOrder1.canteenId === testOwner33.canteenId);
   assert(isOwner33AuthorizedForOrder1, 'Owner 33 (assigned to canteen_33) is authorized for canteen_33 order');
 
-  // ── TEST 8: Invalid Barcode Check (INVALID_BARCODE) ──
   console.log('\n▶ Test 8: Invalid or non-existent barcodes are rejected');
   const fakeOrder = await Order.findOne({ verificationToken: 'QB-FAKE000000000000' });
   assert(fakeOrder === null, 'Non-existent barcode token correctly yields null (INVALID_BARCODE)');
 
-  // ── TEST 9: Two-Step Pickup Confirmation & Atomic MongoDB Update ──
   console.log('\n▶ Test 9: Confirm Order Pickup transitions status to PICKED_UP atomically');
   const now = new Date();
   const confirmedOrder = await Order.findOneAndUpdate(
@@ -215,7 +205,6 @@ async function runTests() {
   assert(confirmedOrder.barcodeStatus === 'USED', 'Barcode status marked as USED');
   assert(confirmedOrder.collectedBy === testOwner33.uid, 'Recorded collecting owner UID');
 
-  // ── TEST 10: Already-Collected Orders Cannot Be Collected Again (ALREADY_COLLECTED) ──
   console.log('\n▶ Test 10: Already-collected orders cannot be collected again');
   const secondAttempt = await Order.findOneAndUpdate(
     {
@@ -232,7 +221,6 @@ async function runTests() {
 
   assert(secondAttempt === null, 'Second pickup confirmation attempt rejected (ALREADY_COLLECTED)');
 
-  // ── TEST 11: Simultaneous Scan Race Condition Protection ──
   console.log('\n▶ Test 11: Simultaneous / concurrent scans cannot result in duplicate collection');
   // Order 2 is currently in READY state for canteen_34
   const promises = [
@@ -255,7 +243,6 @@ async function runTests() {
   assert(successCount === 1, 'Exactly one concurrent scan succeeded');
   assert(failureCount === 1, 'Duplicate concurrent scan was blocked by atomic filter');
 
-  // ── TEST 12: Cleanup Test Orders ──
   console.log('\n▶ Test 12: Clean up test artifacts');
   await Order.deleteMany({ orderId: { $in: [orderId1, orderId2] } });
   await Owner.deleteMany({ email: { $in: ['test_canteen33_barcode@quickbite.test', 'test_canteen34_barcode@quickbite.test'] } });

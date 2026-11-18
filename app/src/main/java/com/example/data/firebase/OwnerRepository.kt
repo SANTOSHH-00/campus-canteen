@@ -1,3 +1,4 @@
+// OwnerRepository: Repository managing data synchronization between remote API and local storage
 package com.example.data.firebase
 
 import android.util.Log
@@ -63,7 +64,6 @@ open class OwnerRepository(
     }
 
     return try {
-      // 1. Call Backend API to authenticate and trigger 6-digit OTP via Gmail SMTP
       val loginResult = mongoRepo.ownerLogin(trimmedEmail, trimmedPass)
       if (loginResult.isFailure) {
         val rawMsg = loginResult.exceptionOrNull()?.message.orEmpty()
@@ -91,7 +91,6 @@ open class OwnerRepository(
       lastOtpDelivered = true
       lastOtpDeliveryNotice = loginResponse?.message ?: "OTP code sent to $trimmedEmail"
 
-      // 2. Fetch owner profile from MongoDB or loginResponse
       val ownerDto = loginResponse?.owner ?: mongoRepo.getOwner(trimmedEmail).getOrNull()
       if (ownerDto == null) {
         return Result.failure(OwnerAuthException.UserNotFound("Owner profile could not be found."))

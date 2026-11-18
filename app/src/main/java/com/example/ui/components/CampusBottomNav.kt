@@ -1,3 +1,4 @@
+// CampusBottomNav: Reusable Jetpack Compose UI component
 package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
@@ -5,10 +6,12 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,13 +32,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.automirrored.outlined.Assignment
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.RestaurantMenu
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.RestaurantMenu
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.ShoppingCart
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberDark
+import com.example.ui.theme.DrawerAmberLight
+import com.example.ui.theme.GoldenAmber
+import com.example.ui.theme.PureWhite
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -60,8 +72,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.BottomNavTab
-import com.example.ui.theme.DrawerAmber
-import com.example.ui.theme.PureWhite
 
 data class BottomBarTabItem(
   val tab: BottomNavTab,
@@ -102,10 +112,10 @@ fun CampusBottomNav(
 
   val tabs = remember {
     listOf(
-      BottomBarTabItem(BottomNavTab.HOME, "Home", Icons.Filled.Home, Icons.Outlined.Home),
-      BottomBarTabItem(BottomNavTab.MENU, "Menu", Icons.Filled.RestaurantMenu, Icons.Outlined.RestaurantMenu),
-      BottomBarTabItem(BottomNavTab.ORDERS, "Orders", Icons.AutoMirrored.Filled.Assignment, Icons.AutoMirrored.Outlined.Assignment),
-      BottomBarTabItem(BottomNavTab.CART, "Cart", Icons.Filled.ShoppingCart, Icons.Outlined.ShoppingCart),
+      BottomBarTabItem(BottomNavTab.HOME, "Home", Icons.Outlined.Home, Icons.Outlined.Home),
+      BottomBarTabItem(BottomNavTab.MENU, "Search", Icons.Outlined.Search, Icons.Outlined.Search),
+      BottomBarTabItem(BottomNavTab.CART, "Cart", Icons.Outlined.ShoppingCart, Icons.Outlined.ShoppingCart),
+      BottomBarTabItem(BottomNavTab.ORDERS, "Orders", Icons.AutoMirrored.Filled.ReceiptLong, Icons.AutoMirrored.Outlined.ReceiptLong),
     )
   }
 
@@ -113,26 +123,25 @@ fun CampusBottomNav(
     modifier = modifier
       .fillMaxWidth()
       .navigationBarsPadding()
-      .padding(horizontal = 14.dp, vertical = 6.dp),
+      .padding(start = 14.dp, end = 14.dp, top = 2.dp, bottom = 4.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    // ── 1. Floating Capsule for Main Destinations (Home, Menu, Orders, Cart) ──
     Surface(
       modifier = Modifier
         .weight(1f)
         .shadow(
-          elevation = 8.dp,
-          shape = RoundedCornerShape(28.dp),
+          elevation = 10.dp,
+          shape = RoundedCornerShape(30.dp),
           clip = false,
         ),
-      shape = RoundedCornerShape(28.dp),
+      shape = RoundedCornerShape(30.dp),
       color = PureWhite,
       tonalElevation = 0.dp,
     ) {
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 4.dp, vertical = 5.dp),
+          .padding(horizontal = 6.dp, vertical = 7.dp),
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically,
       ) {
@@ -140,85 +149,40 @@ fun CampusBottomNav(
           val isSelected = (currentTab == item.tab) ||
               (item.tab == BottomNavTab.MENU && currentTab == BottomNavTab.CANTEENS)
 
-          val iconScale by animateFloatAsState(
-            targetValue = if (isSelected) 1.08f else 1.0f,
-            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
-            label = "tabScale_${item.tab}",
+          BottomNavTabCell(
+            item = item,
+            isSelected = isSelected,
+            cartBadgeCount = cartBadgeCount,
+            onClick = { onTabSelected(item.tab) },
+            modifier = Modifier.weight(1f),
           )
-
-          val pillAlpha by animateFloatAsState(
-            targetValue = if (isSelected) 1f else 0f,
-            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
-            label = "tabPillAlpha_${item.tab}",
-          )
-
-          val iconTint by animateColorAsState(
-            targetValue = if (isSelected) PureWhite else Color(0xFF6B6864),
-            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
-            label = "tabIconTint_${item.tab}",
-          )
-
-          Box(
-            modifier = Modifier
-              .weight(1f)
-              .height(44.dp)
-              .clip(RoundedCornerShape(16.dp))
-              .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { onTabSelected(item.tab) },
-              )
-              .semantics { contentDescription = item.label },
-            contentAlignment = Alignment.Center,
-          ) {
-            // Subtle, balanced selected indicator pill
-            Box(
-              modifier = Modifier
-                .size(width = 46.dp, height = 34.dp)
-                .clip(RoundedCornerShape(17.dp))
-                .background(DrawerAmber.copy(alpha = pillAlpha)),
-            )
-
-            // Medium-sized Icon (24.dp)
-            Icon(
-              imageVector = if (isSelected) item.activeIcon else item.inactiveIcon,
-              contentDescription = item.label,
-              tint = iconTint,
-              modifier = Modifier
-                .size(24.dp)
-                .scale(iconScale),
-            )
-
-            // Live Red Badge for Cart
-            if (item.tab == BottomNavTab.CART && cartBadgeCount > 0) {
-              Box(
-                modifier = Modifier
-                  .align(Alignment.Center)
-                  .offset(x = 12.dp, y = (-10).dp)
-                  .size(16.dp)
-                  .clip(CircleShape)
-                  .background(Color(0xFFE53935)),
-                contentAlignment = Alignment.Center,
-              ) {
-                Text(
-                  text = if (cartBadgeCount > 99) "99+" else cartBadgeCount.toString(),
-                  color = PureWhite,
-                  fontSize = 8.5.sp,
-                  fontWeight = FontWeight.Bold,
-                  textAlign = TextAlign.Center,
-                )
-              }
-            }
-          }
         }
       }
     }
 
-    // ── 2. Distinctive MunchMate Floating Button (ONLY visible on Home screen) ──
+    // Smooth width expansion & shrinking synchronized with the main capsule's weight layout
     AnimatedVisibility(
       visible = isHome,
-      enter = scaleIn(tween(durationMillis = 240, easing = FastOutSlowInEasing)) + fadeIn(tween(240)),
-      exit = scaleOut(tween(durationMillis = 200, easing = FastOutSlowInEasing)) + fadeOut(tween(200)),
+      enter = expandHorizontally(
+        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+        expandFrom = Alignment.End,
+        clip = true,
+      ) + scaleIn(
+        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+        initialScale = 0.6f,
+      ) + fadeIn(
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+      ),
+      exit = shrinkHorizontally(
+        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+        shrinkTowards = Alignment.End,
+        clip = true,
+      ) + scaleOut(
+        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+        targetScale = 0.6f,
+      ) + fadeOut(
+        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+      ),
     ) {
       Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -227,9 +191,9 @@ fun CampusBottomNav(
 
         Box(
           modifier = Modifier
-            .size(48.dp)
+            .size(54.dp)
             .shadow(
-              elevation = 8.dp,
+              elevation = 10.dp,
               shape = CircleShape,
               spotColor = DrawerAmber.copy(alpha = 0.35f),
             )
@@ -239,11 +203,11 @@ fun CampusBottomNav(
               width = 2.dp,
               brush = Brush.sweepGradient(
                 colors = listOf(
-                  Color(0xFFF59E0B),
-                  Color(0xFFEA580C),
-                  Color(0xFFE11D48),
-                  Color(0xFF8B5CF6),
-                  Color(0xFFF59E0B),
+                  DrawerAmber,
+                  GoldenAmber,
+                  DrawerAmberDark,
+                  GoldenAmber,
+                  DrawerAmber,
                 )
               ),
               shape = CircleShape,
@@ -256,12 +220,95 @@ fun CampusBottomNav(
             .semantics { contentDescription = "Open MunchMate AI Assistant" },
           contentAlignment = Alignment.Center,
         ) {
-          // Exact recreated Fork and Knife MunchMate Vector Icon
+          // Extracted Chef Bot MunchMate Vector Icon
           MunchMateIcon(
-            modifier = Modifier.size(24.dp),
-            tint = Color(0xFF2E5A44),
+            modifier = Modifier.size(40.dp),
           )
         }
+      }
+    }
+  }
+}
+
+/**
+ * Isolated Tab Item Composable to optimize recomposition performance:
+ * Only the tab that changed selection re-evaluates its animation states,
+ * completely avoiding row-wide recomposition cascades during navigation.
+ */
+@Composable
+private fun BottomNavTabCell(
+  item: BottomBarTabItem,
+  isSelected: Boolean,
+  cartBadgeCount: Int,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val iconScale by animateFloatAsState(
+    targetValue = if (isSelected) 1.08f else 1.0f,
+    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+    label = "tabScale_${item.tab}",
+  )
+
+  val pillAlpha by animateFloatAsState(
+    targetValue = if (isSelected) 1f else 0f,
+    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+    label = "tabPillAlpha_${item.tab}",
+  )
+
+  val iconTint by animateColorAsState(
+    targetValue = if (isSelected) DrawerAmber else Color(0xFF8E8E93),
+    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+    label = "tabIconTint_${item.tab}",
+  )
+
+  Box(
+    modifier = modifier
+      .height(48.dp)
+      .clip(RoundedCornerShape(18.dp))
+      .clickable(
+        interactionSource = remember { MutableInteractionSource() },
+        indication = null,
+        onClick = onClick,
+      )
+      .semantics { contentDescription = item.label },
+    contentAlignment = Alignment.Center,
+  ) {
+    // Subtle, balanced selected indicator pill in app theme
+    Box(
+      modifier = Modifier
+        .size(width = 50.dp, height = 36.dp)
+        .clip(RoundedCornerShape(18.dp))
+        .background(DrawerAmberLight.copy(alpha = pillAlpha)),
+    )
+
+    // Medium-sized Icon (25.dp)
+    Icon(
+      imageVector = if (isSelected) item.activeIcon else item.inactiveIcon,
+      contentDescription = item.label,
+      tint = iconTint,
+      modifier = Modifier
+        .size(25.dp)
+        .scale(iconScale),
+    )
+
+    // Live Badge for Cart
+    if (item.tab == BottomNavTab.CART && cartBadgeCount > 0) {
+      Box(
+        modifier = Modifier
+          .align(Alignment.Center)
+          .offset(x = 12.dp, y = (-10).dp)
+          .size(16.dp)
+          .clip(CircleShape)
+          .background(DrawerAmber),
+        contentAlignment = Alignment.Center,
+      ) {
+        Text(
+          text = if (cartBadgeCount > 99) "99+" else cartBadgeCount.toString(),
+          color = PureWhite,
+          fontSize = 8.5.sp,
+          fontWeight = FontWeight.Bold,
+          textAlign = TextAlign.Center,
+        )
       }
     }
   }

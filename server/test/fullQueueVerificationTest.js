@@ -170,14 +170,12 @@ async function run() {
   await connectDB();
 
   try {
-    // 0. Clean test data
     await Order.deleteMany({ canteenId: { $in: [TEST_CANTEEN_A, TEST_CANTEEN_B] } });
     await Canteen.deleteMany({ id: { $in: [TEST_CANTEEN_A, TEST_CANTEEN_B] } });
 
     await Canteen.create({ id: TEST_CANTEEN_A, name: 'Scale Canteen A', avgWaitMinutes: 5 });
     await Canteen.create({ id: TEST_CANTEEN_B, name: 'Scale Canteen B', avgWaitMinutes: 8 });
 
-    // ── TEST 1: Time-Basis & Item Prep for 3 Users ─────────────────────────
     console.log('--- TEST 1: Time-Basis Queue Calculation for Users 1, 2, 3 ---');
     const baseTime = Date.now() - 60000; // 1 minute ago
 
@@ -233,7 +231,6 @@ async function run() {
     assert(q3.queuePosition === 3 && q3.ordersAhead === 2, 'User 3 is #3 with 2 orders ahead');
     assert(q3.estWaitMinutes >= 12 && q3.estWaitMinutes <= 18, `User 3 wait time is ${q3.estWaitMinutes}m (parallel kitchen prep + 10m Thali)`);
 
-    // ── TEST 2: Kitchen Advancement ────────────────────────────────────────
     console.log('\n--- TEST 2: Advancing Queue when Kitchen Completes Order 1 ---');
     await Order.updateOne({ orderId: 'ORD-SCALE-01' }, { $set: { status: 'COMPLETED' } });
 
@@ -243,7 +240,6 @@ async function run() {
     assert(q2Advanced.queuePosition === 1 && q2Advanced.ordersAhead === 0, 'User 2 dynamically became #1 in line (0 ahead)');
     assert(q3Advanced.queuePosition === 2 && q3Advanced.ordersAhead === 1, 'User 3 dynamically became #2 in line (1 ahead)');
 
-    // ── TEST 3: High Scale Simulation (25 Concurrent Orders) ──────────────
     console.log('\n--- TEST 3: Massive Rush Hour Scale Test (25 Concurrent Orders) ---');
     await Order.deleteMany({ canteenId: TEST_CANTEEN_A });
 
@@ -275,7 +271,6 @@ async function run() {
       assert(q.estWaitMinutes >= 1 && q.estWaitMinutes <= 120, `Rush User ${i} estWait (${q.estWaitMinutes}m) is realistic and bounded`);
     }
 
-    // ── TEST 4: Batch Completion of First 5 Orders ─────────────────────────
     console.log('\n--- TEST 4: Kitchen Completes First 5 Orders (Batch Advancement) ---');
     await Order.updateMany(
       { orderId: { $in: ['ORD-RUSH-01', 'ORD-RUSH-02', 'ORD-RUSH-03', 'ORD-RUSH-04', 'ORD-RUSH-05'] } },
@@ -290,7 +285,6 @@ async function run() {
     const q25 = await getOrderQueue('ORD-RUSH-25');
     assert(q25.queuePosition === 20 && q25.ordersAhead === 19, 'Order 25 is now #20 in line with 19 orders ahead');
 
-    // ── TEST 5: Cancellation in Middle of Queue ────────────────────────────
     console.log('\n--- TEST 5: Mid-Queue Cancellation Test ---');
     // Cancel Order 10 (which is currently #5 in active line)
     const q10Before = await getOrderQueue('ORD-RUSH-10');
@@ -309,7 +303,6 @@ async function run() {
     const q11 = await getOrderQueue('ORD-RUSH-11');
     assert(q11.queuePosition === pos10, `Order 11 shifted into position #${pos10} after Order 10 cancellation`);
 
-    // ── TEST 6: Simultaneous Order Placement (Sub-millisecond Tie-Breaker) ──
     console.log('\n--- TEST 6: Simultaneous Placement Deterministic Tie-Breaker ---');
     const exactSameTime = new Date();
     await Order.create([
@@ -338,7 +331,6 @@ async function run() {
     assert(tie1.queuePosition !== tie2.queuePosition, 'Simultaneous orders never share identical queue positions');
     assert(tie2.queuePosition === tie1.queuePosition + 1, 'Deterministic tie-breaker places ORD-TIE-1 ahead of ORD-TIE-2');
 
-    // ── TEST 7: Independent Canteen Queues ──────────────────────────────────
     console.log('\n--- TEST 7: Strict Canteen Queue Isolation ---');
     await Order.create({
       orderId: 'ORD-CANTEEN-B-FIRST',

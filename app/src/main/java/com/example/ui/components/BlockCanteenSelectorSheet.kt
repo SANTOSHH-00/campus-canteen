@@ -1,3 +1,4 @@
+// BlockCanteenSelectorSheet: Reusable Jetpack Compose UI component
 package com.example.ui.components
 
 import android.widget.Toast
@@ -25,14 +26,18 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -60,7 +65,6 @@ import com.example.ui.theme.TextDark
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.WarmCream
 
-// ── QuickBite Theme Palette ──────────────────────────────────────────────────
 private val AmberBrand = DrawerAmber
 private val AmberBorder = DrawerAmber
 private val AmberBgSoft = DrawerAmberLight
@@ -89,6 +93,8 @@ fun BlockCanteenSelectorSheet(
   allCanteens: List<CampusBlockCanteen> = SampleFoodData.campusCanteens,
   onCanteenSelected: (CampusBlockCanteen, Int?) -> Unit,
   onDismiss: () -> Unit,
+  onRefresh: (() -> Unit)? = null,
+  isRefreshing: Boolean = false,
 ) {
   val context = LocalContext.current
 
@@ -120,7 +126,6 @@ fun BlockCanteenSelectorSheet(
             .fillMaxSize()
             .padding(horizontal = 20.dp),
         ) {
-          // ── Drag Handle ──────────────────────────────────────────────────────
           Spacer(modifier = Modifier.height(10.dp))
           Box(
             modifier = Modifier
@@ -133,7 +138,6 @@ fun BlockCanteenSelectorSheet(
 
           Spacer(modifier = Modifier.height(16.dp))
 
-          // ── Header: Orange Location Pin + Title & Subtitle ────────────────────
           Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -155,7 +159,7 @@ fun BlockCanteenSelectorSheet(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
               Text(
                 text = "Select Canteen",
                 fontSize = 18.sp,
@@ -169,11 +173,32 @@ fun BlockCanteenSelectorSheet(
                 color = SubtitleGray,
               )
             }
+
+            if (onRefresh != null) {
+              IconButton(
+                onClick = onRefresh,
+                modifier = Modifier.size(36.dp),
+              ) {
+                if (isRefreshing) {
+                  CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = AmberBrand,
+                  )
+                } else {
+                  Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Refresh Canteens",
+                    tint = DarkTitle,
+                    modifier = Modifier.size(20.dp),
+                  )
+                }
+              }
+            }
           }
 
           Spacer(modifier = Modifier.height(16.dp))
 
-          // ── Canteen List ─────────────────────────────────────────────────────
           Column(
             modifier = Modifier
               .weight(1f)
@@ -195,7 +220,6 @@ fun BlockCanteenSelectorSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // ── Bottom Action: "Use Current Location" ───────────────────────────
             Row(
               modifier = Modifier
                 .fillMaxWidth()
@@ -273,44 +297,48 @@ private fun CanteenCardItem(
   isSelected: Boolean,
   onClick: () -> Unit,
 ) {
-  val cardBackground = if (isSelected) DrawerAmber.copy(alpha = 0.08f) else PureWhite
-  val borderColor = if (isSelected) DrawerAmber else BorderGray.copy(alpha = 0.7f)
-  val borderWidth = if (isSelected) 2.dp else 1.dp
+  val cardBackground = if (isSelected) Color(0xFFFFFBEB) else PureWhite
+  val borderColor = if (isSelected) DrawerAmber else BorderGray.copy(alpha = 0.65f)
+  val borderWidth = if (isSelected) 1.8.dp else 1.dp
 
   Box(
     modifier = Modifier
       .fillMaxWidth()
-      .clip(RoundedCornerShape(18.dp))
+      .shadow(
+        elevation = if (isSelected) 5.dp else 1.5.dp,
+        shape = RoundedCornerShape(20.dp),
+        spotColor = if (isSelected) DrawerAmber.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.06f),
+      )
+      .clip(RoundedCornerShape(20.dp))
       .background(cardBackground)
       .border(
         width = borderWidth,
         color = borderColor,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
       )
-      .clickable { onClick() }
+      .clickable(onClick = onClick)
       .padding(14.dp),
   ) {
     Row(
       modifier = Modifier.fillMaxWidth(),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      // ── Left: Canteen Profile Image / Initials Monogram Avatar (Circle) ───
       val context = LocalContext.current
       val imageSource = CanteenImageHelper.resolveCanteenImageSource(context, canteen.id, canteen.imageUrl)
 
       Box(
         modifier = Modifier
-          .size(64.dp)
-          .clip(CircleShape)
+          .size(62.dp)
+          .clip(RoundedCornerShape(16.dp))
           .background(
             brush = Brush.linearGradient(
               colors = listOf(Color(0xFF2C2D30), Color(0xFF1C1D20))
             )
           )
           .border(
-            width = if (isSelected) 2.dp else 1.dp,
+            width = if (isSelected) 1.8.dp else 1.dp,
             color = if (isSelected) DrawerAmber else BorderGray.copy(alpha = 0.5f),
-            shape = CircleShape,
+            shape = RoundedCornerShape(16.dp),
           ),
         contentAlignment = Alignment.Center,
       ) {
@@ -324,7 +352,7 @@ private fun CanteenCardItem(
             contentScale = ContentScale.Crop,
             modifier = Modifier
               .fillMaxSize()
-              .clip(CircleShape),
+              .clip(RoundedCornerShape(16.dp)),
             error = {
               CanteenMonogram(canteen.name)
             },
@@ -336,78 +364,91 @@ private fun CanteenCardItem(
 
       Spacer(modifier = Modifier.width(14.dp))
 
-      // ── Middle: Canteen Name, Location, Timings ──────────────────────────
       Column(modifier = Modifier.weight(1f)) {
         Text(
           text = canteen.name,
-          fontSize = 15.sp,
+          fontSize = 15.5.sp,
           fontWeight = FontWeight.Bold,
           color = DarkTitle,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
         )
 
-        Spacer(modifier = Modifier.height(3.dp))
+        Spacer(modifier = Modifier.height(2.dp))
 
-        Text(
-          text = canteen.betweenBlocks,
-          fontSize = 12.5.sp,
-          fontWeight = FontWeight.Normal,
-          color = SubtitleGray,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
-
-        Spacer(modifier = Modifier.height(5.dp))
-
-        // Open/Closed Status with dot
         Row(verticalAlignment = Alignment.CenterVertically) {
-          Box(
-            modifier = Modifier
-              .size(6.5.dp)
-              .clip(CircleShape)
-              .background(if (canteen.isOpen) StatusGreen else StatusRed),
+          Icon(
+            imageVector = Icons.Default.LocationOn,
+            contentDescription = null,
+            tint = SubtitleGray,
+            modifier = Modifier.size(13.dp),
           )
-
-          Spacer(modifier = Modifier.width(5.dp))
-
-          val statusText = if (canteen.isOpen) {
-            "Open · ${canteen.timings}"
-          } else {
-            val reason = canteen.closeReason?.ifBlank { null } ?: "Opens 8:00 AM"
-            if (reason.startsWith("Opens", ignoreCase = true)) {
-              "Closed · $reason"
-            } else {
-              "Closed · $reason"
-            }
-          }
-
+          Spacer(modifier = Modifier.width(3.dp))
           Text(
-            text = statusText,
-            fontSize = 11.8.sp,
+            text = canteen.betweenBlocks,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
-            color = if (canteen.isOpen) Color(0xFF047857) else Color(0xFFB91C1C),
+            color = SubtitleGray,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
           )
         }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Refined Open/Closed Status Pill
+        val statusBg = if (canteen.isOpen) Color(0xFFECFDF5) else Color(0xFFFEF2F2)
+        val statusTextColor = if (canteen.isOpen) Color(0xFF065F46) else Color(0xFF991B1B)
+        val dotColor = if (canteen.isOpen) Color(0xFF10B981) else Color(0xFFEF4444)
+
+        val statusText = if (canteen.isOpen) {
+          "Open · ${canteen.timings}"
+        } else {
+          val reason = canteen.closeReason?.ifBlank { null } ?: "Opens 8:00 AM"
+          "Closed · $reason"
+        }
+
+        Box(
+          modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(statusBg)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+              modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(dotColor),
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+              text = statusText,
+              fontSize = 11.sp,
+              fontWeight = FontWeight.SemiBold,
+              color = statusTextColor,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+            )
+          }
+        }
       }
 
-      // ── Right: Circular Orange Checkmark for Selected ────────────────────
       if (isSelected) {
         Spacer(modifier = Modifier.width(10.dp))
         Box(
           modifier = Modifier
-            .size(24.dp)
+            .size(26.dp)
             .clip(CircleShape)
-            .background(AmberBrand),
+            .background(AmberBrand)
+            .shadow(2.dp, CircleShape),
           contentAlignment = Alignment.Center,
         ) {
           Icon(
             imageVector = Icons.Default.Check,
             contentDescription = "Selected",
             tint = PureWhite,
-            modifier = Modifier.size(15.dp),
+            modifier = Modifier.size(16.dp),
           )
         }
       }

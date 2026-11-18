@@ -1,3 +1,4 @@
+// WelcomeOnboardingScreen: Jetpack Compose screen for WelcomeOnboarding user interface
 package com.example.ui.screens
 
 import androidx.compose.foundation.Canvas
@@ -37,8 +38,11 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.PureWhite
 
-// Vibrant warm amber matching Image 3
-private val AmberBrand = Color(0xFFF5A623)
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberLight
+
+// Vibrant warm amber matching app theme
+private val AmberBrand = DrawerAmber
 private val TextDark = Color(0xFF1F2937)
 
 /**
@@ -65,7 +69,6 @@ fun WelcomeOnboardingScreen(
       modifier = Modifier.fillMaxSize(),
       verticalArrangement = Arrangement.SpaceBetween,
     ) {
-      // ── Top Half: Logo Branding (like Image 3) ──────────────────────────
       Box(
         modifier = Modifier
           .fillMaxWidth()
@@ -133,7 +136,6 @@ fun WelcomeOnboardingScreen(
         }
       }
 
-      // ── Bottom Half: Amber Card with Welcome & Action Buttons (Image 3 Left) ──
       Box(
         modifier = Modifier
           .fillMaxWidth()

@@ -1,3 +1,4 @@
+// OrdersScreen: Jetpack Compose screen for Orders user interface
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
@@ -6,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,9 +29,15 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.example.ui.components.QuickBiteStateView
+import com.example.ui.components.QuickBiteStateType
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -82,7 +90,6 @@ import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -115,7 +122,6 @@ fun OrdersScreen(
   var isSearchActive by remember { mutableStateOf(false) }
   var searchQuery by remember { mutableStateOf("") }
 
-  // ── Filter State ──
   var filterState by remember { mutableStateOf(OrdersFilterState()) }
   var isFilterSheetOpen by remember { mutableStateOf(false) }
 
@@ -131,7 +137,6 @@ fun OrdersScreen(
     appState.isBottomBarVisible = true
   }
 
-  // Helper date calculation for epoch boundaries (IST / local device midnight)
   val calendar = Calendar.getInstance()
   calendar.set(Calendar.HOUR_OF_DAY, 0)
   calendar.set(Calendar.MINUTE, 0)
@@ -144,7 +149,6 @@ fun OrdersScreen(
   val startOfLast7Days = startOfToday - 6L * 24 * 60 * 60 * 1000
   val startOfLast30Days = startOfToday - 29L * 24 * 60 * 60 * 1000
 
-  // ── Orders List with Live Search & Date/Canteen Filtering ──
   val isViewingActive = selectedTab == "Active Orders"
   val displayedOrders = if (isViewingActive) activeOrders else pastOrders
 
@@ -152,7 +156,6 @@ fun OrdersScreen(
 
   val filteredOrders = remember(displayedOrders, q, filterState) {
     displayedOrders.filter { order ->
-      // 1. Search Query
       val matchesQuery = if (q.isBlank()) true else {
         order.tokenNumber.lowercase().contains(q) ||
         order.id.lowercase().contains(q) ||
@@ -161,7 +164,6 @@ fun OrdersScreen(
         order.items.any { it.foodItem.name.lowercase().contains(q) }
       }
 
-      // 2. Canteen Filter
       val matchesCanteen = if (filterState.selectedCanteenIds.isEmpty()) true else {
         filterState.selectedCanteenIds.contains(order.canteenId) ||
         filterState.selectedCanteenIds.any { id ->
@@ -169,7 +171,6 @@ fun OrdersScreen(
         }
       }
 
-      // 3. Date Filter
       val orderEpoch = order.placedEpoch.takeIf { it > 0 }
         ?: com.example.data.api.extractEpochFromOrderId(order.id).takeIf { it > 0 }
         ?: System.currentTimeMillis()
@@ -222,7 +223,6 @@ fun OrdersScreen(
       .statusBarsPadding()
       .testTag("customer_my_orders_screen"),
   ) {
-    // ── Header: Normal Bar vs Interactive Search Bar ─────────────────────
     if (isSearchActive) {
       Row(
         modifier = Modifier
@@ -329,7 +329,19 @@ fun OrdersScreen(
           modifier = Modifier.weight(1f),
         )
 
-        // 1. Search Icon Button
+        // Refresh Button
+        IconButton(
+          onClick = { appState.refreshOrders() },
+          modifier = Modifier.size(38.dp),
+        ) {
+          Icon(
+            imageVector = Icons.Default.Refresh,
+            contentDescription = "Refresh Orders",
+            tint = TextDark,
+            modifier = Modifier.size(22.dp),
+          )
+        }
+
         IconButton(
           onClick = { isSearchActive = true },
           modifier = Modifier.testTag("my_orders_search_button"),
@@ -342,7 +354,6 @@ fun OrdersScreen(
           )
         }
 
-        // 2. Monochrome Filter Button with Badge
         Box(
           modifier = Modifier.padding(end = 6.dp),
           contentAlignment = Alignment.Center
@@ -386,7 +397,6 @@ fun OrdersScreen(
       }
     }
 
-    // ── Active Filter Chips Row ──
     if (filterState.isActive) {
       Row(
         modifier = Modifier
@@ -448,7 +458,6 @@ fun OrdersScreen(
       }
     }
 
-    // ── Tabs: Active Orders (Current) | Order History (Completed/Picked Up) ──
     val tabs = listOf("Active Orders", "Order History")
     TabRow(
       selectedTabIndex = tabs.indexOf(selectedTab).coerceAtLeast(0),
@@ -483,120 +492,73 @@ fun OrdersScreen(
 
     Spacer(Modifier.height(14.dp))
 
-    // ── Orders Content List or Monochrome Empty State ──
-    if (filteredOrders.isEmpty()) {
-      Box(
-        modifier = Modifier
-          .fillMaxSize()
-          .padding(32.dp),
-        contentAlignment = Alignment.Center,
-      ) {
-        Column(
-          horizontalAlignment = Alignment.CenterHorizontally,
-          modifier = Modifier.padding(horizontal = 16.dp)
+    PullToRefreshBox(
+      isRefreshing = appState.isOrdersRefreshing,
+      onRefresh = { appState.refreshOrders() },
+      modifier = Modifier
+        .fillMaxWidth()
+        .weight(1f),
+    ) {
+      val isOffline = !com.example.util.NetworkMonitor.isCurrentlyOnline()
+      if (isOffline || (appState.ordersError != null && filteredOrders.isEmpty())) {
+        QuickBiteStateView(
+          type = QuickBiteStateType.NO_INTERNET,
+          title = "Unable to Load Orders",
+          message = appState.ordersError ?: "It looks like you're offline. Please check your network connection and try again.",
+          isRetrying = appState.isOrdersRefreshing,
+          onRetry = {
+            com.example.util.NetworkMonitor.refreshConnectivity()
+            appState.refreshOrders()
+          },
+          modifier = Modifier.fillMaxSize(),
+        )
+      } else if (filteredOrders.isEmpty()) {
+        QuickBiteStateView(
+          type = QuickBiteStateType.EMPTY_DATA,
+          title = if (appState.isGuest) "Sign in to view orders" else if (filterState.isActive) "No orders found" else if (searchQuery.isNotBlank()) "No Matching Orders" else if (isViewingActive) "No Active Orders" else "No Past Orders",
+          message = if (appState.isGuest) {
+            "You are currently browsing QuickBite in Guest Mode. Orders and receipts are private to registered student accounts. Sign in to view and track your orders."
+          } else if (filterState.isActive) {
+            "No orders match your selected filters. Try adjusting date range or canteens."
+          } else if (searchQuery.isNotBlank()) {
+            "No orders found matching \"$searchQuery\". Try searching for another item or canteen."
+          } else if (isViewingActive) {
+            "Your active preparing or ready order will appear here. Once picked up, it moves to Order History."
+          } else {
+            "Your past picked up orders and receipts are saved here."
+          },
+          customIcon = if (filterState.isActive) Icons.AutoMirrored.Filled.ReceiptLong else Icons.Default.ShoppingBag,
+          onRetry = if (filterState.isActive) {
+            { filterState = OrdersFilterState() }
+          } else if (searchQuery.isNotBlank()) {
+            { searchQuery = "" }
+          } else null,
+          modifier = Modifier.fillMaxSize(),
+        )
+      } else {
+        LazyColumn(
+          state = ordersListState,
+          modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+          contentPadding = PaddingValues(bottom = 96.dp),
+          verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-          // Monochrome black-and-white icon
-          Box(
-            modifier = Modifier
-              .size(72.dp)
-              .clip(CircleShape)
-              .background(Color(0xFFEFEFEF)),
-            contentAlignment = Alignment.Center,
-          ) {
-            Icon(
-              imageVector = if (filterState.isActive) Icons.AutoMirrored.Filled.ReceiptLong else Icons.Default.ShoppingBag,
-              contentDescription = null,
-              tint = BlackPrimary,
-              modifier = Modifier.size(36.dp),
+          items(filteredOrders, key = { it.id }) { order ->
+            CustomerOrderCard(
+              order = order,
+              onClick = { onOrderClick(order) },
             )
           }
 
-          Spacer(Modifier.height(16.dp))
-
-          Text(
-            text = if (filterState.isActive) "No orders found" else if (searchQuery.isNotBlank()) "No Matching Orders" else if (isViewingActive) "No Active Orders" else "No Past Orders",
-            fontSize = 19.sp,
-            fontWeight = FontWeight.Bold,
-            color = BlackPrimary,
-          )
-
-          Spacer(Modifier.height(8.dp))
-
-          Text(
-            text = if (filterState.isActive) {
-              "No orders match your selected filters.\nTry adjusting date range or canteens."
-            } else if (searchQuery.isNotBlank()) {
-              "No orders found matching \"$searchQuery\".\nTry searching for another item or canteen."
-            } else if (isViewingActive) {
-              "Your active preparing or ready order will appear here.\nOnce picked up, it moves to Order History."
-            } else {
-              "Your past picked up orders and receipts are saved here."
-            },
-            fontSize = 13.5.sp,
-            color = TextMuted,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            lineHeight = 19.sp,
-          )
-
-          if (filterState.isActive) {
-            Spacer(Modifier.height(18.dp))
-            Box(
-              modifier = Modifier
-                .clip(RoundedCornerShape(14.dp))
-                .background(BlackPrimary)
-                .clickable { filterState = OrdersFilterState() }
-                .padding(horizontal = 22.dp, vertical = 11.dp)
-                .testTag("orders_clear_filters_button"),
-            ) {
-              Text(
-                text = "Clear Filters",
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = PureWhite,
-              )
-            }
-          } else if (searchQuery.isNotBlank()) {
-            Spacer(Modifier.height(18.dp))
-            Box(
-              modifier = Modifier
-                .clip(RoundedCornerShape(14.dp))
-                .background(BlackPrimary)
-                .clickable { searchQuery = "" }
-                .padding(horizontal = 20.dp, vertical = 10.dp),
-            ) {
-              Text(
-                text = "Clear Search",
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = PureWhite,
-              )
-            }
+          item {
+            Spacer(Modifier.height(20.dp))
           }
-        }
-      }
-    } else {
-      LazyColumn(
-        state = ordersListState,
-        modifier = Modifier
-          .fillMaxSize()
-          .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-      ) {
-        items(filteredOrders, key = { it.id }) { order ->
-          CustomerOrderCard(
-            order = order,
-            onClick = { onOrderClick(order) },
-          )
-        }
-
-        item {
-          Spacer(Modifier.height(20.dp))
         }
       }
     }
   }
 
-  // ── Filter Bottom Sheet Modal ──
   if (isFilterSheetOpen) {
     OrdersFilterBottomSheet(
       currentState = filterState,
@@ -685,7 +647,6 @@ private fun OrdersFilterBottomSheet(
         .fillMaxWidth()
         .padding(horizontal = 20.dp, vertical = 6.dp)
     ) {
-      // ── Sheet Header ──
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -731,14 +692,12 @@ private fun OrdersFilterBottomSheet(
 
       Spacer(Modifier.height(16.dp))
 
-      // ── Scrollable Content ──
       Column(
         modifier = Modifier
           .fillMaxWidth()
           .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(20.dp),
       ) {
-        // ── Section 1: DATE ──
         Column {
           Text(
             text = "DATE",
@@ -845,7 +804,6 @@ private fun OrdersFilterBottomSheet(
           }
         }
 
-        // ── Section 2: CANTEEN ──
         Column {
           Text(
             text = "CANTEEN",
@@ -889,7 +847,6 @@ private fun OrdersFilterBottomSheet(
 
       Spacer(Modifier.height(20.dp))
 
-      // ── Sticky Action Buttons [Clear All] [Apply] ──
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -940,7 +897,6 @@ private fun OrdersFilterBottomSheet(
     }
   }
 
-  // ── Date Picker Dialog for Custom Date Range ──
   if (showDatePicker) {
     val datePickerState = rememberDatePickerState(
       initialSelectedDateMillis = draftState.customStartDateEpoch ?: System.currentTimeMillis()
@@ -1104,7 +1060,6 @@ private fun CustomerOrderCard(
     border = androidx.compose.foundation.BorderStroke(0.8.dp, CardBorderColor),
   ) {
     Column(modifier = Modifier.padding(18.dp)) {
-      // Header: #Q1042  Preparing / Ready (Decent Black Badge with Good Icons)
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,

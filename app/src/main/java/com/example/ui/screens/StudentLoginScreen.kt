@@ -1,3 +1,4 @@
+// StudentLoginScreen: Jetpack Compose screen for StudentLogin user interface
 package com.example.ui.screens
 
 import androidx.compose.foundation.background

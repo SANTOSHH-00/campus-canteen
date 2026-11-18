@@ -1,3 +1,4 @@
+// AiAssistantViewModel: ViewModel managing UI state and business logic for AiAssistant
 package com.example.ui.viewmodel
 
 import android.util.Log
@@ -71,7 +72,6 @@ class AiAssistantViewModel(
     _errorMessage.value = null
     lastUserMessage = textToSend
 
-    // 1. Capture clean PRIOR conversation history (excluding the new prompt and error bubbles)
     val priorHistory = _messages.value.filter { !it.isError && it.content.isNotBlank() }
 
     val userMessage = ChatMessage(
@@ -79,7 +79,6 @@ class AiAssistantViewModel(
       content = textToSend,
     )
 
-    // 2. Append user message to UI
     _messages.value = _messages.value + userMessage
     _isLoading.value = true
 

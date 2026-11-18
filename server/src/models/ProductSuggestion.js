@@ -27,3 +27,4 @@ productSuggestionSchema.index({ canteenId: 1, studentId: 1, createdAt: -1 });
 productSuggestionSchema.index({ canteenId: 1, studentEmail: 1, createdAt: -1 });
 
 module.exports = mongoose.model('ProductSuggestion', productSuggestionSchema);
+

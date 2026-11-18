@@ -1,3 +1,4 @@
+// Owner Order Details: Kitchen management screen for inspecting student orders and updating preparation status
 package com.example.ui.screens
 
 import android.content.ClipData
@@ -31,6 +32,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.outlined.Restaurant
+import androidx.compose.material.icons.outlined.ShoppingBag
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -39,14 +43,20 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.example.data.api.toDocument
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,13 +81,17 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-private val OrangeAccent = Color(0xFFF97316)
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberLight
+import com.example.ui.theme.BorderGray
+
+private val OrangeAccent = DrawerAmber
 private val GreenReady = Color(0xFF16A34A)
-private val BadgePreparingBg = Color(0xFFFFF7ED)
+private val BadgePreparingBg = DrawerAmberLight
 private val BadgeReadyBg = Color(0xFFF0FDF4)
 private val BadgePickedUpBg = Color(0xFFF3F4F6)
-private val CardBorderColor = Color(0xFFF3F4F6)
-private val DividerColor = Color(0xFFF3F4F6)
+private val CardBorderColor = BorderGray
+private val DividerColor = BorderGray.copy(alpha = 0.5f)
 private val PageBackground = WarmCream
 
 @Composable
@@ -96,6 +110,19 @@ fun OwnerOrderDetailsScreen(
     allOrders.find { it.orderId == orderId }
       ?: fetchedOrder
       ?: com.example.data.api.MongoRepository.getCachedOrder(orderId)
+  }
+
+  DisposableEffect(orderId) {
+    com.example.data.api.WebSocketManager.subscribe("order:$orderId")
+    onDispose {
+      com.example.data.api.WebSocketManager.unsubscribe("order:$orderId")
+    }
+  }
+
+  LaunchedEffect(orderId) {
+    com.example.data.api.WebSocketManager.observeOrder(orderId).collect { updatedDto ->
+      fetchedOrder = updatedDto.toDocument()
+    }
   }
 
   LaunchedEffect(orderId) {
@@ -137,26 +164,41 @@ fun OwnerOrderDetailsScreen(
     return
   }
 
-  val isPreparing = order.status.equals("PREPARING", ignoreCase = true)
-  val isReady = order.status.equals("READY", ignoreCase = true)
-  val isPickedUp = order.status.equals("COMPLETED", ignoreCase = true) || order.status.equals("DELIVERED", ignoreCase = true)
+  var showRejectDialog by remember { mutableStateOf(false) }
+  var rejectionReasonOption by remember { mutableStateOf("Items temporarily out of stock") }
+  var customRejectionReason by remember { mutableStateOf("") }
+
+  val normStatus = order.status.uppercase().trim()
+  val isPending = normStatus in listOf("PENDING", "NEW", "WAITING")
+  val isAccepted = normStatus in listOf("ACCEPTED", "CONFIRMED")
+  val isPreparing = normStatus == "PREPARING"
+  val isReady = normStatus == "READY"
+  val isPickedUp = normStatus in listOf("COMPLETED", "DELIVERED", "PICKED_UP")
+  val isRejected = normStatus == "REJECTED"
 
   val statusLabel = when {
     isPickedUp -> "Picked Up"
     isReady -> "Ready"
-    else -> "Preparing"
+    isPreparing -> "Preparing"
+    isAccepted -> "Accepted"
+    isRejected -> "Rejected"
+    else -> "Incoming"
   }
 
   val statusTextColor = when {
     isPickedUp -> Color(0xFF6B7280)
     isReady -> GreenReady
-    else -> OrangeAccent
+    isPreparing || isAccepted -> OrangeAccent
+    isRejected -> Color(0xFFDC2626)
+    else -> Color(0xFFD97706)
   }
 
   val statusBgColor = when {
     isPickedUp -> BadgePickedUpBg
     isReady -> BadgeReadyBg
-    else -> BadgePreparingBg
+    isPreparing || isAccepted -> BadgePreparingBg
+    isRejected -> Color(0xFFFEE2E2)
+    else -> Color(0xFFFEF3C7)
   }
 
   val timeFormatter = remember {
@@ -243,7 +285,6 @@ fun OwnerOrderDetailsScreen(
         .verticalScroll(rememberScrollState()),
     ) {
 
-      // ── Header matching Image 2 ───────────────────────────────────────────
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -275,7 +316,6 @@ fun OwnerOrderDetailsScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // ── Card 1: Order & Student Profile Summary (Image 2) ─────────────────
       Card(
         modifier = Modifier
           .fillMaxWidth()
@@ -286,7 +326,6 @@ fun OwnerOrderDetailsScreen(
         border = androidx.compose.foundation.BorderStroke(0.8.dp, CardBorderColor),
       ) {
         Column(modifier = Modifier.padding(18.dp)) {
-          // Token and status badge
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -317,7 +356,6 @@ fun OwnerOrderDetailsScreen(
 
           Spacer(modifier = Modifier.height(4.dp))
 
-          // Date & Time
           Text(
             text = "$orderTime • $orderDate",
             fontSize = 13.sp,
@@ -326,10 +364,71 @@ fun OwnerOrderDetailsScreen(
 
           Spacer(modifier = Modifier.height(12.dp))
 
-          // ── Timing Separation: Customer Pickup vs Kitchen Estimated Completion ──
+          // Fulfilment banner: Dine-in vs Takeaway with packaging indicator
+          val isDineIn = order.fulfillmentType.equals("DINE_IN", ignoreCase = true)
+          Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(
+              containerColor = if (isDineIn) Color(0xFFF0FDF4) else Color(0xFFFFFBEB)
+            ),
+            border = androidx.compose.foundation.BorderStroke(
+              1.dp,
+              if (isDineIn) Color(0xFF86EFAC) else Color(0xFFFDE68A)
+            ),
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                  imageVector = if (isDineIn) Icons.Outlined.Restaurant else Icons.Outlined.ShoppingBag,
+                  contentDescription = null,
+                  tint = if (isDineIn) Color(0xFF16A34A) else Color(0xFFD97706),
+                  modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                  Text(
+                    text = if (isDineIn) "Dine-in Order" else "Takeaway Order",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isDineIn) Color(0xFF166534) else Color(0xFF92400E),
+                  )
+                  Text(
+                    text = if (isDineIn) "Serve on tray/plates · No packaging required" else "Pack securely in takeaway containers",
+                    fontSize = 12.sp,
+                    color = if (isDineIn) Color(0xFF15803D) else Color(0xFFB45309),
+                  )
+                }
+              }
+
+              Box(
+                modifier = Modifier
+                  .clip(RoundedCornerShape(8.dp))
+                  .background(if (isDineIn) Color(0xFFDCFCE7) else Color(0xFFFEF3C7))
+                  .padding(horizontal = 8.dp, vertical = 4.dp),
+              ) {
+                Text(
+                  text = if (isDineIn) "₹0 PACK" else "+₹${if (order.packagingCharge > 0) order.packagingCharge else 10} PACK",
+                  fontSize = 11.5.sp,
+                  fontWeight = FontWeight.ExtraBold,
+                  color = if (isDineIn) Color(0xFF16A34A) else Color(0xFFB45309),
+                )
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
+
           val customerPickupDisplay = order.customerPickupTime.ifBlank {
             order.pickupPreference.ifBlank { "ASAP" }
           }
+          val isScheduledPickup = order.isScheduled || (!customerPickupDisplay.contains("ASAP", ignoreCase = true) && customerPickupDisplay.isNotBlank())
           val estimatedCompletionDisplay = order.estimatedCompletionTime.ifBlank {
             order.estimatedReadyTime.ifBlank { "In queue" }
           }
@@ -346,17 +445,17 @@ fun OwnerOrderDetailsScreen(
           ) {
             Column {
               Text(
-                text = "Customer Pickup Time",
+                text = if (isScheduledPickup) "Requested Pickup Time (Scheduled)" else "Customer Pickup Time",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
-                color = TextMuted,
+                color = if (isScheduledPickup) Color(0xFFEA580C) else TextMuted,
               )
               Spacer(modifier = Modifier.height(2.dp))
               Text(
                 text = customerPickupDisplay,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextDark,
+                color = if (isScheduledPickup) Color(0xFFEA580C) else TextDark,
               )
             }
 
@@ -388,12 +487,10 @@ fun OwnerOrderDetailsScreen(
           HorizontalDivider(thickness = 0.8.dp, color = DividerColor)
           Spacer(modifier = Modifier.height(14.dp))
 
-          // Student profile row with Phone Call button
           Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
           ) {
-            // Student avatar
             Box(
               modifier = Modifier
                 .size(46.dp)
@@ -411,7 +508,6 @@ fun OwnerOrderDetailsScreen(
 
             Spacer(modifier = Modifier.width(14.dp))
 
-            // Student Name, ID, Course, Phone
             Column(modifier = Modifier.weight(1f)) {
               Text(
                 text = order.studentName.ifBlank { "Rahul Sharma" },
@@ -441,7 +537,6 @@ fun OwnerOrderDetailsScreen(
               }
             }
 
-            // Call Button (phone icon)
             Box(
               modifier = Modifier
                 .size(40.dp)
@@ -464,7 +559,6 @@ fun OwnerOrderDetailsScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // ── Card 2: Order Items (Image 2) ─────────────────────────────────────
       Card(
         modifier = Modifier
           .fillMaxWidth()
@@ -516,7 +610,50 @@ fun OwnerOrderDetailsScreen(
 
           Spacer(modifier = Modifier.height(12.dp))
           HorizontalDivider(thickness = 0.8.dp, color = DividerColor)
-          Spacer(modifier = Modifier.height(12.dp))
+          Spacer(modifier = Modifier.height(10.dp))
+
+          val isDineIn = order.fulfillmentType.equals("DINE_IN", ignoreCase = true)
+          val subtotalCalculated = if (order.itemsSubtotal > 0) order.itemsSubtotal else displayItems.sumOf { it.price * it.quantity }
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text("Items Subtotal", fontSize = 13.5.sp, color = TextMuted)
+            Text("₹$subtotalCalculated", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = TextDark)
+          }
+
+          Spacer(modifier = Modifier.height(5.dp))
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text(if (isDineIn) "Packaging (Dine-in)" else "Packaging (Takeaway)", fontSize = 13.5.sp, color = TextMuted)
+            Text(
+              text = if (isDineIn || order.packagingCharge == 0) "FREE (₹0)" else "₹${order.packagingCharge}",
+              fontSize = 13.5.sp,
+              fontWeight = FontWeight.SemiBold,
+              color = if (isDineIn || order.packagingCharge == 0) Color(0xFF16A34A) else TextDark,
+            )
+          }
+
+          if (order.taxAmount > 0) {
+            Spacer(modifier = Modifier.height(5.dp))
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Text("Taxes (GST 5%)", fontSize = 13.5.sp, color = TextMuted)
+              Text("₹${order.taxAmount}", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = TextDark)
+            }
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+          HorizontalDivider(thickness = 0.8.dp, color = DividerColor)
+          Spacer(modifier = Modifier.height(8.dp))
 
           Row(
             modifier = Modifier.fillMaxWidth(),
@@ -524,7 +661,7 @@ fun OwnerOrderDetailsScreen(
             verticalAlignment = Alignment.CenterVertically,
           ) {
             Text(
-              text = "Total",
+              text = "Total Amount",
               fontSize = 16.sp,
               fontWeight = FontWeight.Bold,
               color = TextDark,
@@ -541,7 +678,6 @@ fun OwnerOrderDetailsScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // ── Card 3: Order Status Timeline (Image 2) ───────────────────────────
       Card(
         modifier = Modifier
           .fillMaxWidth()
@@ -561,7 +697,6 @@ fun OwnerOrderDetailsScreen(
 
           Spacer(modifier = Modifier.height(16.dp))
 
-          // Step 1: Order Received
           StatusTimelineStep(
             title = "Order Received",
             subtitle = null,
@@ -571,7 +706,6 @@ fun OwnerOrderDetailsScreen(
             showConnectingLine = true,
           )
 
-          // Step 2: Preparing
           StatusTimelineStep(
             title = "Preparing",
             subtitle = "Kitchen started",
@@ -581,7 +715,6 @@ fun OwnerOrderDetailsScreen(
             showConnectingLine = true,
           )
 
-          // Step 3: Ready for Pickup (Only Counter 1 or Counter 2)
           val counterAssigned = if (order.pickupCounter.isNotBlank()) order.pickupCounter else "Counter 1"
           StatusTimelineStep(
             title = "Ready for Pickup",
@@ -592,7 +725,6 @@ fun OwnerOrderDetailsScreen(
             showConnectingLine = true,
           )
 
-          // Step 4: Picked Up
           StatusTimelineStep(
             title = "Picked Up",
             subtitle = if (isPickedUp) "Handed over to student" else null,
@@ -607,8 +739,98 @@ fun OwnerOrderDetailsScreen(
       Spacer(modifier = Modifier.height(20.dp))
     }
 
-    // ── Bottom Fixed Action Button (Sequential Process: NEW -> PREPARING -> READY -> Picked Up) ──
-    val isNew = order.status.equals("NEW", ignoreCase = true)
+    // Reject confirmation dialog
+    if (showRejectDialog) {
+      AlertDialog(
+        onDismissRequest = { showRejectDialog = false },
+        title = {
+          Text(
+            text = "Reject Order #${order.tokenNumber}?",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFFDC2626),
+          )
+        },
+        text = {
+          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+              text = "Please select or enter the reason for rejecting this student's order. A full refund will be automatically scheduled.",
+              fontSize = 12.5.sp,
+              color = TextDark,
+            )
+
+            val reasonOptions = listOf(
+              "Items temporarily out of stock",
+              "Kitchen overloaded / peak rush",
+              "Canteen closing soon",
+              "Unable to fulfill custom request",
+              "Other reason",
+            )
+
+            reasonOptions.forEach { option ->
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clip(RoundedCornerShape(8.dp))
+                  .clickable { rejectionReasonOption = option }
+                  .padding(vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                RadioButton(
+                  selected = rejectionReasonOption == option,
+                  onClick = { rejectionReasonOption = option },
+                  colors = RadioButtonDefaults.colors(selectedColor = Color(0xFFDC2626)),
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                  text = option,
+                  fontSize = 13.sp,
+                  fontWeight = if (rejectionReasonOption == option) FontWeight.SemiBold else FontWeight.Normal,
+                  color = TextDark,
+                )
+              }
+            }
+
+            if (rejectionReasonOption == "Other reason") {
+              OutlinedTextField(
+                value = customRejectionReason,
+                onValueChange = { customRejectionReason = it },
+                placeholder = { Text("Enter specific rejection reason...", fontSize = 12.sp) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+              )
+            }
+          }
+        },
+        confirmButton = {
+          Button(
+            onClick = {
+              val finalReason = if (rejectionReasonOption == "Other reason") {
+                customRejectionReason.ifBlank { "Canteen unable to accept order" }
+              } else {
+                rejectionReasonOption
+              }
+              val targetId = order.orderId.ifBlank { orderId }
+              dashboardViewModel.rejectOrder(targetId, finalReason)
+              showRejectDialog = false
+              Toast.makeText(context, "Order #${order.tokenNumber} rejected. Refund scheduled.", Toast.LENGTH_SHORT).show()
+              onBack()
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+            shape = RoundedCornerShape(10.dp),
+          ) {
+            Text("Confirm Rejection", color = PureWhite, fontWeight = FontWeight.Bold)
+          }
+        },
+        dismissButton = {
+          TextButton(onClick = { showRejectDialog = false }) {
+            Text("Keep Order", color = TextMuted)
+          }
+        },
+        shape = RoundedCornerShape(20.dp),
+        containerColor = PureWhite,
+      )
+    }
 
     Box(
       modifier = Modifier
@@ -618,12 +840,46 @@ fun OwnerOrderDetailsScreen(
         .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
       when {
-        isNew -> {
+        isPending -> {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+          ) {
+            Button(
+              onClick = {
+                val targetId = order.orderId.ifBlank { orderId }
+                dashboardViewModel.acceptOrder(targetId)
+                Toast.makeText(context, "Order #${order.tokenNumber} accepted!", Toast.LENGTH_SHORT).show()
+              },
+              modifier = Modifier
+                .weight(1f)
+                .height(50.dp)
+                .testTag("owner_accept_button"),
+              shape = RoundedCornerShape(12.dp),
+              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+            ) {
+              Text("Accept Order", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = PureWhite)
+            }
+
+            Button(
+              onClick = { showRejectDialog = true },
+              modifier = Modifier
+                .height(50.dp)
+                .testTag("owner_reject_button"),
+              shape = RoundedCornerShape(12.dp),
+              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2)),
+              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDC2626)),
+            ) {
+              Text("Reject", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+            }
+          }
+        }
+        isAccepted -> {
           Button(
             onClick = {
               val targetId = order.orderId.ifBlank { orderId }
               dashboardViewModel.updateOrderStatus(targetId, "PREPARING")
-              Toast.makeText(context, "Order ${order.tokenNumber} moved to Preparing", Toast.LENGTH_SHORT).show()
+              Toast.makeText(context, "Order #${order.tokenNumber} moved to Preparing", Toast.LENGTH_SHORT).show()
             },
             modifier = Modifier
               .fillMaxWidth()
@@ -645,7 +901,7 @@ fun OwnerOrderDetailsScreen(
             onClick = {
               val targetId = order.orderId.ifBlank { orderId }
               dashboardViewModel.updateOrderStatus(targetId, "READY")
-              Toast.makeText(context, "Order ${order.tokenNumber} marked Ready for Pickup", Toast.LENGTH_SHORT).show()
+              Toast.makeText(context, "Order #${order.tokenNumber} marked Ready for Pickup", Toast.LENGTH_SHORT).show()
             },
             modifier = Modifier
               .fillMaxWidth()
@@ -663,12 +919,11 @@ fun OwnerOrderDetailsScreen(
           }
         }
         isReady -> {
-          // As requested: Once ready, button displays "Picked Up" (not Next) and exits on click
           Button(
             onClick = {
               val targetId = order.orderId.ifBlank { orderId }
               dashboardViewModel.updateOrderStatus(targetId, "COMPLETED")
-              Toast.makeText(context, "Order ${order.tokenNumber} Handled & Picked Up", Toast.LENGTH_SHORT).show()
+              Toast.makeText(context, "Order #${order.tokenNumber} Handled & Picked Up", Toast.LENGTH_SHORT).show()
               onBack() // Exits to live orders screen
             },
             modifier = Modifier
@@ -676,18 +931,34 @@ fun OwnerOrderDetailsScreen(
               .height(50.dp)
               .testTag("owner_picked_up_button"),
             shape = RoundedCornerShape(25.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+            colors = ButtonDefaults.buttonColors(containerColor = GreenReady),
           ) {
             Text(
-              text = "Picked Up (Handled Parcel) ✓",
+              text = "Handover & Complete Pickup ➔",
               fontSize = 15.5.sp,
               fontWeight = FontWeight.Bold,
               color = PureWhite,
             )
           }
         }
+        isRejected -> {
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(48.dp)
+              .clip(RoundedCornerShape(24.dp))
+              .background(Color(0xFFFEE2E2)),
+            contentAlignment = Alignment.Center,
+          ) {
+            Text(
+              text = "Order Rejected",
+              fontSize = 14.sp,
+              fontWeight = FontWeight.Bold,
+              color = Color(0xFFDC2626),
+            )
+          }
+        }
         else -> {
-          // Already completed/picked up
           OutlinedButton(
             onClick = onBack,
             modifier = Modifier
@@ -709,7 +980,6 @@ fun OwnerOrderDetailsScreen(
   }
 }
 
-// ── TIMELINE STEP COMPONENT ──────────────────────────────────────────────────
 
 @Composable
 private fun StatusTimelineStep(
@@ -724,7 +994,6 @@ private fun StatusTimelineStep(
     modifier = Modifier.fillMaxWidth(),
     verticalAlignment = Alignment.Top,
   ) {
-    // Indicator Column
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
       Box(
         modifier = Modifier
@@ -755,7 +1024,6 @@ private fun StatusTimelineStep(
 
     Spacer(modifier = Modifier.width(12.dp))
 
-    // Step Details
     Column(modifier = Modifier.weight(1f)) {
       Text(
         text = title,
@@ -772,7 +1040,6 @@ private fun StatusTimelineStep(
       }
     }
 
-    // Time
     Text(
       text = time,
       fontSize = 13.sp,

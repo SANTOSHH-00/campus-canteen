@@ -1,3 +1,4 @@
+// InventoryRepository: Repository managing data synchronization between remote API and local storage
 package com.example.data.firebase
 
 import com.example.data.api.MongoRepository

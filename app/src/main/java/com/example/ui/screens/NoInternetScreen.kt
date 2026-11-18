@@ -1,3 +1,4 @@
+// NoInternetScreen: Jetpack Compose screen for NoInternet user interface
 package com.example.ui.screens
 
 import android.content.Intent
@@ -86,6 +87,7 @@ fun NoInternetScreen(
       // Small pause for tactile UI feedback
       delay(400)
       if (NetworkUtils.isOnline(context)) {
+        com.example.util.NetworkMonitor.refreshConnectivity()
         isChecking = false
         onRetrySuccess()
       } else {
@@ -163,7 +165,6 @@ fun NoInternetScreen(
 
       Spacer(modifier = Modifier.height(28.dp))
 
-      // Heading: "Oops! No Internet Connection"
       Text(
         text = "Oops! No Internet Connection",
         fontSize = 24.sp,
@@ -199,7 +200,6 @@ fun NoInternetScreen(
 
       Spacer(modifier = Modifier.height(36.dp))
 
-      // Button 1: "Try Again" (Orange pill)
       Box(
         modifier = Modifier
           .fillMaxWidth()
@@ -244,7 +244,6 @@ fun NoInternetScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // Button 2: "Check Network Settings" (Subtle outline pill)
       Box(
         modifier = Modifier
           .fillMaxWidth()

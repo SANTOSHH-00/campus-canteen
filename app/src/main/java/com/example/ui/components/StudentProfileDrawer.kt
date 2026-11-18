@@ -1,3 +1,4 @@
+// StudentProfileDrawer: Reusable Jetpack Compose UI component
 package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
@@ -106,6 +107,7 @@ fun StudentProfileDrawer(
 ) {
   var showLogoutConfirm by remember { mutableStateOf(false) }
   var showLoginSheet by remember { mutableStateOf(false) }
+  var activeSubScreen by remember { mutableStateOf(DrawerSubScreen.NONE) }
   var activeDialogTitle by remember { mutableStateOf<String?>(null) }
   var activeDialogContent by remember { mutableStateOf<String?>(null) }
 
@@ -165,7 +167,6 @@ fun StudentProfileDrawer(
               .navigationBarsPadding()
               .padding(horizontal = 22.dp, vertical = 18.dp),
           ) {
-            // ── 1. Top Close Button (✕) ──────────────────────────────────────
             Row(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.Start,
@@ -190,7 +191,6 @@ fun StudentProfileDrawer(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // ── 2. Profile Info Section (Matching Image 1 Boy Avatar) ───────
             Row(
               modifier = Modifier
                 .fillMaxWidth()
@@ -202,20 +202,20 @@ fun StudentProfileDrawer(
                 .padding(vertical = 4.dp),
               verticalAlignment = Alignment.CenterVertically,
             ) {
-              // Black and white monochrome student profile icon
+              // Theme-matched student profile icon
               Box(
                 modifier = Modifier
                   .size(64.dp)
                   .shadow(6.dp, CircleShape)
                   .clip(CircleShape)
-                  .background(Color(0xFF18181B))
+                  .background(DrawerAmberLight)
                   .border(2.5.dp, PureWhite, CircleShape),
                 contentAlignment = Alignment.Center,
               ) {
                 Icon(
                   imageVector = Icons.Default.Person,
                   contentDescription = "Profile Picture",
-                  tint = PureWhite,
+                  tint = DrawerAmber,
                   modifier = Modifier.size(36.dp),
                 )
               }
@@ -225,42 +225,30 @@ fun StudentProfileDrawer(
               Column {
                 Text(
                   text = "Hello,",
-                  fontSize = 13.sp,
-                  fontWeight = FontWeight.Medium,
-                  color = BlackPrimary.copy(alpha = 0.75f),
-                )
-                Text(
-                  text = resolvedName,
-                  fontSize = 21.sp,
-                  fontWeight = FontWeight.Black,
-                  color = BlackPrimary,
-                  maxLines = 1,
+                  fontSize = 16.sp,
+                  fontWeight = FontWeight.SemiBold,
+                  color = BlackPrimary.copy(alpha = 0.8f),
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                  text = resolvedBranch,
-                  fontSize = 11.5.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = BlackPrimary.copy(alpha = 0.8f),
-                )
-                Text(
-                  text = "Roll No: $resolvedRollNo",
-                  fontSize = 11.sp,
-                  fontWeight = FontWeight.SemiBold,
-                  color = BlackPrimary.copy(alpha = 0.7f),
+                  text = resolvedName,
+                  fontSize = 24.sp,
+                  fontWeight = FontWeight.Black,
+                  color = BlackPrimary,
+                  maxLines = 1,
+                  overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
               }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
 
-            // ── 4. Scrollable Drawer Menu Items (Image 1 Style) ──────────────
             Column(
               modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState()),
-              verticalArrangement = Arrangement.spacedBy(4.dp),
+              verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
               DrawerMenuItem(
                 icon = Icons.Filled.Person,
@@ -289,12 +277,18 @@ fun StudentProfileDrawer(
                 },
               )
 
+              androidx.compose.material3.HorizontalDivider(
+                thickness = 0.7.dp,
+                color = PureWhite.copy(alpha = 0.25f),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+              )
+
               DrawerMenuItem(
                 icon = Icons.Outlined.AccountBalanceWallet,
                 title = "Payment Methods",
                 onClick = {
                   activeDialogTitle = "Payment Methods"
-                  activeDialogContent = "Available Methods:\n• UPI (GPay, PhonePe, Paytm)\n• Campus Meal Card (Balance: ₹450)\n• Cash on Counter"
+                  activeDialogContent = "Available Methods:\n• Razorpay (UPI, GPay, PhonePe, Cards)\n• Campus Meal Card\n• Cash at Counter"
                 },
               )
 
@@ -302,27 +296,29 @@ fun StudentProfileDrawer(
                 icon = Icons.AutoMirrored.Outlined.HelpOutline,
                 title = "FAQ's",
                 onClick = {
-                  activeDialogTitle = "Frequently Asked Questions"
-                  activeDialogContent = "Q: How do I collect my food?\nA: Show your 4-digit order token at the canteen pickup counter.\n\nQ: Can I cancel an order?\nA: Orders can be cancelled within 1 minute of placing before preparation starts."
+                  activeSubScreen = DrawerSubScreen.FAQS
                 },
               )
-
 
               DrawerMenuItem(
                 icon = Icons.Outlined.SupportAgent,
                 title = "Support",
                 onClick = {
-                  activeDialogTitle = "Support & Help Desk"
-                  activeDialogContent = "Need help with your canteen order?\n\n• Email: support@quickbite.campus.in\n• Helpline: +91 98765 43210\n• Operating Hours: 8:00 AM – 9:00 PM"
+                  activeSubScreen = DrawerSubScreen.SUPPORT
                 },
+              )
+
+              androidx.compose.material3.HorizontalDivider(
+                thickness = 0.7.dp,
+                color = PureWhite.copy(alpha = 0.25f),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
               )
 
               DrawerMenuItem(
                 icon = Icons.Outlined.Info,
                 title = "About QuickBite",
                 onClick = {
-                  activeDialogTitle = "About QuickBite"
-                  activeDialogContent = "QuickBite v2.4\nSmart Campus Canteen Food Ordering & Queue Management System."
+                  activeSubScreen = DrawerSubScreen.ABOUT
                 },
               )
 
@@ -330,15 +326,13 @@ fun StudentProfileDrawer(
                 icon = Icons.Outlined.Settings,
                 title = "Settings",
                 onClick = {
-                  activeDialogTitle = "App Settings"
-                  activeDialogContent = "Preferences:\n• Notification alerts: ON\n• Sound effects: ON\n• Dietary filter: All Items\n• Theme: Warm Amber"
+                  activeSubScreen = DrawerSubScreen.SETTINGS
                 },
               )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // ── 5. Log In / Log Out at the Bottom ───────────────────────────
             if (isGuest) {
               Row(
                 modifier = Modifier
@@ -394,7 +388,23 @@ fun StudentProfileDrawer(
     }
   }
 
-  // ── Info / Sheet Dialog for Drawer Options ─────────────────────────────────
+  // Full Rich Screens for FAQs, Support, About QuickBite, and Settings
+  when (activeSubScreen) {
+    DrawerSubScreen.FAQS -> {
+      StudentFaqSheet(onBack = { activeSubScreen = DrawerSubScreen.NONE })
+    }
+    DrawerSubScreen.SUPPORT -> {
+      StudentSupportSheet(onBack = { activeSubScreen = DrawerSubScreen.NONE })
+    }
+    DrawerSubScreen.ABOUT -> {
+      StudentAboutSheet(onBack = { activeSubScreen = DrawerSubScreen.NONE })
+    }
+    DrawerSubScreen.SETTINGS -> {
+      StudentSettingsSheet(onBack = { activeSubScreen = DrawerSubScreen.NONE })
+    }
+    else -> {}
+  }
+
   if (activeDialogTitle != null) {
     AlertDialog(
       onDismissRequest = { activeDialogTitle = null },
@@ -428,49 +438,18 @@ fun StudentProfileDrawer(
     )
   }
 
-  // ── Logout Confirmation Dialog ─────────────────────────────────────────────
   if (showLogoutConfirm) {
-    AlertDialog(
-      onDismissRequest = { showLogoutConfirm = false },
-      title = {
-        Text(
-          text = "Confirm Log Out",
-          fontWeight = FontWeight.ExtraBold,
-          fontSize = 18.sp,
-          color = BlackPrimary,
-        )
+    ModernLogoutDialog(
+      userName = resolvedName,
+      onConfirm = {
+        showLogoutConfirm = false
+        onClose()
+        onLogout()
       },
-      text = {
-        Text(
-          text = "Are you sure you want to log out of QuickBite?",
-          fontSize = 14.sp,
-          color = TextDark,
-        )
-      },
-      confirmButton = {
-        Button(
-          onClick = {
-            showLogoutConfirm = false
-            onClose()
-            onLogout()
-          },
-          colors = ButtonDefaults.buttonColors(containerColor = BlackPrimary),
-          shape = RoundedCornerShape(12.dp),
-        ) {
-          Text("Log Out", fontWeight = FontWeight.Bold, color = PureWhite)
-        }
-      },
-      dismissButton = {
-        TextButton(onClick = { showLogoutConfirm = false }) {
-          Text("Cancel", fontWeight = FontWeight.Bold, color = TextMuted)
-        }
-      },
-      containerColor = PureWhite,
-      shape = RoundedCornerShape(22.dp),
+      onDismiss = { showLogoutConfirm = false },
     )
   }
 
-  // ── In-Screen Modal Login Sheet for Guest User ──────────────────────────────
   if (showLoginSheet) {
     Box(
       modifier = Modifier
@@ -496,7 +475,7 @@ fun StudentProfileDrawer(
 }
 
 /**
- * Individual Drawer Item with Clean Material Outline Vector Icon & High Contrast Text
+ * Individual Drawer Item with Clean Material Outline Vector Icon & High Contrast Text (Sleek Flat List)
  */
 @Composable
 private fun DrawerMenuItem(
@@ -508,19 +487,26 @@ private fun DrawerMenuItem(
   Row(
     modifier = modifier
       .fillMaxWidth()
-      .clip(RoundedCornerShape(14.dp))
+      .clip(RoundedCornerShape(12.dp))
       .clickable(onClick = onClick)
-      .padding(horizontal = 12.dp, vertical = 12.dp),
+      .padding(horizontal = 12.dp, vertical = 11.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-
-    Icon(
-      imageVector = icon,
-      contentDescription = title,
-      tint = BlackPrimary,
-      modifier = Modifier.size(22.dp),
-    )
-    Spacer(modifier = Modifier.width(16.dp))
+    Box(
+      modifier = Modifier
+        .size(36.dp)
+        .clip(CircleShape)
+        .background(PureWhite.copy(alpha = 0.22f)),
+      contentAlignment = Alignment.Center,
+    ) {
+      Icon(
+        imageVector = icon,
+        contentDescription = title,
+        tint = BlackPrimary,
+        modifier = Modifier.size(20.dp),
+      )
+    }
+    Spacer(modifier = Modifier.width(14.dp))
     Text(
       text = title,
       fontSize = 15.sp,
@@ -531,7 +517,7 @@ private fun DrawerMenuItem(
     Icon(
       imageVector = Icons.Default.ChevronRight,
       contentDescription = null,
-      tint = BlackPrimary.copy(alpha = 0.5f),
+      tint = BlackPrimary.copy(alpha = 0.45f),
       modifier = Modifier.size(18.dp),
     )
   }

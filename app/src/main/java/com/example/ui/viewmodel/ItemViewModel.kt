@@ -1,3 +1,4 @@
+// ItemViewModel: ViewModel managing UI state and business logic for Item
 package com.example.ui.viewmodel
 
 import android.net.Uri
@@ -193,13 +194,39 @@ class ItemViewModel(
     }
   }
 
+  private val pendingAvailabilityUpdates = mutableSetOf<String>()
+
   fun toggleAvailability(item: ItemDocument, available: Boolean) {
-    if (item.stock == 0 && available) {
-      _actionState.value = ItemActionState.Error("Cannot enable an item with 0 stock. Please update stock first.")
+    val itemId = item.id.ifBlank { item.name }
+
+    // Prevent race conditions and repeated conflicting requests
+    if (pendingAvailabilityUpdates.contains(itemId)) {
       return
     }
+    pendingAvailabilityUpdates.add(itemId)
+
+    val previousState = item.available
+    val previousStock = item.stock
+    val targetStock = if (available && item.stock <= 0) 20 else item.stock
+
+    _allItems.value = _allItems.value.map {
+      if ((it.id.isNotBlank() && it.id == item.id) || it.name == item.name) {
+        it.copy(available = available, stock = targetStock)
+      } else it
+    }
+
     viewModelScope.launch {
-      repository.toggleAvailability(activeCanteenId, item, available)
+      val result = repository.toggleAvailability(activeCanteenId, item, available)
+      pendingAvailabilityUpdates.remove(itemId)
+
+      if (result.isFailure) {
+        _allItems.value = _allItems.value.map {
+          if ((it.id.isNotBlank() && it.id == item.id) || it.name == item.name) {
+            it.copy(available = previousState, stock = previousStock)
+          } else it
+        }
+        _actionState.value = ItemActionState.Error("Unable to save availability for ${item.name}. Reverted.")
+      }
     }
   }
 

@@ -1,3 +1,4 @@
+// MessQFirebaseMessagingService: Background service handling order lifecycle notifications and background synchronization
 package com.example.data.firebase
 
 import android.app.NotificationChannel
@@ -37,6 +38,11 @@ class MessQFirebaseMessagingService : FirebaseMessagingService() {
 
   override fun onMessageReceived(remoteMessage: RemoteMessage) {
     super.onMessageReceived(remoteMessage)
+    // Strictly suppress notifications when user is in guest or unauthenticated mode
+    if (!com.example.data.session.SessionManager.isStudentLoggedIn() && !com.example.data.session.SessionManager.isOwnerLoggedIn()) {
+      Log.d(TAG, "Suppressed incoming push notification in guest mode")
+      return
+    }
     Log.d(TAG, "From: ${remoteMessage.from}, data: ${remoteMessage.data}")
 
     val type = remoteMessage.data["type"] ?: ""

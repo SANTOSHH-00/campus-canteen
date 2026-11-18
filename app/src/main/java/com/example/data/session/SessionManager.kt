@@ -1,3 +1,4 @@
+// SessionManager: Core utility and helper functions
 package com.example.data.session
 
 import android.content.Context
@@ -58,7 +59,6 @@ object SessionManager {
     com.example.util.NetworkMonitor.initialize(context)
   }
 
-  // ── Student Session Management ─────────────────────────────────────────────
 
   fun saveStudentSession(profile: UserProfile) {
     prefs?.edit()?.apply {
@@ -165,11 +165,11 @@ object SessionManager {
       remove(KEY_STUDENT_AVATAR_ID)
       remove(KEY_STUDENT_PHONE)
       remove(KEY_STUDENT_COURSE)
+      remove(KEY_SAVED_NOTIFICATIONS_JSON)
       apply()
     }
   }
 
-  // ── Owner Session Management ───────────────────────────────────────────────
 
   fun saveOwnerSession(owner: OwnerDocument) {
     prefs?.edit()?.apply {
@@ -258,7 +258,6 @@ object SessionManager {
     clearOwnerSession()
   }
 
-  // ── Canteen Settings Persistence (Timings, Profile Picture, Open/Closed) ────
 
   fun saveCanteenProfile(canteenId: String, imageUrl: String?, timings: String?, isOpen: Boolean?, closeReason: String? = null) {
     prefs?.edit()?.apply {
@@ -298,7 +297,6 @@ object SessionManager {
     return prefs?.getString("canteen_reason_$canteenId", null)?.ifBlank { null }
   }
 
-  // ── Password Reset Pending Email Persistence ──────────────────────────────
 
   private const val KEY_PENDING_RESET_EMAIL = "pending_reset_email"
 
@@ -314,7 +312,6 @@ object SessionManager {
     prefs?.edit()?.remove(KEY_PENDING_RESET_EMAIL)?.apply()
   }
 
-  // ── Cart Persistence (Preserves cart during network drops or app restarts) ─
 
   private const val KEY_SAVED_CART_JSON = "saved_cart_items_json"
 
@@ -330,7 +327,6 @@ object SessionManager {
     prefs?.edit()?.remove(KEY_SAVED_CART_JSON)?.apply()
   }
 
-  // ── Notification Persistence ──────────────────────────────────────────────
 
   private const val KEY_SAVED_NOTIFICATIONS_JSON = "saved_notifications_json"
 
@@ -338,6 +334,7 @@ object SessionManager {
   private var lastSavedTime = 0L
 
   fun saveIncomingNotification(title: String, message: String) {
+    if (!isStudentLoggedIn() && !isOwnerLoggedIn()) return
     try {
       val now = System.currentTimeMillis()
       val cleanTitle = title.trim()
@@ -364,12 +361,10 @@ object SessionManager {
         val exTitle = existingObj.optString("title", "").trim()
         val exToken = tokenRegex.find(exTitle)?.groupValues?.get(1)?.lowercase()
 
-        // 1. Exact title duplicate
         if (exTitle.equals(cleanTitle, ignoreCase = true)) {
           return
         }
 
-        // 2. Same order token and milestone duplicate (e.g. "Order #902: Preparing" vs "Order #902 in Kitchen")
         if (!extractedToken.isNullOrBlank() && extractedToken == exToken && milestone.isNotBlank()) {
           val exMilestone = when {
             exTitle.contains("Preparing", ignoreCase = true) || exTitle.contains("Kitchen", ignoreCase = true) -> "PREPARING"
@@ -404,6 +399,7 @@ object SessionManager {
   }
 
   fun getSavedNotificationsJson(): String? {
+    if (!isStudentLoggedIn()) return null
     return prefs?.getString(KEY_SAVED_NOTIFICATIONS_JSON, null)?.ifBlank { null }
   }
 
@@ -415,7 +411,6 @@ object SessionManager {
     prefs?.edit()?.remove(KEY_SAVED_NOTIFICATIONS_JSON)?.apply()
   }
 
-  // ── Active Order Background Tracking Persistence ────────────────────────────
   private const val KEY_ACTIVE_ORDER_ID = "active_tracking_order_id"
   private const val KEY_ACTIVE_ORDER_TOKEN = "active_tracking_order_token"
   private const val KEY_ACTIVE_ORDER_CANTEEN_ID = "active_tracking_order_canteen_id"
@@ -474,7 +469,6 @@ object SessionManager {
     }
   }
 
-  // ── Student Favorites Persistence ──────────────────────────────────────────
 
   fun saveFavoriteItemIds(ids: Set<String>) {
     prefs?.edit()?.apply {
@@ -485,6 +479,22 @@ object SessionManager {
 
   fun getFavoriteItemIds(): Set<String> {
     return prefs?.getStringSet(KEY_STUDENT_FAVORITES, emptySet()) ?: emptySet()
+  }
+
+
+  private const val KEY_STUDENT_RECENTLY_VIEWED = "student_recently_viewed_list"
+
+  fun saveRecentlyViewedItemIds(ids: List<String>) {
+    prefs?.edit()?.apply {
+      // Store ordered list as comma-separated string
+      putString(KEY_STUDENT_RECENTLY_VIEWED, ids.joinToString(","))
+      apply()
+    }
+  }
+
+  fun getRecentlyViewedItemIds(): List<String> {
+    val raw = prefs?.getString(KEY_STUDENT_RECENTLY_VIEWED, null) ?: return emptyList()
+    return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
   }
 }
 

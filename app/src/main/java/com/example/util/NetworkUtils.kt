@@ -1,3 +1,4 @@
+// NetworkUtils: Core utility and helper functions
 package com.example.util
 
 import android.content.Context
@@ -41,7 +42,6 @@ object NetworkUtils {
     val combined = "$msg $localized ${throwable.javaClass.simpleName}"
 
     return when {
-      // 1. Connection Refused / Server Unreachable (Port 5000 offline or wrong host IP)
       throwable is ConnectException ||
       combined.contains("Connection refused", ignoreCase = true) ||
       combined.contains("Failed to connect", ignoreCase = true) ||
@@ -49,7 +49,6 @@ object NetworkUtils {
         "Unable to connect to Quick Bite server. Please ensure the backend is running on port 5000."
       }
 
-      // 2. Connection or Read Timeout
       throwable is SocketTimeoutException ||
       combined.contains("SocketTimeoutException", ignoreCase = true) ||
       combined.contains("timeout", ignoreCase = true) ||
@@ -57,7 +56,6 @@ object NetworkUtils {
         "Connection timed out. The server took too long to respond. Please try again."
       }
 
-      // 3. DNS / Offline (Real lack of internet connection)
       throwable is UnknownHostException ||
       combined.contains("Unable to resolve host", ignoreCase = true) ||
       combined.contains("No address associated with hostname", ignoreCase = true) ||
@@ -66,14 +64,12 @@ object NetworkUtils {
         "No internet connection. Please check your network and try again."
       }
 
-      // 4. Duplicate Account Registration (HTTP 409)
       combined.contains("409") ||
       combined.contains("already registered", ignoreCase = true) ||
       combined.contains("already exists", ignoreCase = true) -> {
         "User already registered. Please log in instead."
       }
 
-      // 5. Authentication Failure / Invalid Credentials (HTTP 401)
       combined.contains("401") ||
       combined.contains("Incorrect password", ignoreCase = true) ||
       combined.contains("invalid_credentials", ignoreCase = true) ||
@@ -82,7 +78,6 @@ object NetworkUtils {
         "Invalid email or password. Please verify and try again."
       }
 
-      // 6. Account Not Found (HTTP 404)
       combined.contains("404") ||
       combined.contains("No student account found", ignoreCase = true) ||
       combined.contains("No canteen owner account", ignoreCase = true) ||
@@ -92,7 +87,6 @@ object NetworkUtils {
         "Account not found. Please check your details or register a new account."
       }
 
-      // 7. Access Denied / Unassigned Canteen (HTTP 403)
       combined.contains("403") ||
       combined.contains("Access Denied", ignoreCase = true) ||
       combined.contains("not assigned", ignoreCase = true) ||
@@ -100,14 +94,12 @@ object NetworkUtils {
         "Access Denied: No canteen has been assigned to your account yet. Please contact the administrator."
       }
 
-      // 8. Server Error (HTTP 500)
       combined.contains("500") ||
       combined.contains("Internal Server Error", ignoreCase = true) ||
       combined.contains("Server error", ignoreCase = true) -> {
         "Server error. Please try again."
       }
 
-      // 9. Bad Request / Validation Failure (HTTP 400)
       combined.contains("400") -> {
         if (msg.isNotBlank() && !msg.contains("http://", ignoreCase = true) && !msg.contains("https://", ignoreCase = true)) {
           msg.removePrefix("Registration failed (400): ").removePrefix("Login failed (400): ").trim()
@@ -116,7 +108,6 @@ object NetworkUtils {
         }
       }
 
-      // 10. Stripping raw URLs and technical internals
       msg.contains("http://", ignoreCase = true) ||
       msg.contains("https://", ignoreCase = true) -> {
         defaultFallback

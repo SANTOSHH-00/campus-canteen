@@ -13,7 +13,6 @@ async function runGuestExclusionAndTimestampTests() {
   const testCanteenId = 'canteen_guest_test_' + Date.now();
 
   try {
-    // ── Test 1: Verify Guest order filter in Canteen Orders query
     // Create one regular order and one guest order in DB directly
     const regularOrder = await Order.create({
       orderId: 'ORD-REG-' + Date.now(),
@@ -50,7 +49,6 @@ async function runGuestExclusionAndTimestampTests() {
     console.assert(visibleOrders[0].orderId === regularOrder.orderId, `Expected ${regularOrder.orderId}, got ${visibleOrders[0].orderId}`);
     console.log('✅ TEST 1 PASSED: Guest orders are strictly excluded from canteen orders query');
 
-    // ── Test 2: Button-Press Milestone Timestamps (PREPARING -> READY -> COMPLETED)
     const pressTime1 = new Date();
     await Order.updateOne(
       { _id: regularOrder._id },

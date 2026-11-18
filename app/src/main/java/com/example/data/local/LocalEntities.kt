@@ -1,3 +1,4 @@
+// LocalEntities: Core utility and helper functions
 package com.example.data.local
 
 import androidx.room.Entity

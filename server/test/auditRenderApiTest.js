@@ -26,12 +26,10 @@ async function testRenderLiveApi() {
   const baseUrl = 'https://quickbite-server-pjaf.onrender.com';
   console.log('Testing Render live backend:', baseUrl);
 
-  // 1. Health check
   console.log('\n--- 1. Health Check ---');
   const health = await httpRequest(`${baseUrl}/health`, { method: 'GET' });
   console.log('Health response:', health.status, health.body);
 
-  // 2. Place Order via POST /api/orders
   console.log('\n--- 2. Place Live Order via Render API ---');
   const testOrderId = 'ORD-LIVE-TEST-' + Date.now();
   const idempotencyKey = 'IDEMPOTENT-' + Date.now();
@@ -74,7 +72,6 @@ async function testRenderLiveApi() {
   console.log('Order creation response code:', createRes.status);
   console.log('Created order ID:', createRes.body?.orderId, 'Verification token:', createRes.body?.verificationToken);
 
-  // 3. Verify retrieval by querying GET /api/orders/:orderId
   console.log('\n--- 3. Query Order via Render API ---');
   const fetchRes = await httpRequest(`${baseUrl}/api/orders/${testOrderId}`, { method: 'GET' });
   console.log('Fetched order exists in DB:', fetchRes.status === 200);
@@ -87,7 +84,6 @@ async function testRenderLiveApi() {
     statusHistory: fetchRes.body?.statusHistory?.map(h => h.status)
   });
 
-  // 4. Update order status to PREPARING via PATCH /api/orders/:orderId/status
   console.log('\n--- 4. Update Status to PREPARING ---');
   const patchRes = await httpRequest(`${baseUrl}/api/orders/${testOrderId}/status`, {
     method: 'PATCH',
@@ -96,12 +92,10 @@ async function testRenderLiveApi() {
 
   console.log('PATCH status response:', patchRes.status, 'New status:', patchRes.body?.status);
 
-  // 5. Query again to verify statusHistory and status updated in MongoDB
   const fetchUpdated = await httpRequest(`${baseUrl}/api/orders/${testOrderId}`, { method: 'GET' });
   console.log('Re-queried MongoDB order status:', fetchUpdated.body?.status);
   console.log('statusHistory in DB:', fetchUpdated.body?.statusHistory?.map(h => `${h.status} at ${h.timestampLocal}`));
 
-  // 6. Test Idempotency with same key
   console.log('\n--- 6. Test Idempotency Retry via Render API ---');
   const retryRes = await httpRequest(`${baseUrl}/api/orders`, {
     method: 'POST',

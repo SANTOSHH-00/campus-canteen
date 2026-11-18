@@ -1,3 +1,4 @@
+// ItemRepository: Repository managing data synchronization between remote API and local storage
 package com.example.data.firebase
 
 import android.net.Uri
@@ -163,12 +164,25 @@ open class ItemRepository(
   }
 
   /**
-   * Toggle availability for an item.
+   * Toggle availability for an item using fast partial update without reloading the entire menu.
    * Note: Cannot set available = true if stock is 0.
    */
   open suspend fun toggleAvailability(ownerCanteenId: String, item: ItemDocument, available: Boolean): Result<Unit> {
-    val newAvailable = if (item.stock == 0) false else available
-    return updateItem(ownerCanteenId, item.copy(available = newAvailable))
+    val newStock = if (available && item.stock <= 0) 20 else item.stock
+    val newAvailable = if (newStock == 0) false else available
+    if (ownerCanteenId.isNotBlank() && item.canteenId.isNotBlank() && item.canteenId != ownerCanteenId) {
+      return Result.failure(ItemValidationException.UnauthorizedCanteen())
+    }
+    // Update local items in-place
+    val idx = localItems.indexOfFirst { it.id == item.id }
+    if (idx >= 0) {
+      localItems[idx] = localItems[idx].copy(available = newAvailable, stock = newStock)
+    }
+    if (available && item.stock <= 0) {
+      return updateStock(ownerCanteenId, item, newStock)
+    }
+    // Fast partial update to MongoDB Atlas via backend
+    return firestoreRepo.updateItemAvailability(item.id, ownerCanteenId, newAvailable)
   }
 
   /**

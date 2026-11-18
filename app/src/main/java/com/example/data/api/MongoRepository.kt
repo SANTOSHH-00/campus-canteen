@@ -1,3 +1,4 @@
+// MongoRepository: Repository managing data synchronization between remote API and local storage
 package com.example.data.api
 
 import android.util.Log
@@ -47,6 +48,15 @@ class MongoRepository(
     suspend fun getCartQueue(canteenId: String, items: List<CartQueueItemRequestDto>): Result<CartQueueResponseDto> =
       defaultInstance.getCartQueue(canteenId, items)
 
+    suspend fun updateOrderStatus(orderId: String, status: String): Result<Unit> =
+      defaultInstance.updateOrderStatus(orderId, status)
+
+    suspend fun acceptOrder(orderId: String): Result<MongoOrderDto> =
+      defaultInstance.acceptOrder(orderId)
+
+    suspend fun rejectOrder(orderId: String, reason: String): Result<MongoOrderDto> =
+      defaultInstance.rejectOrder(orderId, reason)
+
     suspend fun getOrderQueuePosition(orderId: String): Result<OrderQueuePositionDto> =
       defaultInstance.getOrderQueuePosition(orderId)
 
@@ -88,7 +98,6 @@ class MongoRepository(
     }
   }
 
-  // ── Student / User Auth ───────────────────────────────────────────────────
   suspend fun loginUser(email: String, pass: String): Result<LoginResponseDto> {
     return runCatching {
       val res = apiService.loginUser(LoginRequestDto(email = email.trim(), password = pass))
@@ -137,7 +146,6 @@ class MongoRepository(
     }.onFailure { Log.e(TAG, "resetPassword error: ${it.message}") }
   }
 
-  // ── Owner Auth ────────────────────────────────────────────────────────────
   suspend fun ownerLogin(email: String, pass: String): Result<OwnerLoginResponseDto> {
     return runCatching {
       val res = apiService.ownerLogin(OwnerLoginRequestDto(email = email.trim(), password = pass))
@@ -174,7 +182,6 @@ class MongoRepository(
     }.onFailure { Log.e(TAG, "ownerResendOtp error: ${it.message}") }
   }
 
-  // ── Canteens ──────────────────────────────────────────────────────────────
   suspend fun getCanteens(): Result<List<MongoCanteenDto>> {
     return runCatching {
       val res = apiService.getCanteens()
@@ -197,10 +204,68 @@ class MongoRepository(
     }.onFailure { Log.e(TAG, "getCanteen error: ${it.message}") }
   }
 
+  fun invalidateAllCaches() {
+    cachedCanteens.set(null)
+    cachedCanteenDetails.clear()
+    cachedCanteenItems.clear()
+    cachedCanteenOrders.clear()
+    cachedStudentOrders.clear()
+    cachedOrderDetails.clear()
+  }
+
+  fun invalidateCanteen(canteenId: String) {
+    cachedCanteens.set(null)
+    cachedCanteenDetails.remove(canteenId)
+    cachedCanteenItems.remove(canteenId)
+    cachedCanteenOrders.remove(canteenId)
+  }
+
+  suspend fun fetchFreshCanteens(): Result<List<CanteenDocument>> {
+    return runCatching {
+      val res = apiService.getCanteens()
+      if (res.isSuccessful && res.body() != null) {
+        val list = res.body()!!.map { it.toDocument() }
+        cachedCanteens.set(list)
+        list
+      } else {
+        throw Exception("Failed to fetch canteens: ${res.code()}")
+      }
+    }.onFailure { Log.e(TAG, "fetchFreshCanteens error: ${it.message}") }
+  }
+
+  suspend fun fetchFreshItems(canteenId: String): Result<List<ItemDocument>> {
+    val effectiveId = canteenId.ifBlank { "canteen_33" }
+    return runCatching {
+      val res = apiService.getCanteenItems(effectiveId)
+      if (res.isSuccessful && res.body() != null) {
+        val items = res.body()!!.map { it.toDocument() }
+        cachedCanteenItems[effectiveId] = items
+        items
+      } else {
+        throw Exception("Failed to fetch items: ${res.code()}")
+      }
+    }.onFailure { Log.e(TAG, "fetchFreshItems error: ${it.message}") }
+  }
+
+  suspend fun fetchFreshStudentOrders(studentId: String): Result<List<OrderDocument>> {
+    return runCatching {
+      val res = apiService.getStudentOrders(studentId)
+      if (res.isSuccessful && res.body() != null) {
+        val orders = res.body()!!.map { it.toDocument() }
+        cachedStudentOrders[studentId] = orders
+        orders.forEach { cachedOrderDetails[it.orderId] = it }
+        orders
+      } else {
+        throw Exception("Failed to fetch student orders: ${res.code()}")
+      }
+    }.onFailure { Log.e(TAG, "fetchFreshStudentOrders error: ${it.message}") }
+  }
+
   suspend fun saveCanteen(canteen: MongoCanteenDto): Result<MongoCanteenDto> {
     return runCatching {
       val res = apiService.saveCanteen(canteen)
       if (res.isSuccessful && res.body() != null) {
+        invalidateCanteen(canteen.id)
         res.body()!!
       } else {
         throw Exception("Failed to save canteen: ${res.code()}")
@@ -212,6 +277,7 @@ class MongoRepository(
     return runCatching {
       val res = apiService.updateCanteenStatus(canteenId, StatusUpdateDto(isOpen = isOpen, closeReason = closeReason))
       if (!res.isSuccessful) throw Exception("Update canteen status failed: ${res.code()}")
+      invalidateCanteen(canteenId)
     }.onFailure { Log.e(TAG, "updateCanteenStatus error: ${it.message}") }
   }
 
@@ -228,10 +294,10 @@ class MongoRepository(
         ProfileUpdateDto(imageUrl = imageUrl, timings = timings, isOpen = isOpen, closeReason = closeReason)
       )
       if (!res.isSuccessful) throw Exception("Update canteen profile failed: ${res.code()}")
+      invalidateCanteen(canteenId)
     }.onFailure { Log.e(TAG, "updateCanteenProfile error: ${it.message}") }
   }
 
-  // ── Items ─────────────────────────────────────────────────────────────────
   suspend fun getCanteenItems(canteenId: String): Result<List<MongoItemDto>> {
     val effectiveId = canteenId.ifBlank { "canteen_33" }
     return runCatching {
@@ -248,6 +314,7 @@ class MongoRepository(
     return runCatching {
       val res = apiService.saveItem(item)
       if (res.isSuccessful && res.body() != null) {
+        item.canteenId?.let { cachedCanteenItems.remove(it) }
         res.body()!!
       } else {
         throw Exception("Failed to save item: ${res.code()}")
@@ -259,13 +326,32 @@ class MongoRepository(
     return runCatching {
       val res = apiService.updateItemStock(itemId, StockUpdateDto(available = available, stock = stock))
       if (!res.isSuccessful) throw Exception("Update stock failed: ${res.code()}")
+      cachedCanteenItems.clear()
     }.onFailure { Log.e(TAG, "updateItemStock error: ${it.message}") }
+  }
+
+  suspend fun updateItemAvailability(itemId: String, canteenId: String, available: Boolean): Result<Unit> {
+    return runCatching {
+      val res = apiService.updateItemAvailability(
+        itemId,
+        AvailabilityUpdateDto(available = available, canteenId = canteenId.ifBlank { null })
+      )
+      if (!res.isSuccessful) throw Exception("Update availability failed: ${res.code()}")
+      // Update in-memory cached items for this canteen in-place so no full reload is needed
+      val currentList = cachedCanteenItems[canteenId]
+      if (currentList != null) {
+        cachedCanteenItems[canteenId] = currentList.map {
+          if (it.id == itemId) it.copy(available = available) else it
+        }
+      }
+    }.onFailure { Log.e(TAG, "updateItemAvailability error: ${it.message}") }
   }
 
   suspend fun deleteItem(itemId: String): Result<Unit> {
     return runCatching {
       val res = apiService.deleteItem(itemId)
       if (!res.isSuccessful) throw Exception("Delete item failed: ${res.code()}")
+      cachedCanteenItems.clear()
     }.onFailure { Log.e(TAG, "deleteItem error: ${it.message}") }
   }
 
@@ -288,7 +374,122 @@ class MongoRepository(
     }.onFailure { Log.e(TAG, "uploadItemImage error: ${it.message}") }
   }
 
-  // ── Orders ────────────────────────────────────────────────────────────────
+  suspend fun generateItemDescription(name: String, category: String, ingredients: List<String>): Result<String> {
+    return runCatching {
+      val res = apiService.generateItemDescription(
+        GenerateDescriptionRequestDto(name = name, category = category, ingredients = ingredients)
+      )
+      if (res.isSuccessful && res.body() != null) {
+        res.body()!!.description
+      } else {
+        throw Exception("Failed to generate description: ${res.code()}")
+      }
+    }.onFailure { Log.e(TAG, "generateItemDescription error: ${it.message}") }
+  }
+
+  suspend fun getItemReviews(itemId: String): Result<ItemReviewsResponseDto> {
+    return runCatching {
+      val res = apiService.getItemReviews(itemId)
+      if (res.isSuccessful && res.body() != null) {
+        res.body()!!
+      } else {
+        throw Exception("Failed to fetch reviews: ${res.code()}")
+      }
+    }.onFailure { Log.e(TAG, "getItemReviews error: ${it.message}") }
+  }
+
+  suspend fun submitItemReview(
+    itemId: String,
+    rating: Double,
+    comment: String,
+    userName: String,
+    userId: String = "",
+    canteenId: String = "",
+  ): Result<CreateReviewResponseDto> {
+    return runCatching {
+      val res = apiService.submitItemReview(
+        itemId,
+        CreateReviewRequestDto(
+          rating = rating,
+          comment = comment,
+          userName = userName,
+          userId = userId,
+          canteenId = canteenId,
+        )
+      )
+      if (res.isSuccessful && res.body() != null) {
+        res.body()!!
+      } else {
+        throw Exception("Failed to submit review: ${res.code()}")
+      }
+    }.onFailure { Log.e(TAG, "submitItemReview error: ${it.message}") }
+  }
+
+  suspend fun addReview(
+    itemId: String,
+    rating: Double,
+    comment: String,
+    userName: String = "Student",
+    userId: String = "",
+    canteenId: String = "",
+  ): Result<CreateReviewResponseDto> {
+    return submitItemReview(
+      itemId = itemId,
+      rating = rating,
+      comment = comment,
+      userName = userName,
+      userId = userId,
+      canteenId = canteenId,
+    )
+  }
+
+  suspend fun createPaymentOrder(amount: Double, canteenId: String, orderId: String? = null, fulfillmentType: String? = null): Result<CreatePaymentOrderResponseDto> {
+    return runCatching {
+      val res = apiService.createPaymentOrder(
+        CreatePaymentOrderRequestDto(amount = amount, canteenId = canteenId, orderId = orderId, fulfillmentType = fulfillmentType)
+      )
+      if (res.isSuccessful && res.body() != null) {
+        res.body()!!
+      } else {
+        throw Exception("Failed to create payment order: ${res.code()} ${res.message()}")
+      }
+    }.onFailure { Log.e(TAG, "createPaymentOrder error: ${it.message}") }
+  }
+
+  suspend fun verifyPayment(
+    razorpayOrderId: String,
+    razorpayPaymentId: String,
+    razorpaySignature: String,
+    orderId: String? = null
+  ): Result<VerifyPaymentResponseDto> {
+    return runCatching {
+      val res = apiService.verifyPayment(
+        VerifyPaymentRequestDto(
+          razorpayOrderId = razorpayOrderId,
+          razorpayPaymentId = razorpayPaymentId,
+          razorpaySignature = razorpaySignature,
+          orderId = orderId
+        )
+      )
+      if (res.isSuccessful && res.body() != null) {
+        res.body()!!
+      } else {
+        throw Exception("Payment verification failed: ${res.code()} ${res.message()}")
+      }
+    }.onFailure { Log.e(TAG, "verifyPayment error: ${it.message}") }
+  }
+
+  suspend fun getPaymentConfig(): Result<PaymentConfigResponseDto> {
+    return runCatching {
+      val res = apiService.getPaymentConfig()
+      if (res.isSuccessful && res.body() != null) {
+        res.body()!!
+      } else {
+        throw Exception("Failed to get payment config: ${res.code()}")
+      }
+    }.onFailure { Log.e(TAG, "getPaymentConfig error: ${it.message}") }
+  }
+
   suspend fun createOrder(order: MongoOrderDto, idempotencyKey: String? = null): Result<MongoOrderDto> {
     return runCatching {
       val key = idempotencyKey?.ifBlank { null } ?: order.orderId
@@ -378,6 +579,44 @@ class MongoRepository(
         }
       }
     }.onFailure { Log.e(TAG, "updateOrderStatus error: ${it.message}") }
+  }
+
+  suspend fun acceptOrder(orderId: String): Result<MongoOrderDto> {
+    return runCatching {
+      val res = apiService.acceptOrder(orderId)
+      if (!res.isSuccessful || res.body() == null) {
+        val errBody = res.errorBody()?.string() ?: ""
+        throw Exception("Failed to accept order: ${res.code()} $errBody")
+      }
+      val body = res.body()!!
+      val doc = body.toDocument()
+      cachedOrderDetails[orderId] = doc
+      cachedCanteenOrders.forEach { (canteen, list) ->
+        cachedCanteenOrders[canteen] = list.map {
+          if (it.orderId == orderId) doc else it
+        }
+      }
+      body
+    }.onFailure { Log.e(TAG, "acceptOrder error: ${it.message}") }
+  }
+
+  suspend fun rejectOrder(orderId: String, reason: String): Result<MongoOrderDto> {
+    return runCatching {
+      val res = apiService.rejectOrder(orderId, mapOf("reason" to reason))
+      if (!res.isSuccessful || res.body() == null) {
+        val errBody = res.errorBody()?.string() ?: ""
+        throw Exception("Failed to reject order: ${res.code()} $errBody")
+      }
+      val body = res.body()!!
+      val doc = body.toDocument()
+      cachedOrderDetails[orderId] = doc
+      cachedCanteenOrders.forEach { (canteen, list) ->
+        cachedCanteenOrders[canteen] = list.map {
+          if (it.orderId == orderId) doc else it
+        }
+      }
+      body
+    }.onFailure { Log.e(TAG, "rejectOrder error: ${it.message}") }
   }
 
   suspend fun getOrderQr(orderId: String): Result<OrderQrResponseDto> {
@@ -542,7 +781,6 @@ class MongoRepository(
     }.onFailure { Log.e(TAG, "getOrderQueuePosition error: ${it.message}") }
   }
 
-  // ── Users ─────────────────────────────────────────────────────────────────
   suspend fun getUser(uid: String): Result<MongoUserDto> {
     return runCatching {
       val res = apiService.getUser(uid)
@@ -572,7 +810,6 @@ class MongoRepository(
     }.onFailure { Log.e(TAG, "updateUserFcmToken error: ${it.message}") }
   }
 
-  // ── Owners ────────────────────────────────────────────────────────────────
   suspend fun getOwner(uid: String): Result<MongoOwnerDto> {
     return runCatching {
       val res = apiService.getOwner(uid)
@@ -611,7 +848,6 @@ class MongoRepository(
     }.onFailure { Log.e(TAG, "assignCanteen error: ${it.message}") }
   }
 
-  // ── Inventory ─────────────────────────────────────────────────────────────
   suspend fun getCanteenInventory(canteenId: String): Result<List<MongoInventoryDto>> {
     return runCatching {
       val res = apiService.getCanteenInventory(canteenId)
@@ -641,7 +877,6 @@ class MongoRepository(
     }.onFailure { Log.e(TAG, "addInventoryItem error: ${it.message}") }
   }
 
-  // ── Notifications ─────────────────────────────────────────────────────────
   suspend fun getUserNotifications(userId: String): Result<List<MongoNotificationDto>> {
     return runCatching {
       val res = apiService.getUserNotifications(userId)
@@ -671,7 +906,6 @@ class MongoRepository(
     }.onFailure { Log.e(TAG, "markNotificationRead error: ${it.message}") }
   }
 
-  // ── Favorites ─────────────────────────────────────────────────────────────
   suspend fun getUserFavorites(uid: String): Result<List<String>> {
     return runCatching {
       val res = apiService.getUserFavorites(uid)
@@ -705,7 +939,6 @@ class MongoRepository(
     }.onFailure { Log.e(TAG, "removeFavorite error: ${it.message}") }
   }
 
-  // ── Real-Time Reactive Flows ──────────────────────────────────────────────
   fun observeCanteens(): Flow<List<CanteenDocument>> = flow {
     cachedCanteens.get()?.let { emit(it) }
     var delayMs = 15000L
@@ -882,7 +1115,6 @@ class MongoRepository(
     // Instant 0ms emit from cache if available
     cachedOrderDetails[orderId]?.let { trySend(it) }
 
-    // 1. Instant sub-second updates pushed via WebSocket
     val wsJob = launch {
       WebSocketManager.observeOrder(orderId).collect { dto ->
         val doc = dto.toDocument()
@@ -891,7 +1123,6 @@ class MongoRepository(
       }
     }
 
-    // 2. Fetch initial order and periodic safety fallback with backoff
     val pollJob = launch {
       var delayMs = 12000L
       while (isActive) {
@@ -938,7 +1169,6 @@ class MongoRepository(
   }
 }
 
-// ── Extension Document Converters ───────────────────────────────────────────
 fun MongoCanteenDto.toDocument(): CanteenDocument {
   return CanteenDocument(
     id = id,
@@ -1071,6 +1301,10 @@ fun MongoOrderDto.toDocument(): OrderDocument {
     totalAmount = totalAmount,
     status = status,
     paymentStatus = paymentStatus,
+    paymentMethod = paymentMethod ?: "RAZORPAY",
+    razorpayOrderId = razorpayOrderId.orEmpty(),
+    razorpayPaymentId = razorpayPaymentId.orEmpty(),
+    razorpaySignature = razorpaySignature.orEmpty(),
     tokenNumber = tokenNumber,
     pickupPreference = pickupPreference,
     pickupCanteenName = pickupCanteenName,
@@ -1112,6 +1346,10 @@ fun OrderDocument.toMongoDto(): MongoOrderDto {
     totalAmount = totalAmount,
     status = status,
     paymentStatus = paymentStatus,
+    paymentMethod = paymentMethod ?: "RAZORPAY",
+    razorpayOrderId = razorpayOrderId.orEmpty(),
+    razorpayPaymentId = razorpayPaymentId.orEmpty(),
+    razorpaySignature = razorpaySignature.orEmpty(),
     tokenNumber = tokenNumber,
     pickupPreference = pickupPreference,
     customerPickupTime = customerPickupTime.ifBlank {

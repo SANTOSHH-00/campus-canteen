@@ -1,3 +1,4 @@
+// AppDatabase: Room database component for offline caching and local persistence
 package com.example.data.local
 
 import android.content.Context

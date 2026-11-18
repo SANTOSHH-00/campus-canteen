@@ -122,36 +122,28 @@ const cleanDatabase = async () => {
     await connectDB();
     console.log('🧹 Cleaning MongoDB database while preserving canteen names...');
 
-    // 1. Remove all food items
     const deletedItems = await Item.deleteMany({});
     console.log(`🗑️ Deleted ${deletedItems.deletedCount} food items.`);
 
-    // 2. Remove all inventory records
     const deletedInventory = await Inventory.deleteMany({});
     console.log(`🗑️ Deleted ${deletedInventory.deletedCount} inventory records.`);
 
-    // 3. Remove all canteen owners
     const deletedOwners = await Owner.deleteMany({});
     console.log(`🗑️ Deleted ${deletedOwners.deletedCount} owner accounts.`);
 
-    // 4. Remove all sample users
     const deletedUsers = await User.deleteMany({});
     console.log(`🗑️ Deleted ${deletedUsers.deletedCount} student/user records.`);
 
-    // 5. Remove all sample orders
     const deletedOrders = await Order.deleteMany({});
     console.log(`🗑️ Deleted ${deletedOrders.deletedCount} orders.`);
 
-    // 6. Remove all notifications
     const deletedNotifications = await Notification.deleteMany({});
     console.log(`🗑️ Deleted ${deletedNotifications.deletedCount} notifications.`);
 
-    // 7. Remove OTP / reset tokens
     await OtpVerification.deleteMany({});
     await PasswordResetToken.deleteMany({});
     console.log(`🗑️ Cleared OTP and password reset tokens.`);
 
-    // 8. Preserve canteen names only (strip out Supabase storage URLs)
     for (const c of canteensToPreserve) {
       await Canteen.findOneAndUpdate(
         { id: c.id },

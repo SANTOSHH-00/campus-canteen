@@ -1,3 +1,4 @@
+// FirebaseModels: Core utility and helper functions
 package com.example.data.firebase
 
 import com.example.data.CampusBlockCanteen
@@ -6,6 +7,7 @@ import com.example.data.CrowdStatus
 import com.example.data.FoodAddon
 import com.example.data.FoodCategory
 import com.example.data.FoodItem
+import com.example.data.FulfillmentType
 import com.example.data.NotificationItem
 import com.example.data.OrderRecord
 import com.example.data.OrderStatus
@@ -17,7 +19,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// ── 1. Users Collection: users/{uid} ──────────────────────────────────────────
 @IgnoreExtraProperties
 data class UserDocument(
   @DocumentId val uid: String = "",
@@ -65,7 +66,6 @@ data class UserDocument(
   }
 }
 
-// ── 2. Owners Collection: owners/{uid} ────────────────────────────────────────
 @IgnoreExtraProperties
 data class OwnerDocument(
   @DocumentId val uid: String = "",
@@ -80,7 +80,6 @@ data class OwnerDocument(
   val createdAt: Long = System.currentTimeMillis(),
 )
 
-// ── 3. Canteens Collection: canteens/{canteenId} ─────────────────────────────
 @IgnoreExtraProperties
 data class CanteenDocument(
   @DocumentId val id: String = "",
@@ -95,6 +94,9 @@ data class CanteenDocument(
   val icon: String = "🏢",
   val imageUrl: String = "",
   val timings: String = "7:00 AM – 10:00 PM",
+  val ownerName: String = "",
+  val packagingCharge: Int = 10,
+  val taxRatePercent: Int = 5,
 ) {
   fun toCampusBlockCanteen(items: List<FoodItem> = emptyList()): CampusBlockCanteen {
     val quick = items.filter { it.category == FoodCategory.QUICK_ORDER }.ifEmpty { items.filter { it.prepMinutes <= 5 } }
@@ -129,6 +131,9 @@ data class CanteenDocument(
       closeReason = closeReason.ifBlank { null },
       imageUrl = imageUrl.ifBlank { null },
       timings = timings.ifBlank { "7:00 AM – 10:00 PM" },
+      ownerName = ownerName,
+      packagingCharge = packagingCharge,
+      taxRatePercent = taxRatePercent,
     )
   }
 
@@ -147,12 +152,13 @@ data class CanteenDocument(
         icon = canteen.icon,
         imageUrl = canteen.imageUrl ?: "",
         timings = canteen.timings,
+        packagingCharge = canteen.packagingCharge,
+        taxRatePercent = canteen.taxRatePercent,
       )
     }
   }
 }
 
-// ── 4. Items Collection: items/{itemId} ───────────────────────────────────────
 @IgnoreExtraProperties
 data class AddonDocument(
   val name: String = "",
@@ -239,7 +245,6 @@ data class ItemDocument(
   }
 }
 
-// ── 5. Orders Collection: orders/{orderId} ────────────────────────────────────
 @IgnoreExtraProperties
 data class OrderItemDocument(
   val itemId: String = "",
@@ -261,8 +266,12 @@ data class OrderDocument(
   val canteenId: String = "",
   val items: List<OrderItemDocument> = emptyList(),
   val totalAmount: Int = 0,
-  val status: String = "PREPARING", // PREPARING, READY, COMPLETED, CANCELLED
+  val status: String = "PREPARING",
   val paymentStatus: String = "PAID",
+  val paymentMethod: String = "RAZORPAY",
+  val razorpayOrderId: String = "",
+  val razorpayPaymentId: String = "",
+  val razorpaySignature: String = "",
   val tokenNumber: String = "",
   val pickupPreference: String = "Pickup ASAP",
   val customerPickupTime: String = "",
@@ -278,6 +287,16 @@ data class OrderDocument(
   val preparingAt: Long = 0L,
   val readyAt: Long = 0L,
   val completedAt: Long = 0L,
+  val acceptedAt: Long = 0L,
+  val rejectedAt: Long = 0L,
+  val rejectionReason: String = "",
+  val refundStatus: String = "",
+  val fulfillmentType: String = "TAKEAWAY",
+  val packagingCharge: Int = 0,
+  val taxAmount: Int = 0,
+  val itemsSubtotal: Int = 0,
+  val isScheduled: Boolean = false,
+  val scheduledPickupTime: String = "",
 ) {
   fun getExactPlacedEpoch(): Long {
     if (orderPlacedAt > 0) return orderPlacedAt
@@ -288,11 +307,16 @@ data class OrderDocument(
   }
 
   fun toOrderRecord(): OrderRecord {
-    val parsedStatus = when (status.uppercase()) {
-      "NEW" -> OrderStatus.NEW
+    val parsedStatus = when (status.uppercase().trim()) {
+      "PENDING", "WAITING", "ORDER_PLACED" -> OrderStatus.PENDING
+      "NEW" -> OrderStatus.PENDING
+      "ACCEPTED", "CONFIRMED" -> OrderStatus.ACCEPTED
+      "PREPARING" -> OrderStatus.PREPARING
       "READY" -> OrderStatus.READY
-      "COMPLETED", "PICKED_UP" -> OrderStatus.COMPLETED
-      else -> OrderStatus.PREPARING
+      "COMPLETED", "PICKED_UP", "COLLECTED" -> OrderStatus.COMPLETED
+      "CANCELLED" -> OrderStatus.CANCELLED
+      "REJECTED" -> OrderStatus.REJECTED
+      else -> OrderStatus.PENDING
     }
 
     val cartItems = items.map { itemDoc ->
@@ -314,10 +338,12 @@ data class OrderDocument(
     val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
     val placedTimestamp = getExactPlacedEpoch()
     val placedFormatted = if (placedTimestamp > 0) timeFormat.format(Date(placedTimestamp)) else ""
-    val confirmedFormatted = if (confirmedAt > 0) timeFormat.format(Date(confirmedAt)) else placedFormatted
+    val confirmedFormatted = if (confirmedAt > 0) timeFormat.format(Date(confirmedAt)) else ""
+    val acceptedFormatted = if (acceptedAt > 0) timeFormat.format(Date(acceptedAt)) else confirmedFormatted
     val preparingFormatted = if (preparingAt > 0) timeFormat.format(Date(preparingAt)) else ""
     val readyFormatted = if (readyAt > 0) timeFormat.format(Date(readyAt)) else ""
     val completedFormatted = if (completedAt > 0) timeFormat.format(Date(completedAt)) else ""
+    val rejectedFormatted = if (rejectedAt > 0) timeFormat.format(Date(rejectedAt)) else ""
 
     val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     val orderDateStr = if (placedTimestamp > 0) dateFormat.format(Date(placedTimestamp)) else ""
@@ -345,6 +371,16 @@ data class OrderDocument(
       preparingAt = preparingFormatted,
       readyAt = readyFormatted,
       completedAt = completedFormatted,
+      acceptedAt = acceptedFormatted,
+      rejectedAt = rejectedFormatted,
+      rejectionReason = rejectionReason,
+      refundStatus = refundStatus,
+      fulfillmentType = if (fulfillmentType.equals("DINE_IN", ignoreCase = true)) FulfillmentType.DINE_IN else FulfillmentType.TAKEAWAY,
+      packagingCharge = packagingCharge,
+      taxAmount = taxAmount,
+      itemsSubtotal = itemsSubtotal,
+      isScheduled = isScheduled || (customerPickupTime.isNotBlank() && !customerPickupTime.contains("ASAP", ignoreCase = true)),
+      scheduledPickupTime = scheduledPickupTime.ifBlank { customerPickupTime },
       placedEpoch = placedTimestamp,
       orderDate = orderDateStr,
     )
@@ -359,6 +395,9 @@ data class OrderDocument(
       studentPhone: String = "",
       studentCourse: String = "",
       pickupCounter: String = "Counter 1",
+      paymentId: String = "",
+      razorpayOrderId: String = "",
+      razorpaySignature: String = "",
     ): OrderDocument {
       val itemDocs = record.items.map { cart ->
         OrderItemDocument(
@@ -380,7 +419,7 @@ data class OrderDocument(
           if (fromId > 0) fromId else now
         }
       }
-      val confirmedEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.confirmedAt).let { if (it > 0) it else placedEpoch }
+      val confirmedEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.confirmedAt)
       val preparingEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.preparingAt)
       val readyEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.readyAt)
       val completedEpoch = com.example.data.api.parseIsoOrMillisToEpoch(record.completedAt)
@@ -396,12 +435,22 @@ data class OrderDocument(
         totalAmount = record.totalPrice,
         status = record.status.name,
         paymentStatus = "PAID",
+        paymentMethod = "RAZORPAY",
+        razorpayOrderId = razorpayOrderId,
+        razorpayPaymentId = paymentId,
+        razorpaySignature = razorpaySignature,
         tokenNumber = record.tokenNumber,
         pickupPreference = record.pickupPreference,
         customerPickupTime = record.customerPickupTime.ifBlank {
           if (record.pickupPreference.contains("at ", ignoreCase = true)) record.pickupPreference.substringAfter("at ").trim() else "ASAP"
         },
         estimatedCompletionTime = record.estimatedCompletionTime.ifBlank { record.estimatedReadyTime },
+        fulfillmentType = record.fulfillmentType.name,
+        packagingCharge = record.packagingCharge,
+        taxAmount = record.taxAmount,
+        itemsSubtotal = record.itemsSubtotal,
+        isScheduled = record.isScheduled,
+        scheduledPickupTime = record.scheduledPickupTime.ifBlank { record.customerPickupTime },
         pickupCanteenName = record.pickupCanteenName,
         pickupLocation = record.pickupLocation,
         pickupCounter = pickupCounter,
@@ -418,7 +467,6 @@ data class OrderDocument(
   }
 }
 
-// ── 6. Notifications Collection: notifications/{notificationId} ───────────────
 @IgnoreExtraProperties
 data class NotificationDocument(
   @DocumentId val notificationId: String = "",

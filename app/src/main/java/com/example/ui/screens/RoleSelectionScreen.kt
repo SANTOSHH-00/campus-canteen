@@ -1,3 +1,4 @@
+// RoleSelectionScreen: Jetpack Compose screen for RoleSelection user interface
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
@@ -74,7 +75,6 @@ fun RoleSelectionScreen(
     ) {
       Spacer(modifier = Modifier.height(12.dp))
 
-      // ── MESSQ Top Brand Badge ──────────────────────────────────────────────
       Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
@@ -110,7 +110,6 @@ fun RoleSelectionScreen(
 
       Spacer(modifier = Modifier.height(20.dp))
 
-      // ── Main Header Title ──────────────────────────────────────────────────
       Text(
         text = "Select Account Type",
         fontSize = 28.sp,
@@ -134,7 +133,6 @@ fun RoleSelectionScreen(
 
       Spacer(modifier = Modifier.height(32.dp))
 
-      // ── Role 1: Student Account Card ───────────────────────────────────────
       RoleOptionCard(
         badgeTitle = "STUDENT PORTAL",
         badgeColor = DeliveryOrange,
@@ -155,7 +153,6 @@ fun RoleSelectionScreen(
 
       Spacer(modifier = Modifier.height(22.dp))
 
-      // ── Role 2: Canteen Owner Account Card ──────────────────────────────────
       RoleOptionCard(
         badgeTitle = "CANTEEN OWNER / STAFF",
         badgeColor = BlackPrimary,
@@ -176,7 +173,6 @@ fun RoleSelectionScreen(
 
       Spacer(modifier = Modifier.height(30.dp))
 
-      // ── Bottom Campus Disclaimer ───────────────────────────────────────────
       Text(
         text = "QuickBite Campus Canteen Platform · Smart Dining Hub",
         fontSize = 11.5.sp,
@@ -224,7 +220,6 @@ private fun RoleOptionCard(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        // Icon Badge
         Box(
           modifier = Modifier
             .size(54.dp)

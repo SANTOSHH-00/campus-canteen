@@ -391,7 +391,7 @@ class OwnerDashboardAndItemManagementTest {
   }
 
   @Test
-  fun testClosedCanteenBlocksStudentOrder() {
+  fun testClosedCanteenBlocksStudentOrder() = runTest {
     val appState = CanteenAppState()
     val testFoodItem = FoodItem(
       id = "food_1",
@@ -408,13 +408,13 @@ class OwnerDashboardAndItemManagementTest {
     // Close canteen
     appState.selectedCanteen = appState.selectedCanteen.copy(isOpen = false, closeReason = "Maintenance")
 
-    val placed = appState.placeOrder()
+    val placed = appState.placeOrder().getOrNull()
     assertNull("Placing order while canteen is closed must return null", placed)
     assertEquals("Cart items must remain unconsumed when canteen is closed", 1, appState.cartItems.size)
 
     // Reopen canteen
     appState.selectedCanteen = appState.selectedCanteen.copy(isOpen = true, closeReason = null)
-    val placedSuccess = appState.placeOrder()
+    val placedSuccess = appState.placeOrder().getOrNull()
     assertNotNull("Placing order when canteen is open must succeed", placedSuccess)
     assertEquals(OrderStatus.NEW, placedSuccess!!.status)
     assertEquals(0, appState.cartItems.size)

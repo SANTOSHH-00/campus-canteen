@@ -1,3 +1,4 @@
+// AiAssistantScreen: Jetpack Compose screen for AiAssistant user interface
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
@@ -14,6 +15,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -124,6 +127,7 @@ fun AiAssistantScreen(
   appState: CanteenAppState,
   onBack: (() -> Unit)? = null,
   onClose: (() -> Unit)? = onBack,
+  onRequestExpand: () -> Unit = {},
   viewModel: AiAssistantViewModel = viewModel(),
   modifier: Modifier = Modifier,
 ) {
@@ -135,11 +139,27 @@ fun AiAssistantScreen(
 
   val listState = rememberLazyListState()
 
-  // Auto-scroll to latest message
+  // Auto-scroll to latest message and expand sheet when generating answer
   LaunchedEffect(messages.size, isLoading) {
+    if (isLoading) {
+      onRequestExpand()
+    }
     if (messages.isNotEmpty() || isLoading) {
       val targetIndex = if (isLoading) messages.size else maxOf(0, messages.size - 1)
       listState.animateScrollToItem(targetIndex)
+    }
+  }
+
+  // Automatically expand sheet to full screen when answering begins or messages are present
+  LaunchedEffect(isLoading) {
+    if (isLoading) {
+      onRequestExpand()
+    }
+  }
+
+  LaunchedEffect(messages.size) {
+    if (messages.isNotEmpty()) {
+      onRequestExpand()
     }
   }
 
@@ -149,7 +169,6 @@ fun AiAssistantScreen(
       .background(WarmCream)
       .imePadding()
   ) {
-    // ── 1. MunchMate Top Bar Header ──────────────────────────────────────────
     MunchMateTopBar(
       onBack = onBack,
       onClose = onClose,
@@ -157,18 +176,18 @@ fun AiAssistantScreen(
       hasMessages = messages.isNotEmpty(),
     )
 
-    // ── 2. Chat Conversation Body / Welcome Screen ──────────────────────────
     Box(
       modifier = Modifier
         .weight(1f)
         .fillMaxWidth()
     ) {
       if (messages.isEmpty()) {
-        // Welcome Screen State
+        // Welcome Screen State with clean greeting & suggestion chips
         MunchMateWelcomeContent(
           suggestions = suggestions,
           appState = appState,
           onSuggestionClick = { prompt ->
+            onRequestExpand()
             viewModel.sendMessage(
               promptText = prompt,
               canteenId = appState.selectedCanteen.id,
@@ -187,11 +206,15 @@ fun AiAssistantScreen(
             ChatBubbleItem(
               message = message,
               appState = appState,
-              onRetry = { viewModel.retryLastMessage(canteenId = appState.selectedCanteen.id) },
+              onRetry = {
+                onRequestExpand()
+                viewModel.retryLastMessage(canteenId = appState.selectedCanteen.id)
+              },
               onFeedback = { msg, type, reason ->
                 viewModel.onFeedbackSelected(msg, type, reason)
               },
               onSelectOrder = { orderDto ->
+                onRequestExpand()
                 viewModel.sendMessage(
                   promptText = "Track order #${orderDto.orderId}",
                   canteenId = appState.selectedCanteen.id,
@@ -209,7 +232,7 @@ fun AiAssistantScreen(
       }
     }
 
-    // ── 3. Bottom Contextual Suggestions (when chatting) ────────────────────
+    // Dynamic Suggestion Chips Row (shown above input bar when messages exist)
     if (messages.isNotEmpty() && suggestions.isNotEmpty()) {
       LazyRow(
         modifier = Modifier
@@ -224,6 +247,7 @@ fun AiAssistantScreen(
             color = PureWhite,
             border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray),
             modifier = Modifier.clickable {
+              onRequestExpand()
               viewModel.sendMessage(
                 promptText = chip,
                 canteenId = appState.selectedCanteen.id,
@@ -242,11 +266,12 @@ fun AiAssistantScreen(
       }
     }
 
-    // ── 4. Chat Input Bar ───────────────────────────────────────────────────
+    // Always-docked bottom input bar (Classic Bot Theme)
     MunchMateChatInputBar(
       inputText = inputText,
       onTextChanged = { viewModel.onInputTextChanged(it) },
       onSend = {
+        onRequestExpand()
         viewModel.sendMessage(canteenId = appState.selectedCanteen.id)
       },
       isLoading = isLoading,
@@ -254,7 +279,6 @@ fun AiAssistantScreen(
   }
 }
 
-// ── Top Bar ─────────────────────────────────────────────────────────────────
 @Composable
 private fun MunchMateTopBar(
   onClearChat: () -> Unit,
@@ -291,7 +315,7 @@ private fun MunchMateTopBar(
         Spacer(modifier = Modifier.width(8.dp))
       }
 
-      // MunchMate Identity Icon (Native Vector Fork & Knife Artwork)
+      // MunchMate Identity Icon (Native Vector Chef Bot)
       Box(
         modifier = Modifier
           .size(40.dp)
@@ -302,8 +326,7 @@ private fun MunchMateTopBar(
         contentAlignment = Alignment.Center,
       ) {
         MunchMateIcon(
-          modifier = Modifier.size(24.dp),
-          tint = Color(0xFF2E5A44),
+          modifier = Modifier.size(32.dp),
         )
       }
 
@@ -370,7 +393,6 @@ private fun MunchMateTopBar(
   )
 }
 
-// ── Welcome Screen Content ──────────────────────────────────────────────────
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MunchMateWelcomeContent(
@@ -400,15 +422,16 @@ private fun MunchMateWelcomeContent(
   Column(
     modifier = Modifier
       .fillMaxSize()
-      .padding(horizontal = 24.dp)
-      .padding(top = 32.dp),
+      .verticalScroll(rememberScrollState())
+      .padding(horizontal = 20.dp, vertical = 24.dp),
     horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.Center,
   ) {
-    // Large MunchMate Icon
+    // Elegant Header with MunchMate Chef Bot Icon
     Box(
       modifier = Modifier
-        .size(76.dp)
-        .shadow(6.dp, CircleShape, spotColor = DrawerAmber.copy(alpha = 0.5f))
+        .size(68.dp)
+        .shadow(6.dp, CircleShape, spotColor = DrawerAmber.copy(alpha = 0.4f))
         .clip(CircleShape)
         .background(PureWhite)
         .border(2.dp, DrawerAmberLight, CircleShape),
@@ -416,33 +439,32 @@ private fun MunchMateWelcomeContent(
     ) {
       MunchMateIcon(
         modifier = Modifier.size(46.dp),
-        tint = Color(0xFF2E5A44),
       )
     }
 
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(14.dp))
 
     Text(
       text = welcomeGreeting,
-      fontSize = 24.sp,
-      fontWeight = FontWeight.Black,
+      fontSize = 20.sp,
+      fontWeight = FontWeight.ExtraBold,
       color = BlackPrimary,
       textAlign = TextAlign.Center,
     )
 
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(4.dp))
 
     Text(
-      text = "I'm MunchMate by QuickBite • Your smart campus food buddy.\nAsk me about food recommendations, canteen menus, or track your live orders in real time!",
-      fontSize = 13.5.sp,
+      text = "Ask about food items, canteen queues, or track live orders",
+      fontSize = 13.sp,
       fontWeight = FontWeight.Normal,
       color = TextMuted,
-      lineHeight = 20.sp,
       textAlign = TextAlign.Center,
     )
 
-    Spacer(modifier = Modifier.height(28.dp))
+    Spacer(modifier = Modifier.height(24.dp))
 
+    // Quick suggestion chips
     FlowRow(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.Center,
@@ -453,23 +475,22 @@ private fun MunchMateWelcomeContent(
           shape = RoundedCornerShape(20.dp),
           color = PureWhite,
           shadowElevation = 1.dp,
-          border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray),
+          border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray.copy(alpha = 0.8f)),
           modifier = Modifier
             .padding(horizontal = 4.dp)
             .clickable { onSuggestionClick(chipText) },
         ) {
           Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
           ) {
             MunchMateIcon(
               modifier = Modifier.size(16.dp),
-              tint = Color(0xFF2E5A44),
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
               text = chipText,
-              fontSize = 13.sp,
+              fontSize = 12.5.sp,
               fontWeight = FontWeight.SemiBold,
               color = BlackPrimary,
             )
@@ -480,7 +501,6 @@ private fun MunchMateWelcomeContent(
   }
 }
 
-// ── Chat Bubble Item ────────────────────────────────────────────────────────
 @Composable
 private fun ChatBubbleItem(
   message: ChatMessage,
@@ -499,7 +519,6 @@ private fun ChatBubbleItem(
     horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
   ) {
     if (isUser) {
-      // ── Student Message (Aligned Right) ──
       Box(
         modifier = Modifier
           .fillMaxWidth(0.85f)
@@ -515,14 +534,12 @@ private fun ChatBubbleItem(
         )
       }
     } else {
-      // ── MunchMate AI Response (Aligned Left) ──
       Column(
         modifier = Modifier.fillMaxWidth(0.95f),
       ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
           MunchMateIcon(
-            modifier = Modifier.size(16.dp),
-            tint = Color(0xFF2E5A44),
+            modifier = Modifier.size(18.dp),
           )
           Spacer(modifier = Modifier.width(6.dp))
           Text(
@@ -584,7 +601,6 @@ private fun ChatBubbleItem(
           }
         }
 
-        // ── Thumbs Up / Thumbs Down Feedback Row (Only for successful assistant answers) ──
         if (!message.isError) {
           Spacer(modifier = Modifier.height(6.dp))
           Row(
@@ -667,7 +683,6 @@ private fun ChatBubbleItem(
           }
         }
 
-        // ── 1. Real-Time Order Tracking Progress Card (Scenario A & C) ────────
         if (message.trackedOrder != null) {
           Spacer(modifier = Modifier.height(10.dp))
           AiOrderTrackingCard(
@@ -701,7 +716,6 @@ private fun ChatBubbleItem(
           )
         }
 
-        // ── 2. Selectable Orders List (Scenario B - Multiple Active Orders) ───
         if (message.selectableOrders.isNotEmpty()) {
           Spacer(modifier = Modifier.height(10.dp))
           AiSelectableOrdersCard(
@@ -710,7 +724,6 @@ private fun ChatBubbleItem(
           )
         }
 
-        // ── 3. Recommended Food Items Carousel / List ────────────────────────
         if (message.recommendedItems.isNotEmpty()) {
           Spacer(modifier = Modifier.height(10.dp))
           LazyRow(
@@ -745,7 +758,6 @@ private fun ChatBubbleItem(
   }
 }
 
-// ── Real-Time Order Tracking Progress Card (5-Stage Visual Timeline) ────────
 @Composable
 private fun AiOrderTrackingCard(
   order: AiTrackedOrderDto,
@@ -780,7 +792,6 @@ private fun AiOrderTrackingCard(
         .fillMaxWidth()
         .padding(14.dp),
     ) {
-      // Header: Order ID & Token Badge
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -919,7 +930,6 @@ private fun AiOrderTrackingCard(
 
       Spacer(modifier = Modifier.height(10.dp))
 
-      // Button: View Full Tracking Screen
       Button(
         onClick = onOpenFullTracking,
         colors = ButtonDefaults.buttonColors(containerColor = BlackPrimary),
@@ -945,7 +955,6 @@ private fun AiOrderTrackingCard(
   }
 }
 
-// ── Selectable Active Orders Card (Scenario B) ──────────────────────────────
 @Composable
 private fun AiSelectableOrdersCard(
   orders: List<AiTrackedOrderDto>,
@@ -1027,7 +1036,6 @@ private fun AiSelectableOrdersCard(
   }
 }
 
-// ── Food Recommendation Card ────────────────────────────────────────────────
 @Composable
 private fun AiFoodRecommendationCard(
   item: AiRecommendedItemDto,
@@ -1043,7 +1051,6 @@ private fun AiFoodRecommendationCard(
       .padding(10.dp),
   ) {
     Column {
-      // Image or Food Icon
       Box(
         modifier = Modifier
           .fillMaxWidth()
@@ -1131,7 +1138,6 @@ private fun AiFoodRecommendationCard(
   }
 }
 
-// ── MunchMate Thinking Indicator ─────────────────────────────────────────────
 @Composable
 private fun MunchMateThinkingBubble() {
   val infiniteTransition = rememberInfiniteTransition(label = "munchmate_pulse")
@@ -1150,8 +1156,7 @@ private fun MunchMateThinkingBubble() {
     modifier = Modifier.padding(start = 4.dp),
   ) {
     MunchMateIcon(
-      modifier = Modifier.size(16.dp),
-      tint = Color(0xFF2E5A44),
+      modifier = Modifier.size(18.dp),
     )
     Spacer(modifier = Modifier.width(6.dp))
     Box(
@@ -1181,7 +1186,6 @@ private fun MunchMateThinkingBubble() {
   }
 }
 
-// ── Chat Input Bar ──────────────────────────────────────────────────────────
 @Composable
 private fun MunchMateChatInputBar(
   inputText: String,

@@ -1,43 +1,52 @@
+<!-- Admin & Owner Portal: Web dashboard for campus canteens, live orders, menu stock, and pickup verification -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QuickBite Campus Admin Portal - Canteen Management</title>
+  <title>QuickBite Campus Admin Console - Operations & Governance</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
     :root {
-      /* App Theme Palette (QuickBite Flame & Warm Amber) */
-      --primary: #FF5200;
-      --primary-dark: #E04800;
-      --amber: #F5A623;
-      --amber-dark: #D4922A;
-      --amber-light: #FFF5E4;
-      --primary-gradient: linear-gradient(135deg, #FF5200 0%, #F5A623 100%);
-      --btn-shadow: 0 8px 24px rgba(255, 82, 0, 0.32);
       
-      /* Dark Modern Canvas */
-      --bg: #0C0F14;
-      --surface: #151922;
-      --surface-elevated: #1D2330;
-      --surface-border: #283040;
-      --text-main: #F9FAFB;
-      --text-muted: #9CA3AF;
+      --primary: #F59E0B;
+      --primary-dark: #D97706;
+      --primary-light: #FEF3C7;
+      --accent-flame: #FF5200;
+      --accent-flame-dark: #E04800;
+      --primary-gradient: linear-gradient(135deg, #FF5200 0%, #F59E0B 100%);
+      --accent-gradient: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+      --btn-shadow: 0 10px 24px rgba(245, 158, 11, 0.28);
       
-      /* App Accents */
+      
+      --bg: #0B0F17;
+      --surface: #111827;
+      --surface-elevated: #1A2333;
+      --surface-border: #222E42;
+      --surface-hover: #1F2A3D;
+      --text-main: #F8FAFC;
+      --text-muted: #94A3B8;
+      --text-subtle: #64748B;
+      
+      
       --success: #10B981;
+      --success-dark: #059669;
       --success-bg: rgba(16, 185, 129, 0.12);
       --danger: #EF4444;
+      --danger-dark: #DC2626;
       --danger-bg: rgba(239, 68, 68, 0.12);
       --warning: #F59E0B;
       --warning-bg: rgba(245, 158, 11, 0.12);
+      --info: #3B82F6;
+      --info-bg: rgba(59, 130, 246, 0.12);
       
       --radius: 12px;
       --card-radius: 18px;
       --pill-radius: 9999px;
+      --transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     * {
@@ -53,38 +62,59 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      background-image: radial-gradient(circle at 50% 0%, rgba(255, 82, 0, 0.08) 0%, transparent 60%);
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(245, 158, 11, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 90% 20%, rgba(255, 82, 0, 0.05) 0%, transparent 40%);
     }
 
+    
+    .icon {
+      width: 18px;
+      height: 18px;
+      display: inline-block;
+      vertical-align: middle;
+      stroke-width: 2;
+      stroke: currentColor;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+    }
+    .icon-sm { width: 15px; height: 15px; }
+    .icon-lg { width: 22px; height: 22px; }
+    .icon-xl { width: 32px; height: 32px; }
+
+    
     header {
-      background: var(--surface);
+      background: rgba(17, 24, 39, 0.88);
       border-bottom: 1px solid var(--surface-border);
-      padding: 0.9rem 2rem;
+      padding: 0.85rem 2rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
       position: sticky;
       top: 0;
       z-index: 100;
-      backdrop-filter: blur(12px);
+      backdrop-filter: blur(16px);
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 0.85rem;
+      text-decoration: none;
     }
 
     .brand-logo-badge {
-      width: 40px;
-      height: 40px;
+      width: 42px;
+      height: 42px;
       background: var(--primary-gradient);
       border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.35rem;
-      box-shadow: 0 4px 14px rgba(255, 82, 0, 0.35);
+      color: #FFF;
+      box-shadow: 0 6px 18px rgba(255, 82, 0, 0.35);
     }
 
     .brand-text-col {
@@ -93,13 +123,13 @@
     }
 
     .brand-title {
-      font-size: 1.18rem;
+      font-size: 1.22rem;
       font-weight: 800;
       letter-spacing: -0.4px;
       color: #FFF;
       display: flex;
       align-items: center;
-      gap: 0.4rem;
+      gap: 0.35rem;
     }
 
     .brand-title span.accent {
@@ -108,21 +138,21 @@
 
     .brand-subtitle {
       font-size: 0.72rem;
-      color: var(--amber);
+      color: var(--text-muted);
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.6px;
+      letter-spacing: 0.8px;
     }
 
     .header-badges {
       display: flex;
       align-items: center;
-      gap: 0.85rem;
+      gap: 0.75rem;
     }
 
-    .badge-db {
+    .badge-status {
       background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.3);
+      border: 1px solid rgba(16, 185, 129, 0.28);
       color: #34D399;
       font-size: 0.75rem;
       font-weight: 700;
@@ -133,10 +163,38 @@
       gap: 0.45rem;
     }
 
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      background-color: #10B981;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #10B981;
+      animation: pulseDot 2s infinite;
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .live-clock-badge {
+      background: var(--surface-elevated);
+      border: 1px solid var(--surface-border);
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 0.4rem 0.75rem;
+      border-radius: var(--pill-radius);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
     .user-chip {
-      background: rgba(255, 82, 0, 0.12);
-      border: 1px solid rgba(255, 82, 0, 0.3);
-      color: #FFA066;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: var(--primary);
       font-size: 0.8rem;
       font-weight: 700;
       padding: 0.4rem 0.95rem;
@@ -146,26 +204,73 @@
       gap: 0.45rem;
     }
 
-    .user-avatar {
-      font-size: 0.95rem;
+    
+    .nav-tabs-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--surface-border);
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .nav-tabs-bar::-webkit-scrollbar { display: none; }
+
+    .nav-tab-item {
+      padding: 0.9rem 1.15rem;
+      font-size: 0.86rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      background: none;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: var(--transition);
+      white-space: nowrap;
     }
 
-    .btn-sm {
-      padding: 0.4rem 0.95rem;
-      font-size: 0.8rem;
+    .nav-tab-item:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .nav-tab-item.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      background: rgba(245, 158, 11, 0.05);
+    }
+
+    .nav-tab-item .badge-count {
+      font-size: 0.7rem;
+      background: var(--surface-border);
+      color: var(--text-muted);
+      padding: 0.1rem 0.45rem;
       border-radius: var(--pill-radius);
+      font-weight: 700;
+    }
+    .nav-tab-item.active .badge-count {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--primary);
     }
 
+    
     .container {
-      max-width: 1250px;
-      margin: 2rem auto;
-      padding: 0 1.5rem;
+      max-width: 1350px;
+      margin: 1.75rem auto;
+      padding: 0 1.75rem;
       flex: 1;
       width: 100%;
     }
 
+    
     .page-header {
-      margin-bottom: 2rem;
+      margin-bottom: 1.75rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -174,14 +279,17 @@
     }
 
     .page-title {
-      font-size: 1.9rem;
+      font-size: 1.75rem;
       font-weight: 800;
-      letter-spacing: -0.6px;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
     }
 
     .page-subtitle {
       color: var(--text-muted);
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       margin-top: 0.35rem;
     }
 
@@ -189,37 +297,37 @@
       display: flex;
       gap: 0.75rem;
       align-items: center;
+      flex-wrap: wrap;
     }
 
+    
     .btn {
       color: white;
       border: none;
-      padding: 0.7rem 1.35rem;
+      padding: 0.65rem 1.25rem;
       border-radius: var(--pill-radius);
       font-weight: 700;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: var(--transition);
       text-decoration: none;
     }
 
-    .btn-app-primary {
+    .btn-primary {
       background: var(--primary-gradient);
       box-shadow: var(--btn-shadow);
       color: #FFF;
     }
 
-    .btn-app-primary:hover {
+    .btn-primary:hover {
       transform: translateY(-2px);
-      box-shadow: 0 12px 28px rgba(255, 82, 0, 0.42);
+      box-shadow: 0 12px 28px rgba(255, 82, 0, 0.4);
     }
 
-    .btn-app-primary:active {
-      transform: translateY(0);
-    }
+    .btn-primary:active { transform: translateY(0); }
 
     .btn-secondary {
       background: var(--surface-elevated);
@@ -228,8 +336,18 @@
     }
 
     .btn-secondary:hover {
-      background: #262E3E;
-      border-color: rgba(255, 255, 255, 0.15);
+      background: var(--surface-hover);
+      border-color: rgba(255, 255, 255, 0.16);
+      transform: translateY(-1px);
+    }
+
+    .btn-outline-amber {
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      color: var(--primary);
+    }
+    .btn-outline-amber:hover {
+      background: rgba(245, 158, 11, 0.18);
       transform: translateY(-1px);
     }
 
@@ -245,10 +363,17 @@
       transform: translateY(-1px);
     }
 
+    .btn-sm {
+      padding: 0.42rem 0.88rem;
+      font-size: 0.8rem;
+      border-radius: var(--pill-radius);
+    }
+
+    
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 1.25rem;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.15rem;
       margin-bottom: 2rem;
     }
 
@@ -256,33 +381,66 @@
       background: var(--surface);
       border: 1px solid var(--surface-border);
       border-radius: var(--card-radius);
-      padding: 1.35rem 1.6rem;
+      padding: 1.25rem 1.45rem;
       display: flex;
       flex-direction: column;
-      gap: 0.4rem;
       position: relative;
       overflow: hidden;
-      transition: transform 0.2s ease, border-color 0.2s ease;
+      transition: var(--transition);
     }
 
     .stat-card:hover {
       transform: translateY(-2px);
-      border-color: rgba(255, 255, 255, 0.14);
+      border-color: rgba(245, 158, 11, 0.25);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .stat-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.65rem;
+    }
+
+    .stat-icon-wrapper {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface-elevated);
+      color: var(--primary);
+      border: 1px solid var(--surface-border);
     }
 
     .stat-num {
-      font-size: 2.15rem;
+      font-size: 2.1rem;
       font-weight: 800;
-      color: var(--primary);
-      letter-spacing: -0.5px;
+      color: var(--text-main);
+      letter-spacing: -0.6px;
+      line-height: 1.1;
     }
 
     .stat-label {
       color: var(--text-muted);
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       font-weight: 600;
+      margin-top: 0.35rem;
     }
 
+    .stat-trend {
+      font-size: 0.74rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      margin-top: 0.5rem;
+    }
+    .stat-trend.positive { color: var(--success); }
+    .stat-trend.neutral { color: var(--primary); }
+
+    
     .card {
       background: var(--surface);
       border: 1px solid var(--surface-border);
@@ -293,7 +451,7 @@
     }
 
     .card-header {
-      padding: 1.35rem 1.6rem;
+      padding: 1.25rem 1.6rem;
       border-bottom: 1px solid var(--surface-border);
       display: flex;
       justify-content: space-between;
@@ -303,86 +461,111 @@
     }
 
     .card-title {
-      font-size: 1.18rem;
+      font-size: 1.12rem;
       font-weight: 800;
       display: flex;
       align-items: center;
-      gap: 0.6rem;
-      letter-spacing: -0.3px;
+      gap: 0.65rem;
+      color: #FFF;
+    }
+
+    .card-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    
+    .search-input-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .search-input-wrap .search-icon {
+      position: absolute;
+      left: 1rem;
+      color: var(--text-subtle);
+      pointer-events: none;
     }
 
     .search-input {
-      background: #0C0F14;
+      background: var(--surface-elevated);
       border: 1px solid var(--surface-border);
-      border-radius: var(--pill-radius);
-      padding: 0.65rem 1.15rem;
       color: var(--text-main);
-      font-size: 0.88rem;
-      width: 280px;
+      padding: 0.55rem 1rem 0.55rem 2.5rem;
+      border-radius: var(--pill-radius);
+      font-size: 0.85rem;
       outline: none;
-      transition: all 0.2s;
+      width: 260px;
+      transition: var(--transition);
     }
 
     .search-input:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(255, 82, 0, 0.2);
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+      width: 320px;
     }
 
+    .filter-select {
+      background: var(--surface-elevated);
+      border: 1px solid var(--surface-border);
+      color: var(--text-main);
+      padding: 0.55rem 1rem;
+      border-radius: var(--pill-radius);
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    
     table {
       width: 100%;
       border-collapse: collapse;
       text-align: left;
     }
 
-    th, td {
-      padding: 1.1rem 1.35rem;
+    th {
+      background: rgba(17, 24, 39, 0.7);
+      padding: 1rem 1.4rem;
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.75px;
+      color: var(--text-muted);
       border-bottom: 1px solid var(--surface-border);
-      font-size: 0.9rem;
+    }
+
+    td {
+      padding: 1.1rem 1.4rem;
+      border-bottom: 1px solid var(--surface-border);
+      font-size: 0.88rem;
       vertical-align: middle;
     }
 
-    th {
-      background: rgba(0, 0, 0, 0.25);
-      color: var(--text-muted);
-      font-weight: 700;
-      text-transform: uppercase;
-      font-size: 0.72rem;
-      letter-spacing: 0.6px;
-    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr { transition: background-color 0.15s ease; }
+    tbody tr:hover { background-color: rgba(255, 255, 255, 0.02); }
 
-    tr:last-child td {
-      border-bottom: none;
-    }
-
-    tr:hover td {
-      background: rgba(255, 255, 255, 0.02);
-    }
-
-    /* Live Toggle Switch */
+    
     .switch {
       position: relative;
       display: inline-block;
-      width: 48px;
-      height: 26px;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
     }
 
-    .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
+    .switch input { opacity: 0; width: 0; height: 0; }
 
     .slider {
       position: absolute;
       cursor: pointer;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: #283040;
-      transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #334155;
+      transition: .25s cubic-bezier(0.4, 0, 0.2, 1);
       border-radius: 34px;
-      border: 1px solid #3E4756;
     }
 
     .slider:before {
@@ -393,73 +576,102 @@
       left: 3px;
       bottom: 3px;
       background-color: white;
-      transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: .25s cubic-bezier(0.4, 0, 0.2, 1);
       border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
     }
 
-    input:checked + .slider {
-      background-color: var(--success);
-      border-color: #34D399;
-    }
-
-    input:checked + .slider:before {
-      transform: translateX(22px);
-    }
+    input:checked + .slider { background-color: var(--success); }
+    input:checked + .slider:before { transform: translateX(20px); }
 
     .toggle-wrapper {
       display: inline-flex;
       align-items: center;
-      gap: 0.6rem;
+      gap: 0.75rem;
     }
 
     .toggle-label {
-      font-size: 0.8rem;
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+
+    .text-active { color: #34D399; }
+    .text-inactive { color: var(--text-subtle); }
+
+    
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.3rem 0.7rem;
+      border-radius: var(--pill-radius);
+      font-size: 0.75rem;
       font-weight: 700;
     }
-
-    .text-active {
+    .badge-amber {
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.28);
+      color: var(--primary);
+    }
+    .badge-success {
+      background: var(--success-bg);
+      border: 1px solid rgba(16, 185, 129, 0.3);
       color: #34D399;
     }
-
-    .text-inactive {
+    .badge-danger {
+      background: var(--danger-bg);
+      border: 1px solid rgba(239, 68, 68, 0.3);
       color: #F87171;
+    }
+    .badge-blue {
+      background: var(--info-bg);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #60A5FA;
     }
 
     .canteen-pill {
       display: inline-flex;
       align-items: center;
-      gap: 0.4rem;
+      gap: 0.5rem;
       background: var(--surface-elevated);
       border: 1px solid var(--surface-border);
-      padding: 0.4rem 0.8rem;
+      padding: 0.35rem 0.8rem;
       border-radius: 8px;
-      font-weight: 700;
-      font-size: 0.85rem;
+      font-weight: 600;
+      font-size: 0.82rem;
+      color: #FFF;
     }
 
+    .canteen-pill .canteen-icon {
+      color: var(--primary);
+    }
+
+    
     .actions-cell {
       display: flex;
-      gap: 0.4rem;
       align-items: center;
+      gap: 0.45rem;
     }
 
     .btn-icon {
-      padding: 0.5rem 0.75rem;
-      font-size: 0.82rem;
-      border-radius: 8px;
       background: var(--surface-elevated);
       border: 1px solid var(--surface-border);
-      color: var(--text-main);
+      color: var(--text-muted);
+      padding: 0.45rem 0.75rem;
+      border-radius: 8px;
       cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
       display: inline-flex;
       align-items: center;
-      gap: 0.3rem;
-      font-weight: 600;
-      transition: all 0.2s;
+      gap: 0.4rem;
+      transition: var(--transition);
     }
 
     .btn-icon:hover {
-      background: #2A3344;
+      background: var(--surface-hover);
+      color: var(--text-main);
       border-color: rgba(255, 255, 255, 0.2);
     }
 
@@ -469,83 +681,193 @@
       color: #F87171;
     }
 
-    /* Modals */
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(12, 15, 20, 0.85);
-      backdrop-filter: blur(8px);
+    
+    .tab-content-pane {
       display: none;
-      place-items: center;
-      z-index: 1000;
-      padding: 1.5rem;
+      animation: fadeIn 0.25s ease;
+    }
+    .tab-content-pane.active {
+      display: block;
     }
 
-    .modal-overlay.active {
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    
+    .canteen-grid {
       display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
     }
 
-    .modal {
+    .canteen-card {
       background: var(--surface);
       border: 1px solid var(--surface-border);
-      border-radius: 20px;
-      width: 100%;
-      max-width: 520px;
-      padding: 2.2rem;
-      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
-      animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      border-radius: var(--card-radius);
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      transition: var(--transition);
+      position: relative;
     }
 
-    @keyframes modalPop {
-      from { transform: scale(0.96); opacity: 0; }
-      to { transform: scale(1); opacity: 1; }
+    .canteen-card:hover {
+      border-color: rgba(245, 158, 11, 0.35);
+      transform: translateY(-2px);
     }
 
-    .modal-title {
-      font-size: 1.4rem;
+    .canteen-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .canteen-name {
+      font-size: 1.25rem;
       font-weight: 800;
-      margin-bottom: 0.35rem;
+      color: #FFF;
       display: flex;
       align-items: center;
       gap: 0.5rem;
     }
 
-    .modal-subtitle {
+    .canteen-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      font-size: 0.84rem;
       color: var(--text-muted);
-      font-size: 0.88rem;
-      margin-bottom: 1.6rem;
+    }
+
+    .canteen-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(8, 12, 19, 0.85);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      padding: 1.5rem;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--card-radius);
+      width: 100%;
+      max-width: 520px;
+      padding: 2rem;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
+      transform: scale(0.96);
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-overlay.active .modal {
+      transform: scale(1);
+    }
+
+    .modal-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      margin-bottom: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: #FFF;
+    }
+
+    .modal-subtitle {
+      font-size: 0.86rem;
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
       line-height: 1.45;
     }
 
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      margin-top: 1.75rem;
+    }
+
+    
     .form-group {
       margin-bottom: 1.25rem;
+      text-align: left;
     }
 
     label {
       display: block;
-      margin-bottom: 0.45rem;
-      font-size: 0.8rem;
+      font-size: 0.82rem;
       font-weight: 700;
-      color: #D1D5DB;
+      margin-bottom: 0.45rem;
+      color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.4px;
     }
 
-    input, select {
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="tel"],
+    input[type="number"],
+    select,
+    textarea {
       width: 100%;
-      background: #0C0F14;
+      background: var(--surface-elevated);
       border: 1px solid var(--surface-border);
-      border-radius: 10px;
-      padding: 0.8rem 1rem;
       color: var(--text-main);
-      font-size: 0.95rem;
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      font-size: 0.92rem;
       outline: none;
-      transition: all 0.2s;
+      transition: var(--transition);
     }
 
-    input:focus, select:focus {
+    input:focus, select:focus, textarea:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(255, 82, 0, 0.2);
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+    }
+
+    .input-with-icon {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-with-icon .input-icon {
+      position: absolute;
+      left: 1rem;
+      color: var(--text-subtle);
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-with-icon input {
+      padding-left: 2.8rem;
     }
 
     .password-wrapper {
@@ -554,442 +876,374 @@
 
     .password-toggle {
       position: absolute;
-      right: 14px;
+      right: 0.85rem;
       top: 50%;
       transform: translateY(-50%);
-      cursor: pointer;
       background: none;
       border: none;
-      color: var(--text-muted);
-      font-size: 1.1rem;
-      padding: 0.2rem;
-    }
-
-    .modal-footer {
+      color: var(--text-subtle);
+      cursor: pointer;
       display: flex;
-      justify-content: flex-end;
-      gap: 0.75rem;
-      margin-top: 1.85rem;
+      align-items: center;
+      padding: 0.35rem;
+      border-radius: 6px;
+      transition: var(--transition);
     }
+    .password-toggle:hover { color: var(--text-main); }
 
-    /* ── AUTH GATE OVERLAY (SIDE-BY-SIDE SIGN IN & REGISTER) ── */
+    
     #authGateOverlay {
       position: fixed;
-      inset: 0;
-      background: rgba(10, 13, 18, 0.94);
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(11, 15, 23, 0.94);
       backdrop-filter: blur(14px);
-      z-index: 9999;
+      z-index: 2000;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 1.5rem;
-      overflow-y: auto;
     }
 
     .auth-card {
       background: var(--surface);
       border: 1px solid var(--surface-border);
       border-radius: 22px;
-      max-width: 480px;
       width: 100%;
+      max-width: 460px;
       padding: 2.25rem;
-      box-shadow: 0 25px 70px rgba(0, 0, 0, 0.75);
-      position: relative;
-      overflow: hidden;
-      animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-      margin: auto;
-    }
-
-    .auth-card::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: var(--primary-gradient);
-    }
-
-    .auth-brand-header {
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
       text-align: center;
-      margin-bottom: 1.4rem;
     }
 
     .auth-brand-logo {
-      width: 48px;
-      height: 48px;
+      width: 52px;
+      height: 52px;
       background: var(--primary-gradient);
       border-radius: 14px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.6rem;
-      box-shadow: 0 6px 20px rgba(255, 82, 0, 0.35);
-      margin-bottom: 0.65rem;
+      color: #FFF;
+      box-shadow: 0 8px 24px rgba(255, 82, 0, 0.4);
+      margin-bottom: 1.25rem;
     }
 
     .auth-portal-title {
       font-size: 1.45rem;
       font-weight: 800;
-      letter-spacing: -0.5px;
-      margin-bottom: 0.25rem;
+      color: #FFF;
+      letter-spacing: -0.4px;
+      margin-bottom: 0.35rem;
     }
 
     .auth-portal-desc {
+      font-size: 0.85rem;
       color: var(--text-muted);
-      font-size: 0.86rem;
+      margin-bottom: 1.5rem;
       line-height: 1.4;
     }
 
-    /* Segmented Tab Switcher */
     .auth-tabs {
       display: flex;
-      background: #0C0F14;
+      background: var(--surface-elevated);
       padding: 4px;
-      border-radius: var(--pill-radius);
+      border-radius: 12px;
       border: 1px solid var(--surface-border);
-      margin-bottom: 1.6rem;
+      margin-bottom: 1.5rem;
       gap: 4px;
     }
 
     .auth-tab {
       flex: 1;
-      padding: 0.65rem 1rem;
+      background: none;
       border: none;
-      background: transparent;
       color: var(--text-muted);
+      padding: 0.65rem;
+      font-size: 0.84rem;
       font-weight: 700;
-      font-size: 0.88rem;
-      border-radius: var(--pill-radius);
+      border-radius: 8px;
       cursor: pointer;
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 0.45rem;
+      transition: var(--transition);
     }
 
     .auth-tab.active {
-      background: var(--primary-gradient);
-      color: #FFF;
-      box-shadow: 0 4px 14px rgba(255, 82, 0, 0.35);
-    }
-
-    .auth-tab:not(.active):hover {
+      background: var(--surface);
       color: var(--text-main);
-      background: rgba(255, 255, 255, 0.04);
-    }
-
-    .input-with-icon {
-      position: relative;
-    }
-
-    .input-with-icon input {
-      padding-left: 2.75rem;
-      border-radius: 10px;
-    }
-
-    .input-icon {
-      position: absolute;
-      left: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      font-size: 1.05rem;
-      pointer-events: none;
-      opacity: 0.7;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
     }
 
     .auth-error-box {
       background: var(--danger-bg);
-      border: 1px solid rgba(239, 68, 68, 0.4);
+      border: 1px solid rgba(239, 68, 68, 0.35);
       color: #FCA5A5;
-      font-size: 0.84rem;
       padding: 0.75rem 1rem;
       border-radius: 10px;
-      margin-bottom: 1.15rem;
-      text-align: left;
-      line-height: 1.45;
-      display: flex;
-      align-items: flex-start;
-      gap: 0.55rem;
-    }
-
-    .auth-security-notice {
-      background: rgba(245, 166, 35, 0.1);
-      border: 1px solid rgba(245, 166, 35, 0.28);
-      color: #FBBF24;
-      border-radius: 10px;
-      padding: 0.7rem 0.9rem;
-      font-size: 0.78rem;
-      text-align: left;
+      font-size: 0.82rem;
       margin-bottom: 1.25rem;
-      line-height: 1.45;
-    }
-
-    .auth-switch-note {
-      text-align: center;
-      margin-top: 1.35rem;
-      font-size: 0.85rem;
-      color: var(--text-muted);
-    }
-
-    .auth-switch-note a {
-      color: var(--primary);
-      font-weight: 700;
-      text-decoration: none;
-      margin-left: 0.25rem;
-    }
-
-    .auth-switch-note a:hover {
-      text-decoration: underline;
-    }
-
-    /* OTP Step */
-    .otp-digit-input {
-      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-      font-size: 1.85rem;
-      font-weight: 800;
-      letter-spacing: 12px;
-      text-align: center;
-      padding: 0.85rem 1rem;
-      color: #FFF;
-      background: #0C0F14;
-      border: 2px solid var(--surface-border);
-      border-radius: 14px;
-      width: 100%;
-      outline: none;
-      transition: all 0.2s;
-    }
-
-    .otp-digit-input:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 4px rgba(255, 82, 0, 0.22);
-    }
-
-    .otp-timer-box {
-      margin-top: 1.25rem;
-      padding-top: 1rem;
-      border-top: 1px solid var(--surface-border);
       display: flex;
-      justify-content: center;
       align-items: center;
-      font-size: 0.85rem;
+      gap: 0.6rem;
+      text-align: left;
+      line-height: 1.4;
     }
 
-    .link-btn {
-      background: none;
-      border: none;
-      color: var(--primary);
-      font-size: 0.85rem;
-      font-weight: 700;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      padding: 0.3rem 0.6rem;
-      border-radius: 4px;
-      transition: all 0.2s;
+    .otp-digit-input {
+      font-family: 'JetBrains Mono', monospace !important;
+      font-size: 1.85rem !important;
+      font-weight: 800 !important;
+      letter-spacing: 0.55rem !important;
+      text-align: center !important;
+      padding: 0.8rem 1rem !important;
+      color: var(--primary) !important;
+      border: 2px solid var(--surface-border) !important;
+    }
+    .otp-digit-input:focus {
+      border-color: var(--primary) !important;
     }
 
-    .link-btn:hover {
-      text-decoration: underline;
-      background: rgba(255, 82, 0, 0.08);
+    
+    .scanner-viewfinder {
+      position: relative;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #000;
+      min-height: 250px;
+      margin-bottom: 1.25rem;
+      border: 1.5px solid var(--surface-border);
     }
 
-    .link-btn-subtle {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      font-size: 0.84rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: color 0.2s;
+    .scanner-reticle {
+      position: absolute;
+      top: 20%; left: 15%; right: 15%; bottom: 20%;
+      border: 2px dashed rgba(245, 158, 11, 0.75);
+      border-radius: 12px;
+      pointer-events: none;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4);
     }
 
-    .link-btn-subtle:hover {
-      color: var(--text-main);
+    .scanner-laser {
+      position: absolute;
+      left: 15%; right: 15%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #F59E0B, transparent);
+      box-shadow: 0 0 12px #F59E0B;
+      animation: laserSweep 2s ease-in-out infinite;
     }
 
-    .spinner {
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-top-color: #FFF;
-      border-radius: 50%;
-      animation: spin 0.6s linear infinite;
-      display: inline-block;
+    @keyframes laserSweep {
+      0%, 100% { top: 22%; opacity: 0.8; }
+      50% { top: 78%; opacity: 1; }
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    /* Toast */
+    
     .toast {
       position: fixed;
       bottom: 2rem;
       right: 2rem;
-      background: #1C222E;
-      border: 1px solid var(--primary);
-      padding: 1rem 1.5rem;
+      background: var(--surface-elevated);
+      border: 1px solid var(--surface-border);
+      padding: 0.9rem 1.4rem;
       border-radius: 12px;
-      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.55);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
       display: none;
-      animation: slideIn 0.3s ease;
-      z-index: 3000;
+      animation: slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 3500;
       max-width: 440px;
-      font-size: 0.92rem;
+      font-size: 0.88rem;
       line-height: 1.4;
+      align-items: center;
+      gap: 0.75rem;
     }
 
     .toast.success {
-      border-color: #10B981;
+      border-color: rgba(16, 185, 129, 0.4);
       color: #34D399;
     }
 
     .toast.error {
-      border-color: #EF4444;
+      border-color: rgba(239, 68, 68, 0.4);
       color: #F87171;
+    }
+
+    .toast.info {
+      border-color: rgba(245, 158, 11, 0.4);
+      color: var(--primary);
     }
 
     @keyframes slideIn {
       from { transform: translateY(20px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
     }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.25);
+      border-top-color: #FFF;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    
+    @media (max-width: 900px) {
+      header { padding: 0.75rem 1rem; }
+      .container { padding: 0 1rem; }
+      .page-header { flex-direction: column; align-items: flex-start; }
+      .search-input { width: 100%; }
+      .search-input:focus { width: 100%; }
+    }
   </style>
 </head>
 <body>
 
-  <!-- ADMIN AUTH GATE OVERLAY (SIGN IN & REGISTER TABS + 2-FACTOR OTP) -->
+  
   <div id="authGateOverlay" style="display: none;">
     <div class="auth-card">
-      
-      <!-- Top Brand Header -->
-      <div class="auth-brand-header">
-        <div class="auth-brand-logo">🍔</div>
-        <h1 class="auth-portal-title">QuickBite Campus Admin</h1>
-        <p class="auth-portal-desc">Official Canteen Allocation & Administrative Security Gateway</p>
+      <div class="auth-brand-logo">
+        <svg class="icon-lg" viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>
       </div>
+      <h1 class="auth-portal-title">QuickBite Campus Admin</h1>
+      <p class="auth-portal-desc">Campus Governance, Canteen Allocations & Operations Gateway</p>
 
-      <!-- Segmented Tab Switcher (Sign In beside Register) -->
+      
       <div class="auth-tabs" id="authTabsContainer">
         <button type="button" class="auth-tab active" id="tabBtnSignIn" onclick="switchAuthTab('login')">
-          <span>🔑</span> Sign In
+          <svg class="icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          Sign In
         </button>
         <button type="button" class="auth-tab" id="tabBtnRegister" onclick="switchAuthTab('register')">
-          <span>📝</span> Register Admin
+          <svg class="icon-sm" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+          Register Admin
         </button>
       </div>
 
-      <!-- ── TAB 1: SIGN IN VIEW ── -->
+      
       <div id="authTabSignInView">
         <form id="adminLoginForm" onsubmit="submitAdminLogin(event)">
-          <div class="form-group" style="text-align: left;">
+          <div class="form-group">
             <label for="adminEmailInput">Administrator Email</label>
             <div class="input-with-icon">
-              <span class="input-icon">✉️</span>
+              <span class="input-icon">
+                <svg class="icon-sm" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+              </span>
               <input type="email" id="adminEmailInput" required placeholder="admin@campus.edu" autocomplete="email">
             </div>
           </div>
 
-          <div class="form-group" style="text-align: left;">
+          <div class="form-group">
             <label for="adminPasswordInput">Password</label>
             <div class="input-with-icon password-wrapper">
-              <span class="input-icon">🔑</span>
-              <input type="password" id="adminPasswordInput" required placeholder="Enter your administrator password" autocomplete="current-password">
-              <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('adminPasswordInput')">👁️</button>
+              <span class="input-icon">
+                <svg class="icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              </span>
+              <input type="password" id="adminPasswordInput" required placeholder="Enter administrator password" autocomplete="current-password">
+              <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('adminPasswordInput')">
+                <svg class="icon-sm" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </button>
             </div>
           </div>
 
           <div id="loginErrorMsg" class="auth-error-box" style="display: none;"></div>
 
-          <button type="submit" id="btnLoginSubmit" class="btn btn-app-primary" style="width: 100%; justify-content: center; padding: 0.88rem; font-size: 0.95rem;">
-            <span>Sign In as Administrator</span> ➔
+          <button type="submit" id="btnLoginSubmit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem;">
+            <span>Sign In to Dashboard</span>
+            <svg class="icon-sm" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
           </button>
-
-          <div class="auth-switch-note">
-            Not registered yet? <a href="javascript:void(0)" onclick="switchAuthTab('register')">Register as an Administrator</a>
-          </div>
         </form>
       </div>
 
-      <!-- ── TAB 2: REGISTER VIEW ── -->
+      
       <div id="authTabRegisterView" style="display: none;">
         <form id="adminRegisterForm" onsubmit="submitAdminRegister(event)">
-          <div class="form-group" style="text-align: left;">
+          <div class="form-group">
             <label for="regAdminName">Administrator Full Name</label>
             <div class="input-with-icon">
-              <span class="input-icon">👤</span>
-              <input type="text" id="regAdminName" required placeholder="e.g. Ramesh Admin" autocomplete="name">
+              <span class="input-icon">
+                <svg class="icon-sm" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              </span>
+              <input type="text" id="regAdminName" required placeholder="e.g. Campus Authority" autocomplete="name">
             </div>
           </div>
 
-          <div class="form-group" style="text-align: left;">
+          <div class="form-group">
             <label for="regAdminEmail">Official Admin Email</label>
             <div class="input-with-icon">
-              <span class="input-icon">✉️</span>
+              <span class="input-icon">
+                <svg class="icon-sm" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+              </span>
               <input type="email" id="regAdminEmail" required placeholder="admin@campus.edu" autocomplete="email">
             </div>
           </div>
 
-          <div class="form-group" style="text-align: left;">
-            <label for="regAdminPhone">Contact Phone (Optional)</label>
+          <div class="form-group">
+            <label for="regAdminPhone">Contact Phone</label>
             <div class="input-with-icon">
-              <span class="input-icon">📞</span>
+              <span class="input-icon">
+                <svg class="icon-sm" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+              </span>
               <input type="tel" id="regAdminPhone" placeholder="+91 9876543210" autocomplete="tel">
             </div>
           </div>
 
-          <div class="form-group" style="text-align: left;">
+          <div class="form-group">
             <label for="regAdminPassword">Create Password (Min 6 chars)</label>
             <div class="input-with-icon password-wrapper">
-              <span class="input-icon">🔑</span>
-              <input type="password" id="regAdminPassword" required minlength="6" placeholder="Create a secure password" autocomplete="new-password">
-              <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('regAdminPassword')">👁️</button>
+              <span class="input-icon">
+                <svg class="icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              </span>
+              <input type="password" id="regAdminPassword" required minlength="6" placeholder="Choose secure password" autocomplete="new-password">
+              <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('regAdminPassword')">
+                <svg class="icon-sm" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </button>
             </div>
           </div>
 
-          <div class="form-group" style="text-align: left;">
+          <div class="form-group">
             <label for="regAdminConfirmPassword">Confirm Password</label>
             <div class="input-with-icon password-wrapper">
-              <span class="input-icon">🔒</span>
-              <input type="password" id="regAdminConfirmPassword" required minlength="6" placeholder="Repeat your password" autocomplete="new-password">
-              <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('regAdminConfirmPassword')">👁️</button>
+              <span class="input-icon">
+                <svg class="icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              </span>
+              <input type="password" id="regAdminConfirmPassword" required minlength="6" placeholder="Confirm password" autocomplete="new-password">
+              <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('regAdminConfirmPassword')">
+                <svg class="icon-sm" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </button>
             </div>
-          </div>
-
-          <div class="auth-security-notice">
-            🛡️ <strong>Admin Authorization Notice:</strong> Only official campus administrators can register here. Canteen owners and students cannot access or manage the Admin Portal.
           </div>
 
           <div id="registerErrorMsg" class="auth-error-box" style="display: none;"></div>
 
-          <button type="submit" id="btnRegisterSubmit" class="btn btn-app-primary" style="width: 100%; justify-content: center; padding: 0.88rem; font-size: 0.95rem;">
-            <span>Create Admin Account</span> ➔
+          <button type="submit" id="btnRegisterSubmit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem;">
+            <span>Create Admin Account</span>
+            <svg class="icon-sm" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
           </button>
-
-          <div class="auth-switch-note">
-            Already registered? <a href="javascript:void(0)" onclick="switchAuthTab('login')">Sign In to Dashboard</a>
-          </div>
         </form>
       </div>
 
-      <!-- ── STEP 2: 6-DIGIT OTP VERIFICATION VIEW (COMMON) ── -->
+      
       <div id="authStepOtpView" style="display: none;">
         <div style="text-align: center; margin-bottom: 1.25rem;">
-          <div style="display: inline-flex; align-items: center; gap: 0.4rem; background: rgba(255, 82, 0, 0.15); color: var(--primary); padding: 0.35rem 0.85rem; border-radius: var(--pill-radius); font-size: 0.78rem; font-weight: 700; text-transform: uppercase;">
-            <span>📬</span> Security Verification
+          <div class="badge badge-amber" style="margin-bottom: 0.5rem;">
+            <svg class="icon-sm" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            2-Factor Security Challenge
           </div>
-          <h2 class="auth-title" id="otpTitleText" style="margin-top: 0.75rem;">Verify Your Email</h2>
-          <p class="auth-desc" id="otpSubtitleText">
-            We sent a 6-digit security code to<br>
-            <strong id="otpTargetEmailDisplay" style="color: var(--text-main); font-weight: 700;">admin@campus.edu</strong>
+          <h2 class="auth-portal-title" id="otpTitleText" style="font-size: 1.25rem;">Verify Your Email</h2>
+          <p class="auth-portal-desc" style="margin-bottom: 0;">
+            A 6-digit code has been dispatched to<br>
+            <strong id="otpTargetEmailDisplay" style="color: var(--text-main);">admin@campus.edu</strong>
           </p>
         </div>
 
         <form id="adminOtpForm" onsubmit="submitAdminOtp(event)">
           <div class="form-group">
-            <label for="adminOtpInput" style="text-align: center;">Enter 6-Digit Passcode</label>
+            <label for="adminOtpInput" style="text-align: center;">Enter 6-Digit Verification Code</label>
             <input 
               type="text" 
               id="adminOtpInput" 
@@ -1005,22 +1259,23 @@
 
           <div id="otpErrorMsg" class="auth-error-box" style="display: none;"></div>
 
-          <button type="submit" id="btnOtpSubmit" class="btn btn-app-primary" style="width: 100%; justify-content: center; padding: 0.88rem; font-size: 0.95rem; margin-top: 0.5rem;">
-            🔓 Verify & Enter Dashboard
+          <button type="submit" id="btnOtpSubmit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem; margin-top: 0.5rem;">
+            <svg class="icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Verify & Enter Console
           </button>
 
-          <div class="otp-timer-box">
-            <span id="otpCountdownText" style="color: var(--text-muted); font-size: 0.85rem;">
-              Resend code in <strong id="otpTimerSeconds" style="color: var(--primary);">60s</strong>
-            </span>
-            <button type="button" id="btnResendOtp" class="link-btn" style="display: none;" onclick="resendAdminOtp()">
-              🔄 Resend Verification Code
+          <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+            <span id="otpCountdownText">Resend code in <strong id="otpTimerSeconds" style="color: var(--primary);">60s</strong></span>
+            <button type="button" id="btnResendOtp" class="btn btn-secondary btn-sm" style="display: none; margin: 0 auto;" onclick="resendAdminOtp()">
+              <svg class="icon-sm" viewBox="0 0 24 24"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+              Resend Code
             </button>
           </div>
 
-          <div style="margin-top: 1.35rem; text-align: center;">
-            <button type="button" class="link-btn-subtle" onclick="cancelOtpAndReturn()">
-              ← Back to Sign In / Register
+          <div style="margin-top: 1.25rem;">
+            <button type="button" class="btn-icon" style="margin: 0 auto;" onclick="cancelOtpAndReturn()">
+              <svg class="icon-sm" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+              Back to Credentials
             </button>
           </div>
         </form>
@@ -1029,108 +1284,599 @@
     </div>
   </div>
 
+  
   <header>
     <div class="brand">
-      <div class="brand-logo-badge">🍔</div>
+      <div class="brand-logo-badge">
+        <svg class="icon-lg" viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>
+      </div>
       <div class="brand-text-col">
         <div class="brand-title">Quick<span class="accent">Bite</span> <span style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Admin</span></div>
-        <div class="brand-subtitle">Campus Management</div>
+        <div class="brand-subtitle">Campus Operations Console</div>
       </div>
     </div>
+
     <div class="header-badges">
-      <div class="badge-db" id="dbStatusBadge">
-        <span>●</span> MongoDB Atlas (Quickbite)
+      <div class="badge-status" id="dbStatusBadge">
+        <div class="status-dot"></div>
+        <span>MongoDB Atlas (Connected)</span>
       </div>
+
+      <div class="live-clock-badge" id="liveClockBadge">
+        <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        <span id="liveClockText">--:--:-- IST</span>
+      </div>
+
       <div class="user-chip" id="adminUserPill" style="display: none;">
-        <span class="user-avatar">👤</span>
+        <svg class="icon-sm" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
         <span id="adminSessionEmail">Administrator</span>
       </div>
+
       <button class="btn btn-secondary btn-sm" id="btnSignOut" onclick="logoutAdmin()" style="display: none;">
-        🚪 Sign Out
+        <svg class="icon-sm" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+        Sign Out
       </button>
     </div>
   </header>
 
+  
+  <nav class="nav-tabs-bar">
+    <button class="nav-tab-item active" onclick="switchMainTab('overview')">
+      <svg class="icon-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+      Overview
+    </button>
+    <button class="nav-tab-item" onclick="switchMainTab('owners')">
+      <svg class="icon-sm" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+      Canteen Owners
+      <span class="badge-count" id="tabOwnersCount">0</span>
+    </button>
+    <button class="nav-tab-item" onclick="switchMainTab('canteens')">
+      <svg class="icon-sm" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+      Campus Canteens
+      <span class="badge-count" id="tabCanteensCount">0</span>
+    </button>
+    <button class="nav-tab-item" onclick="switchMainTab('orders')">
+      <svg class="icon-sm" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+      Live Campus Orders
+      <span class="badge-count" id="tabOrdersCount">0</span>
+    </button>
+    <button class="nav-tab-item" onclick="switchMainTab('menu')">
+      <svg class="icon-sm" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+      Menu & Stock
+      <span class="badge-count" id="tabItemsCount">0</span>
+    </button>
+    <button class="nav-tab-item" onclick="switchMainTab('suggestions')">
+      <svg class="icon-sm" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+      Student Feedback
+      <span class="badge-count" id="tabSuggestionsCount">0</span>
+    </button>
+    <button class="nav-tab-item" onclick="openBarcodeScannerModal()">
+      <svg class="icon-sm" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"></rect><line x1="7" y1="8" x2="7" y2="16"></line><line x1="10" y1="8" x2="10" y2="16"></line><line x1="13" y1="8" x2="13" y2="16"></line><line x1="17" y1="8" x2="17" y2="16"></line></svg>
+      Scan & Verify
+    </button>
+    <button class="nav-tab-item" onclick="switchMainTab('system')">
+      <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      System Health
+    </button>
+  </nav>
+
+  
   <main class="container">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">Canteen Owner Access & Allocations</h1>
-        <p class="page-subtitle">Provision owner credentials, assign campus canteens, and live-toggle access in MongoDB Atlas.</p>
-      </div>
-      <div class="btn-group">
-        <button class="btn btn-secondary" onclick="openBarcodeScannerModal()" style="border-color: #ff5200; color: #ff5200; font-weight: 700;">
-          📷 SCAN & VERIFY ORDER
-        </button>
-        <button class="btn btn-secondary" onclick="fetchData()">⟳ Refresh Data</button>
-        <button class="btn btn-app-primary" onclick="openCreateOwnerModal()">
-          <span>➕</span> Create New Canteen Owner
-        </button>
-      </div>
-    </div>
 
-    <!-- Quick Stats -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-num" id="statTotalOwners">0</div>
-        <div class="stat-label">Total Canteen Owners</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-num text-active" id="statActiveOwners">0</div>
-        <div class="stat-label">Active & Assigned (Can Log In)</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-num text-inactive" id="statInactiveOwners">0</div>
-        <div class="stat-label">Deactivated / Pending (Access Denied)</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-num" id="statTotalCanteens" style="color: var(--amber);">0</div>
-        <div class="stat-label">Available Campus Canteens</div>
-      </div>
-    </div>
-
-    <!-- Owners Table Card -->
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">
-          <span>👥</span> Registered Canteen Owners
+    
+    <div id="tabOverview" class="tab-content-pane active">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">
+            <svg class="icon-lg" style="color: var(--primary);" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            Campus Operations Overview
+          </h1>
+          <p class="page-subtitle">Real-time status of campus canteens, active vendors, orders, and operational health.</p>
         </div>
-        <input type="text" id="ownerSearchInput" class="search-input" placeholder="🔍 Search owner by name or email..." oninput="filterOwnersTable()">
+        <div class="btn-group">
+          <button class="btn btn-outline-amber" onclick="openBarcodeScannerModal()">
+            <svg class="icon-sm" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"></rect><line x1="7" y1="8" x2="7" y2="16"></line><line x1="10" y1="8" x2="10" y2="16"></line><line x1="13" y1="8" x2="13" y2="16"></line><line x1="17" y1="8" x2="17" y2="16"></line></svg>
+            Verify Pickup Barcode
+          </button>
+          <button class="btn btn-secondary" onclick="fetchData()">
+            <svg class="icon-sm" viewBox="0 0 24 24"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+            Sync Data
+          </button>
+          <button class="btn btn-primary" onclick="openCreateOwnerModal()">
+            <svg class="icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Provision Vendor
+          </button>
+        </div>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Owner Details</th>
-            <th>Contact Email & Phone</th>
-            <th>Assigned Canteen</th>
-            <th>Access Status (Live Toggle)</th>
-            <th style="text-align: right;">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="ownersTableBody">
-          <tr>
-            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 3rem;">
-              Connecting to MongoDB Atlas...
-            </td>
-          </tr>
-        </tbody>
-      </table>
+
+      
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-icon-wrapper">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            </div>
+            <span class="badge badge-amber">Vendors</span>
+          </div>
+          <div class="stat-num" id="statTotalOwners">0</div>
+          <div class="stat-label">Registered Canteen Owners</div>
+          <div class="stat-trend positive" id="statActiveOwnersTrend">
+            <svg class="icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span id="statActiveOwnersText">0 active & assigned</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-icon-wrapper">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            </div>
+            <span class="badge badge-success">Open</span>
+          </div>
+          <div class="stat-num" id="statTotalCanteens">0</div>
+          <div class="stat-label">Campus Canteens</div>
+          <div class="stat-trend neutral">
+            <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <span>Block 33 & Block 34</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-icon-wrapper">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line></svg>
+            </div>
+            <span class="badge badge-blue">Live</span>
+          </div>
+          <div class="stat-num" id="statTotalOrders">0</div>
+          <div class="stat-label">Total Campus Orders Tracked</div>
+          <div class="stat-trend positive">
+            <svg class="icon-sm" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+            <span id="statActiveOrdersBadge">0 in preparation</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-icon-wrapper">
+              <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            </div>
+            <span class="badge badge-success">Revenue</span>
+          </div>
+          <div class="stat-num" id="statTotalRevenue" style="color: var(--primary);">₹0</div>
+          <div class="stat-label">Estimated Campus Volume</div>
+          <div class="stat-trend positive">
+            <svg class="icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Processed digitally</span>
+          </div>
+        </div>
+      </div>
+
+      
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon" style="color: var(--primary);" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            Operational Campus Canteens
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="switchMainTab('canteens')">
+            Manage All Canteens
+            <svg class="icon-sm" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </button>
+        </div>
+        <div style="padding: 1.5rem;" id="overviewCanteensContainer">
+          <div style="text-align: center; color: var(--text-muted); padding: 2rem;">Connecting to MongoDB Atlas...</div>
+        </div>
+      </div>
+
+      
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon" style="color: var(--primary);" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line></svg>
+            Live Kitchen Queue & Recent Orders
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="switchMainTab('orders')">
+            View All Orders
+            <svg class="icon-sm" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Student Details</th>
+              <th>Canteen</th>
+              <th>Items & Amount</th>
+              <th>Status</th>
+              <th style="text-align: right;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="overviewOrdersTableBody">
+            <tr>
+              <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+                Fetching live orders...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
+
+    
+    <div id="tabOwners" class="tab-content-pane">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">
+            <svg class="icon-lg" style="color: var(--primary);" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            Canteen Owner Access & Governance
+          </h1>
+          <p class="page-subtitle">Provision vendor credentials, bind campus canteens, and live-toggle login authorization in MongoDB Atlas.</p>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-secondary" onclick="exportOwnersCSV()">
+            <svg class="icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Export CSV
+          </button>
+          <button class="btn btn-primary" onclick="openCreateOwnerModal()">
+            <svg class="icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Create New Canteen Owner
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            Registered Vendors Directory
+          </div>
+          <div class="card-actions">
+            <div class="search-input-wrap">
+              <span class="search-icon">
+                <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              </span>
+              <input type="text" id="ownerSearchInput" class="search-input" placeholder="Search by name, email, or canteen..." oninput="filterOwnersTable()">
+            </div>
+            <select id="ownerStatusFilter" class="filter-select" onchange="filterOwnersTable()">
+              <option value="all">All Vendors</option>
+              <option value="active">Active (Access Granted)</option>
+              <option value="inactive">Disabled (Access Denied)</option>
+            </select>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Owner Details</th>
+              <th>Contact Email & Phone</th>
+              <th>Assigned Canteen</th>
+              <th>Access Status (Live Toggle)</th>
+              <th style="text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ownersTableBody">
+            <tr>
+              <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 3rem;">
+                Connecting to MongoDB Atlas...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    
+    <div id="tabCanteens" class="tab-content-pane">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">
+            <svg class="icon-lg" style="color: var(--primary);" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            Campus Canteen Operations
+          </h1>
+          <p class="page-subtitle">Configure canteen opening hours, live toggle open/closed status, and monitor queue loads.</p>
+        </div>
+      </div>
+
+      <div class="canteen-grid" id="canteensCardsGrid">
+        
+      </div>
+    </div>
+
+    
+    <div id="tabOrders" class="tab-content-pane">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">
+            <svg class="icon-lg" style="color: var(--primary);" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line></svg>
+            Live Campus Orders Feed
+          </h1>
+          <p class="page-subtitle">Live stream of student orders across all campus canteens with real-time status updates.</p>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-secondary" onclick="exportOrdersCSV()">
+            <svg class="icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Export Orders CSV
+          </button>
+          <button class="btn btn-secondary" onclick="fetchOrders()">
+            <svg class="icon-sm" viewBox="0 0 24 24"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+            Refresh Feed
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            Order Feed Tracker
+          </div>
+          <div class="card-actions">
+            <div class="search-input-wrap">
+              <span class="search-icon">
+                <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              </span>
+              <input type="text" id="orderSearchInput" class="search-input" placeholder="Search by student, ID, or item..." oninput="filterOrdersTable()">
+            </div>
+            <select id="orderCanteenFilter" class="filter-select" onchange="filterOrdersTable()">
+              <option value="all">All Canteens</option>
+            </select>
+            <select id="orderStatusFilter" class="filter-select" onchange="filterOrdersTable()">
+              <option value="all">All Statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="PREPARING">Preparing</option>
+              <option value="READY">Ready for Pickup</option>
+              <option value="PICKED_UP">Collected / Picked Up</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Student & Roll</th>
+              <th>Canteen</th>
+              <th>Items Ordered</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Placed Time</th>
+              <th style="text-align: right;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="ordersTableBody">
+            <tr>
+              <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 3rem;">
+                Fetching live orders...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    
+    <div id="tabMenu" class="tab-content-pane">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">
+            <svg class="icon-lg" style="color: var(--primary);" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            Campus Menu & Stock Control
+          </h1>
+          <p class="page-subtitle">Real-time availability of food items across all canteens. Flip stock status instantly when sold out.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+            Menu Items Directory
+          </div>
+          <div class="card-actions">
+            <div class="search-input-wrap">
+              <span class="search-icon">
+                <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              </span>
+              <input type="text" id="menuSearchInput" class="search-input" placeholder="Search dish name or category..." oninput="filterMenuTable()">
+            </div>
+            <select id="menuCanteenFilter" class="filter-select" onchange="filterMenuTable()">
+              <option value="all">All Canteens</option>
+            </select>
+            <select id="menuStockFilter" class="filter-select" onchange="filterMenuTable()">
+              <option value="all">All Stock States</option>
+              <option value="in_stock">In Stock Only</option>
+              <option value="out_of_stock">Out of Stock Only</option>
+            </select>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Dish Name</th>
+              <th>Canteen</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Prep Time</th>
+              <th>Availability (Live Switch)</th>
+            </tr>
+          </thead>
+          <tbody id="menuTableBody">
+            <tr>
+              <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 3rem;">
+                Fetching menu items...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    
+    <div id="tabSuggestions" class="tab-content-pane">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">
+            <svg class="icon-lg" style="color: var(--primary);" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            Student Suggestions & Product Requests
+          </h1>
+          <p class="page-subtitle">Dishes and enhancements requested by students for campus canteens.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7M9 21a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1H9v1z"></path></svg>
+            Submitted Student Ideas
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Requested Dish</th>
+              <th>Canteen</th>
+              <th>Category</th>
+              <th>Student Details</th>
+              <th>Notes & Reason</th>
+              <th>Status</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody id="suggestionsTableBody">
+            <tr>
+              <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 3rem;">
+                Fetching student suggestions...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    
+    <div id="tabSystem" class="tab-content-pane">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">
+            <svg class="icon-lg" style="color: var(--primary);" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+            Campus Infrastructure & System Health
+          </h1>
+          <p class="page-subtitle">Realtime server diagnostics, database connection status, and security audit logs.</p>
+        </div>
+        <button class="btn btn-secondary" onclick="checkSystemLatency()">
+          <svg class="icon-sm" viewBox="0 0 24 24"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          Run Diagnostic Ping
+        </button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-icon-wrapper">
+              <svg class="icon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+            </div>
+            <span class="badge badge-success">Atlas</span>
+          </div>
+          <div class="stat-num" style="font-size: 1.5rem; color: #34D399;">Connected</div>
+          <div class="stat-label">Database: MongoDB Atlas (Quickbite)</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-icon-wrapper">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+            </div>
+            <span class="badge badge-blue">REST API</span>
+          </div>
+          <div class="stat-num" id="apiLatencyText" style="font-size: 1.5rem;">-- ms</div>
+          <div class="stat-label">API Gateway Response Latency</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-icon-wrapper">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            </div>
+            <span class="badge badge-amber">Secure</span>
+          </div>
+          <div class="stat-num" style="font-size: 1.5rem; color: var(--primary);">2-Factor OTP</div>
+          <div class="stat-label">Campus Administrator Authentication</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            System Diagnostics & API Endpoints
+          </div>
+        </div>
+        <div style="padding: 1.5rem;">
+          <table style="margin-top: 0;">
+            <thead>
+              <tr>
+                <th>Service Endpoint</th>
+                <th>Protocol</th>
+                <th>Target Scope</th>
+                <th>Access Control</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>/api/owners</code></td>
+                <td><span class="badge badge-blue">REST GET/POST</span></td>
+                <td>Campus Canteen Owners Directory</td>
+                <td><span class="badge badge-amber">Admin JWT</span></td>
+              </tr>
+              <tr>
+                <td><code>/api/canteens/:id/status</code></td>
+                <td><span class="badge badge-blue">REST PATCH</span></td>
+                <td>Live Open/Closed Toggle</td>
+                <td><span class="badge badge-success">Open Gateway</span></td>
+              </tr>
+              <tr>
+                <td><code>/api/items/:id/availability</code></td>
+                <td><span class="badge badge-blue">REST PATCH</span></td>
+                <td>Stock Replenishment & Depletion</td>
+                <td><span class="badge badge-success">Live Sync</span></td>
+              </tr>
+              <tr>
+                <td><code>/api/owners/orders/verify-barcode</code></td>
+                <td><span class="badge badge-blue">REST POST</span></td>
+                <td>Code 128 / QR Token Verification</td>
+                <td><span class="badge badge-amber">Admin & Owner</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </main>
 
-  <!-- MODAL: CREATE NEW OWNER -->
+  
+
+  
   <div class="modal-overlay" id="createOwnerModal">
     <div class="modal">
-      <h2 class="modal-title"><span>➕</span> Create Canteen Owner</h2>
-      <p class="modal-subtitle">Provision login credentials and assign a campus canteen. The owner can then log into the Quickbite Mobile App.</p>
+      <h2 class="modal-title">
+        <svg class="icon" style="color: var(--primary);" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+        Provision Canteen Owner
+      </h2>
+      <p class="modal-subtitle">Provision vendor credentials and allocate a campus canteen. The owner can log in to manage their canteen orders.</p>
 
       <form id="createOwnerForm" onsubmit="submitCreateOwner(event)">
         <div class="form-group">
-          <label for="createName">Owner Full Name</label>
+          <label for="createName">Vendor Full Name</label>
           <input type="text" id="createName" required placeholder="e.g. Ramesh Kumar">
         </div>
 
         <div class="form-group">
-          <label for="createEmail">Owner Email (For App Login & OTP)</label>
+          <label for="createEmail">Vendor Email (Login & OTP)</label>
           <input type="email" id="createEmail" required placeholder="e.g. owner@campus.edu">
         </div>
 
@@ -1138,30 +1884,32 @@
           <label for="createPassword">Initial Password (Min 6 chars)</label>
           <div class="password-wrapper">
             <input type="password" id="createPassword" required minlength="6" placeholder="Set initial password">
-            <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('createPassword')">👁️</button>
+            <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('createPassword')">
+              <svg class="icon-sm" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
           </div>
         </div>
 
         <div class="form-group">
-          <label for="createPhone">Contact Phone (Optional)</label>
+          <label for="createPhone">Contact Phone</label>
           <input type="tel" id="createPhone" placeholder="+91 9876543210">
         </div>
 
         <div class="form-group">
           <label for="createCanteenId">Assign Campus Canteen</label>
           <select id="createCanteenId" required onchange="onCreateCanteenSelectChange()">
-            <option value="">-- Select Canteen --</option>
+            <option value="">-- Select Campus Canteen --</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label>Initial Access State</label>
+          <label>Initial Authorization State</label>
           <div class="toggle-wrapper" style="margin-top: 0.4rem;">
             <label class="switch">
               <input type="checkbox" id="createCanteenAssigned" checked>
               <span class="slider"></span>
             </label>
-            <span class="toggle-label text-active" id="createToggleLabel">Active (Assigned)</span>
+            <span class="toggle-label text-active" id="createToggleLabel">Active (Access Granted)</span>
           </div>
         </div>
 
@@ -1169,17 +1917,20 @@
 
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('createOwnerModal')">Cancel</button>
-          <button type="submit" class="btn btn-app-primary">Create & Save to MongoDB</button>
+          <button type="submit" class="btn btn-primary">Save to MongoDB Atlas</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- MODAL: EDIT ALLOCATION -->
+  
   <div class="modal-overlay" id="editModal">
     <div class="modal">
-      <h2 class="modal-title"><span>✏️</span> Edit Canteen Allocation</h2>
-      <p class="modal-subtitle" id="editModalSubtitle">owner@campus.edu</p>
+      <h2 class="modal-title">
+        <svg class="icon" style="color: var(--primary);" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        Edit Canteen Allocation
+      </h2>
+      <p class="modal-subtitle" id="editModalSubtitle">Modify canteen assignment</p>
 
       <form id="editForm" onsubmit="submitEditAllocation(event)">
         <input type="hidden" id="editOwnerUid">
@@ -1198,7 +1949,7 @@
               <input type="checkbox" id="editCanteenAssigned" onchange="updateEditToggleLabel()">
               <span class="slider"></span>
             </label>
-            <span class="toggle-label" id="editToggleLabel">Active</span>
+            <span class="toggle-label text-active" id="editToggleLabel">Active</span>
           </div>
         </div>
 
@@ -1206,17 +1957,20 @@
 
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('editModal')">Cancel</button>
-          <button type="submit" class="btn btn-app-primary">Save Allocation</button>
+          <button type="submit" class="btn btn-primary">Save Allocation</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- MODAL: RESET PASSWORD -->
+  
   <div class="modal-overlay" id="resetPasswordModal">
     <div class="modal">
-      <h2 class="modal-title"><span>🔑</span> Reset Owner Password</h2>
-      <p class="modal-subtitle" id="resetPasswordSubtitle">Reset credentials for owner</p>
+      <h2 class="modal-title">
+        <svg class="icon" style="color: var(--primary);" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        Reset Owner Password
+      </h2>
+      <p class="modal-subtitle" id="resetPasswordSubtitle">Provision new credentials for vendor</p>
 
       <form id="resetPasswordForm" onsubmit="submitResetPassword(event)">
         <input type="hidden" id="resetPasswordUid">
@@ -1225,129 +1979,190 @@
           <label for="newPasswordInput">New Password (Min 6 chars)</label>
           <div class="password-wrapper">
             <input type="password" id="newPasswordInput" required minlength="6" placeholder="Enter new password">
-            <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('newPasswordInput')">👁️</button>
+            <button type="button" class="password-toggle" onclick="togglePasscodeVisibility('newPasswordInput')">
+              <svg class="icon-sm" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
           </div>
         </div>
 
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('resetPasswordModal')">Cancel</button>
-          <button type="submit" class="btn btn-app-primary">Update Password in MongoDB</button>
+          <button type="submit" class="btn btn-primary">Update Password</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Modal: SCAN & VERIFY ORDER BARCODE -->
+  
   <div class="modal-overlay" id="barcodeScannerModal">
-    <div class="modal" style="max-width: 520px;">
-      <h2 class="modal-title"><span>📷</span> SCAN & VERIFY ORDER</h2>
-      <p class="modal-subtitle">Scan student's Code 128 barcode using device camera or enter verification code manually.</p>
+    <div class="modal" style="max-width: 540px;">
+      <h2 class="modal-title">
+        <svg class="icon" style="color: var(--primary);" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"></rect><line x1="7" y1="8" x2="7" y2="16"></line><line x1="10" y1="8" x2="10" y2="16"></line><line x1="13" y1="8" x2="13" y2="16"></line><line x1="17" y1="8" x2="17" y2="16"></line></svg>
+        Verify Student Order Pickup
+      </h2>
+      <p class="modal-subtitle">Scan student's barcode or enter token to validate order and mark as collected.</p>
 
-      <div class="modal-body" style="margin-top: 16px;">
-        <!-- View 1: Camera Scanner & Input -->
+      <div class="modal-body">
+        
         <div id="barcodeScannerView">
-          <div id="barcodeReader" style="width: 100%; min-height: 240px; background: #0f172a; border-radius: 12px; overflow: hidden; margin-bottom: 14px;"></div>
+          <div class="scanner-viewfinder">
+            <div id="barcodeReader" style="width: 100%; min-height: 240px;"></div>
+            <div class="scanner-reticle">
+              <div class="scanner-laser"></div>
+            </div>
+          </div>
           
           <div class="form-group">
-            <label class="form-label">Manual Verification Token</label>
+            <label>Manual Verification Token / Order ID</label>
             <div style="display: flex; gap: 8px;">
-              <input type="text" id="manualBarcodeInput" class="form-control" placeholder="e.g. QB-8F3A2B1C9D4E5F6A" style="font-family: monospace; text-transform: uppercase;">
-              <button type="button" class="btn btn-app-primary" onclick="verifyManualBarcode()">Verify</button>
+              <input type="text" id="manualBarcodeInput" placeholder="e.g. QB-8F3A2B1C or Order #1042" style="font-family: 'JetBrains Mono', monospace; text-transform: uppercase;">
+              <button type="button" class="btn btn-primary" onclick="verifyManualBarcode()">Verify</button>
             </div>
-            <p class="form-hint">Enter the alphanumeric token printed below the student's barcode.</p>
           </div>
         </div>
 
-        <!-- View 2: Verification Success View -->
+        
         <div id="barcodeVerifiedView" style="display: none;">
-          <div style="background: #14532d; border: 1.5px solid #22c55e; border-radius: 12px; padding: 14px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
-            <span style="font-size: 28px;">✅</span>
+          <div style="background: rgba(16, 185, 129, 0.12); border: 1.5px solid #10B981; border-radius: 12px; padding: 14px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: #10B981; display: flex; align-items: center; justify-content: center; color: white;">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
             <div>
-              <div style="color: #4ade80; font-weight: 800; font-size: 15px;">ORDER VERIFIED SUCCESSFULLY</div>
-              <div style="color: #86efac; font-size: 12px;">Eligible for collection at Counter 1</div>
+              <div style="color: #34D399; font-weight: 800; font-size: 15px;">ORDER VERIFIED SUCCESSFULLY</div>
+              <div style="color: var(--text-muted); font-size: 12px;">Authorized for customer collection</div>
             </div>
           </div>
 
-          <div style="background: var(--surface-elevated, #1D2330); border-radius: 10px; padding: 14px; margin-bottom: 14px; border: 1px solid var(--surface-border, #283040);">
+          <div style="background: var(--surface-elevated); border-radius: 12px; padding: 16px; margin-bottom: 14px; border: 1px solid var(--surface-border);">
             <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-              <span style="color: #94a3b8; font-size: 12px;">Order ID</span>
-              <strong id="verifiedOrderId" style="color: #f8fafc;">---</strong>
+              <span style="color: var(--text-muted); font-size: 12px;">Order ID</span>
+              <strong id="verifiedOrderId" style="color: #FFF; font-family: 'JetBrains Mono', monospace;">---</strong>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-              <span style="color: #94a3b8; font-size: 12px;">Student Name</span>
-              <strong id="verifiedStudentName" style="color: #f8fafc;">---</strong>
+              <span style="color: var(--text-muted); font-size: 12px;">Student Name</span>
+              <strong id="verifiedStudentName" style="color: #FFF;">---</strong>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-              <span style="color: #94a3b8; font-size: 12px;">Order Placed Time</span>
-              <span id="verifiedOrderTime" style="color: #f8fafc; font-size: 13px;">---</span>
+              <span style="color: var(--text-muted); font-size: 12px;">Order Placed Time</span>
+              <span id="verifiedOrderTime" style="color: #FFF; font-size: 13px;">---</span>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-              <span style="color: #94a3b8; font-size: 12px;">Current Status</span>
+              <span style="color: var(--text-muted); font-size: 12px;">Current Status</span>
               <span class="badge badge-success" id="verifiedOrderStatus">READY</span>
             </div>
-            <hr style="border: none; border-top: 1px dashed #334155; margin: 10px 0;">
-            <div style="font-size: 12px; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Ordered Items:</div>
+            <hr style="border: none; border-top: 1px dashed var(--surface-border); margin: 10px 0;">
+            <div style="font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">Ordered Dishes:</div>
             <div id="verifiedItemsList" style="max-height: 120px; overflow-y: auto; font-size: 13px;"></div>
-            <hr style="border: none; border-top: 1px solid #334155; margin: 10px 0;">
+            <hr style="border: none; border-top: 1px solid var(--surface-border); margin: 10px 0;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span style="font-weight: 700; font-size: 14px;">Total Amount</span>
-              <strong id="verifiedTotalAmount" style="font-size: 18px; color: #ff5200;">₹0.00</strong>
+              <strong id="verifiedTotalAmount" style="font-size: 18px; color: var(--primary);">₹0.00</strong>
             </div>
           </div>
 
-          <button type="button" class="btn btn-app-primary" id="btnConfirmPickup" onclick="confirmOrderPickup()" style="width: 100%; height: 46px; font-size: 15px; font-weight: 800; background: #16a34a; border-color: #16a34a;">
-            ✓ CONFIRM ORDER PICKUP
+          <button type="button" class="btn btn-primary" id="btnConfirmPickup" onclick="confirmOrderPickup()" style="width: 100%; height: 46px; font-size: 15px; font-weight: 800; background: var(--success); border-color: var(--success); justify-content: center;">
+            <svg class="icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            CONFIRM ORDER PICKUP
           </button>
-          <button type="button" class="btn btn-secondary" onclick="resetBarcodeScanner()" style="width: 100%; margin-top: 8px;">
+          <button type="button" class="btn btn-secondary" onclick="resetBarcodeScanner()" style="width: 100%; margin-top: 8px; justify-content: center;">
             Cancel / Scan Another
           </button>
         </div>
 
-        <!-- View 3: Collected Confirmation Screen -->
-        <div id="barcodeCollectedView" style="display: none; text-align: center; padding: 20px 0;">
-          <div style="font-size: 54px; margin-bottom: 12px;">🎉</div>
-          <h3 style="color: #22c55e; font-size: 20px; font-weight: 800; margin-bottom: 6px;">Order Successfully Collected</h3>
-          <p style="color: #94a3b8; font-size: 13px; margin-bottom: 20px;" id="collectedSummaryText">The order has been marked as collected and verification token marked as used.</p>
-          <button type="button" class="btn btn-app-primary" onclick="resetBarcodeScanner()" style="width: 100%;">
+        
+        <div id="barcodeCollectedView" style="display: none; text-align: center; padding: 24px 0;">
+          <div style="width: 58px; height: 58px; border-radius: 50%; background: var(--success-bg); border: 1.5px solid var(--success); margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; color: var(--success);">
+            <svg class="icon-xl" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+          <h3 style="color: #34D399; font-size: 19px; font-weight: 800; margin-bottom: 6px;">Order Handed Over & Collected</h3>
+          <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;" id="collectedSummaryText">The order has been marked as collected and token marked as used.</p>
+          <button type="button" class="btn btn-primary" onclick="resetBarcodeScanner()" style="width: 100%; justify-content: center;">
             Scan Next Order
           </button>
         </div>
 
-        <!-- View 4: Error View -->
-        <div id="barcodeErrorView" style="display: none; text-align: center; padding: 16px 0;">
-          <div style="font-size: 48px; margin-bottom: 10px;">⚠️</div>
-          <h3 style="color: #ef4444; font-size: 18px; font-weight: 800; margin-bottom: 6px;" id="barcodeErrorTitle">Verification Failed</h3>
-          <p style="color: #e2e8f0; font-size: 14px; margin-bottom: 20px; line-height: 1.5;" id="barcodeErrorMessage">Error details</p>
-          <button type="button" class="btn btn-secondary" onclick="resetBarcodeScanner()" style="width: 100%;">
-            ⟳ Restart Scanning
+        
+        <div id="barcodeErrorView" style="display: none; text-align: center; padding: 20px 0;">
+          <div style="width: 54px; height: 54px; border-radius: 50%; background: var(--danger-bg); border: 1.5px solid var(--danger); margin: 0 auto 14px; display: flex; align-items: center; justify-content: center; color: var(--danger);">
+            <svg class="icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </div>
+          <h3 style="color: #F87171; font-size: 18px; font-weight: 800; margin-bottom: 6px;" id="barcodeErrorTitle">Verification Failed</h3>
+          <p style="color: var(--text-main); font-size: 13px; margin-bottom: 20px; line-height: 1.5;" id="barcodeErrorMessage">Error details</p>
+          <button type="button" class="btn btn-secondary" onclick="resetBarcodeScanner()" style="width: 100%; justify-content: center;">
+            Restart Scanner
           </button>
         </div>
       </div>
 
-      <div class="modal-footer" style="margin-top: 16px;">
-        <button type="button" class="btn btn-secondary" onclick="closeBarcodeScannerModal()">Close</button>
+      <div class="modal-footer" style="margin-top: 14px;">
+        <button type="button" class="btn btn-secondary" onclick="closeBarcodeScannerModal()">Close Window</button>
       </div>
     </div>
   </div>
 
+  
   <div class="toast" id="toast"></div>
 
+  
   <script>
     let canteensList = [];
     let ownersList = [];
+    let ordersList = [];
+    let menuItemsList = [];
+    let suggestionsList = [];
     let adminToken = localStorage.getItem('qb_admin_token') || '';
     let pendingAuthEmail = '';
     let currentAuthMode = 'login'; // 'login' | 'register'
     let otpCountdownInterval = null;
+    let liveClockInterval = null;
 
-    // Check if session is already active on page load
+    // Initialize application on DOM ready
     window.addEventListener('DOMContentLoaded', () => {
+      startLiveClock();
       if (!adminToken) {
         showAuthGate('login');
       } else {
         validateSavedSession();
       }
     });
+
+    function startLiveClock() {
+      function update() {
+        const now = new Date();
+        const options = { timeZone: 'Asia/Kolkata', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
+        const timeStr = now.toLocaleTimeString('en-GB', options) + ' IST';
+        const clockEl = document.getElementById('liveClockText');
+        if (clockEl) clockEl.textContent = timeStr;
+      }
+      update();
+      liveClockInterval = setInterval(update, 1000);
+    }
+
+    function switchMainTab(tabId) {
+      document.querySelectorAll('.nav-tab-item').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-content-pane').forEach(el => el.classList.remove('active'));
+
+      const paneMap = {
+        overview: 'tabOverview',
+        owners: 'tabOwners',
+        canteens: 'tabCanteens',
+        orders: 'tabOrders',
+        menu: 'tabMenu',
+        suggestions: 'tabSuggestions',
+        system: 'tabSystem'
+      };
+
+      const targetPane = document.getElementById(paneMap[tabId]);
+      if (targetPane) targetPane.classList.add('active');
+
+      const tabs = Array.from(document.querySelectorAll('.nav-tab-item'));
+      const activeBtn = tabs.find(t => t.getAttribute('onclick')?.includes(tabId));
+      if (activeBtn) activeBtn.classList.add('active');
+
+      if (tabId === 'orders' && ordersList.length === 0) fetchOrders();
+      if (tabId === 'menu' && menuItemsList.length === 0) fetchMenuItems();
+      if (tabId === 'suggestions' && suggestionsList.length === 0) fetchSuggestions();
+    }
 
     function switchAuthTab(tab) {
       currentAuthMode = tab;
@@ -1365,20 +2180,12 @@
         viewRegister.style.display = 'block';
         viewSignIn.style.display = 'none';
         document.getElementById('registerErrorMsg').style.display = 'none';
-        setTimeout(() => {
-          const regName = document.getElementById('regAdminName');
-          if (regName) regName.focus();
-        }, 100);
       } else {
         tabSignIn.classList.add('active');
         tabRegister.classList.remove('active');
         viewSignIn.style.display = 'block';
         viewRegister.style.display = 'none';
         document.getElementById('loginErrorMsg').style.display = 'none';
-        setTimeout(() => {
-          const emailInput = document.getElementById('adminEmailInput');
-          if (emailInput) emailInput.focus();
-        }, 100);
       }
     }
 
@@ -1453,7 +2260,6 @@
       }
     }
 
-    // ── STEP 1A: ADMIN SIGN IN ─────────────────────────────────────────────
     async function submitAdminLogin(e) {
       e.preventDefault();
       const email = document.getElementById('adminEmailInput').value.trim();
@@ -1463,7 +2269,7 @@
 
       errBox.style.display = 'none';
       submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span class="spinner"></span> Verifying administrator...';
+      submitBtn.innerHTML = '<span class="spinner"></span> Verifying credentials...';
 
       try {
         const res = await fetch('/api/owners/admin/login', {
@@ -1471,7 +2277,6 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
         });
-
         const data = await res.json();
 
         if (res.ok && data.success) {
@@ -1482,7 +2287,6 @@
           document.getElementById('otpTargetEmailDisplay').textContent = pendingAuthEmail;
           document.getElementById('authTabsContainer').style.display = 'none';
           document.getElementById('authTabSignInView').style.display = 'none';
-          document.getElementById('authTabRegisterView').style.display = 'none';
           document.getElementById('authStepOtpView').style.display = 'block';
           document.getElementById('adminOtpInput').value = '';
           document.getElementById('otpErrorMsg').style.display = 'none';
@@ -1490,28 +2294,23 @@
           startOtpCountdown(60);
           if (data.devOtp) {
             document.getElementById('adminOtpInput').value = data.devOtp;
-            showToast(`📬 Code sent to ${pendingAuthEmail} (Dev Code: ${data.devOtp})`, 'success');
+            showToast(`Security code sent to ${pendingAuthEmail} (Dev Code: ${data.devOtp})`, 'success');
           } else {
-            showToast(`📬 6-digit passcode sent to ${pendingAuthEmail}`, 'success');
+            showToast(`6-digit code dispatched to ${pendingAuthEmail}`, 'info');
           }
-          setTimeout(() => {
-            const otpInput = document.getElementById('adminOtpInput');
-            if (otpInput) otpInput.focus();
-          }, 150);
         } else {
-          errBox.innerHTML = `⚠️ ${escapeHtml(data.error || 'Authentication failed. Please check your credentials.')}`;
+          errBox.textContent = data.error || 'Authentication failed. Please verify credentials.';
           errBox.style.display = 'flex';
         }
       } catch (err) {
-        errBox.innerHTML = `❌ Connection error: ${escapeHtml(err.message)}`;
+        errBox.textContent = `Connection error: ${err.message}`;
         errBox.style.display = 'flex';
       } finally {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<span>Sign In as Administrator</span> ➔';
+        submitBtn.innerHTML = '<span>Sign In to Dashboard</span>';
       }
     }
 
-    // ── STEP 1B: ADMIN REGISTRATION ────────────────────────────────────────
     async function submitAdminRegister(e) {
       e.preventDefault();
       const name = document.getElementById('regAdminName').value.trim();
@@ -1523,9 +2322,8 @@
       const submitBtn = document.getElementById('btnRegisterSubmit');
 
       errBox.style.display = 'none';
-
       if (password !== confirmPassword) {
-        errBox.innerHTML = '⚠️ Passwords do not match. Please verify your password entry.';
+        errBox.textContent = 'Passwords do not match.';
         errBox.style.display = 'flex';
         return;
       }
@@ -1539,7 +2337,6 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, email, password, phone })
         });
-
         const data = await res.json();
 
         if (res.ok && data.success) {
@@ -1549,7 +2346,6 @@
           document.getElementById('otpTitleText').textContent = 'Confirm Administrator Email';
           document.getElementById('otpTargetEmailDisplay').textContent = pendingAuthEmail;
           document.getElementById('authTabsContainer').style.display = 'none';
-          document.getElementById('authTabSignInView').style.display = 'none';
           document.getElementById('authTabRegisterView').style.display = 'none';
           document.getElementById('authStepOtpView').style.display = 'block';
           document.getElementById('adminOtpInput').value = '';
@@ -1558,28 +2354,23 @@
           startOtpCountdown(60);
           if (data.devOtp) {
             document.getElementById('adminOtpInput').value = data.devOtp;
-            showToast(`📩 Verification code sent to ${pendingAuthEmail} (Dev Code: ${data.devOtp})`, 'success');
+            showToast(`Security code sent to ${pendingAuthEmail} (Dev Code: ${data.devOtp})`, 'success');
           } else {
-            showToast(`📩 Verification code dispatched to ${pendingAuthEmail}`, 'success');
+            showToast(`Verification code dispatched to ${pendingAuthEmail}`, 'info');
           }
-          setTimeout(() => {
-            const otpInput = document.getElementById('adminOtpInput');
-            if (otpInput) otpInput.focus();
-          }, 150);
         } else {
-          errBox.innerHTML = `⚠️ ${escapeHtml(data.error || 'Registration failed.')}`;
+          errBox.textContent = data.error || 'Registration failed.';
           errBox.style.display = 'flex';
         }
       } catch (err) {
-        errBox.innerHTML = `❌ Connection error: ${escapeHtml(err.message)}`;
+        errBox.textContent = `Connection error: ${err.message}`;
         errBox.style.display = 'flex';
       } finally {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<span>Create Admin Account</span> ➔';
+        submitBtn.innerHTML = '<span>Create Admin Account</span>';
       }
     }
 
-    // ── STEP 2: SUBMIT 6-DIGIT OTP (LOGIN OR REGISTRATION) ─────────────────
     async function submitAdminOtp(e) {
       e.preventDefault();
       const otp = document.getElementById('adminOtpInput').value.trim();
@@ -1587,26 +2378,25 @@
       const submitBtn = document.getElementById('btnOtpSubmit');
 
       if (otp.length !== 6) {
-        errBox.innerHTML = '⚠️ Please enter all 6 digits of the verification code.';
+        errBox.textContent = 'Please enter all 6 digits.';
         errBox.style.display = 'flex';
         return;
       }
 
       errBox.style.display = 'none';
       submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span class="spinner"></span> Verifying security code...';
+      submitBtn.innerHTML = '<span class="spinner"></span> Verifying code...';
 
-      const targetEndpoint = currentAuthMode === 'register' 
+      const endpoint = currentAuthMode === 'register' 
         ? '/api/owners/admin/verify-register-otp'
         : '/api/owners/admin/verify-otp';
 
       try {
-        const res = await fetch(targetEndpoint, {
+        const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: pendingAuthEmail, otp })
         });
-
         const data = await res.json();
 
         if (res.ok && data.token) {
@@ -1614,22 +2404,21 @@
           adminToken = data.token;
           localStorage.setItem('qb_admin_token', data.token);
           hideAuthGate(data.admin?.email || pendingAuthEmail, data.admin?.name || '');
-          showToast(`🎉 Welcome, ${data.admin?.name || 'Administrator'}! Session authenticated.`, 'success');
+          showToast(`Welcome, ${data.admin?.name || 'Administrator'}! Session authenticated.`, 'success');
           fetchData();
         } else {
-          errBox.innerHTML = `⚠️ ${escapeHtml(data.error || 'Invalid verification code. Please try again.')}`;
+          errBox.textContent = data.error || 'Invalid verification code. Please try again.';
           errBox.style.display = 'flex';
         }
       } catch (err) {
-        errBox.innerHTML = `❌ Connection error: ${escapeHtml(err.message)}`;
+        errBox.textContent = `Connection error: ${err.message}`;
         errBox.style.display = 'flex';
       } finally {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '🔓 Verify & Enter Dashboard';
+        submitBtn.innerHTML = 'Verify & Enter Console';
       }
     }
 
-    // ── RESEND OTP (COOLDOWN PROTECTED) ────────────────────────────────────
     async function resendAdminOtp() {
       const resendBtn = document.getElementById('btnResendOtp');
       const errBox = document.getElementById('otpErrorMsg');
@@ -1642,44 +2431,39 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: pendingAuthEmail })
         });
-
         const data = await res.json();
 
         if (res.ok && data.success) {
           startOtpCountdown(60);
           if (data.devOtp) {
             document.getElementById('adminOtpInput').value = data.devOtp;
-            showToast(`📩 Fresh code sent to ${pendingAuthEmail} (Dev Code: ${data.devOtp})`, 'success');
+            showToast(`Fresh code sent to ${pendingAuthEmail} (Dev Code: ${data.devOtp})`, 'success');
           } else {
-            showToast(`📩 Fresh code sent to ${pendingAuthEmail}`, 'success');
+            showToast(`Fresh code sent to ${pendingAuthEmail}`, 'info');
           }
           errBox.style.display = 'none';
         } else {
-          errBox.innerHTML = `⚠️ ${escapeHtml(data.error || 'Failed to resend code.')}`;
+          errBox.textContent = data.error || 'Failed to resend code.';
           errBox.style.display = 'flex';
           resendBtn.disabled = false;
-          resendBtn.textContent = '🔄 Resend Verification Code';
+          resendBtn.textContent = 'Resend Code';
         }
       } catch (err) {
-        errBox.innerHTML = `❌ Connection error: ${escapeHtml(err.message)}`;
+        errBox.textContent = `Connection error: ${err.message}`;
         errBox.style.display = 'flex';
         resendBtn.disabled = false;
-        resendBtn.textContent = '🔄 Resend Verification Code';
+        resendBtn.textContent = 'Resend Code';
       }
     }
 
-    // ── SIGN OUT / LOCK SESSION ────────────────────────────────────────────
     function logoutAdmin() {
-      if (confirm('Sign out of the Quickbite Admin Portal?')) {
+      if (confirm('Sign out of the QuickBite Admin Console?')) {
         localStorage.removeItem('qb_admin_token');
         adminToken = '';
         pendingAuthEmail = '';
         if (otpCountdownInterval) clearInterval(otpCountdownInterval);
-        document.getElementById('adminLoginForm').reset();
-        document.getElementById('adminRegisterForm').reset();
-        document.getElementById('adminOtpForm').reset();
         showAuthGate('login');
-        showToast('🔒 You have signed out.', 'info');
+        showToast('You have signed out.', 'info');
       }
     }
 
@@ -1695,52 +2479,69 @@
       field.type = field.type === 'password' ? 'text' : 'password';
     }
 
-    // ── FETCH CANTEENS & OWNERS DATA ────────────────────────────────────────
     async function fetchData() {
       try {
         const cRes = await fetch('/api/canteens');
         canteensList = await cRes.json();
         populateCanteenDropdowns();
+        renderCanteensGrid();
 
-        const oRes = await fetch('/api/owners', {
-          headers: getAdminHeaders()
-        });
-
+        const oRes = await fetch('/api/owners', { headers: getAdminHeaders() });
         if (oRes.status === 401 || oRes.status === 403) {
           localStorage.removeItem('qb_admin_token');
           adminToken = '';
           showAuthGate('login');
-          showToast('⚠️ Session unauthorized. Please sign in as an Administrator.', 'error');
           return;
         }
-
         ownersList = await oRes.json();
-        updateStats();
         renderOwnersTable(ownersList);
+
+        await fetchOrders();
+        updateGlobalStats();
       } catch (err) {
-        showToast('Error syncing with MongoDB: ' + err.message, 'error');
+        showToast('Error syncing with database: ' + err.message, 'error');
       }
     }
 
     function populateCanteenDropdowns() {
       const createSelect = document.getElementById('createCanteenId');
       const editSelect = document.getElementById('editCanteenId');
+      const orderCanteenFilter = document.getElementById('orderCanteenFilter');
+      const menuCanteenFilter = document.getElementById('menuCanteenFilter');
 
-      let optionsHtml = '<option value="">-- Choose a Canteen --</option>';
+      let optionsHtml = '<option value="">-- Choose Canteen --</option>';
+      let filterOptionsHtml = '<option value="all">All Canteens</option>';
+
       canteensList.forEach(c => {
         optionsHtml += `<option value="${c.id}" data-block="${c.block}">${c.name} (${c.location || 'Block ' + c.block})</option>`;
+        filterOptionsHtml += `<option value="${c.id}">${c.name}</option>`;
       });
 
-      createSelect.innerHTML = optionsHtml;
-      editSelect.innerHTML = optionsHtml;
+      if (createSelect) createSelect.innerHTML = optionsHtml;
+      if (editSelect) editSelect.innerHTML = optionsHtml;
+      if (orderCanteenFilter) orderCanteenFilter.innerHTML = filterOptionsHtml;
+      if (menuCanteenFilter) menuCanteenFilter.innerHTML = filterOptionsHtml;
     }
 
-    function updateStats() {
-      document.getElementById('statTotalOwners').textContent = ownersList.length;
-      const activeCount = ownersList.filter(o => o.canteenAssigned).length;
-      document.getElementById('statActiveOwners').textContent = activeCount;
-      document.getElementById('statInactiveOwners').textContent = ownersList.length - activeCount;
+    function updateGlobalStats() {
+      const totalOwners = ownersList.length;
+      const activeOwners = ownersList.filter(o => o.canteenAssigned).length;
+      document.getElementById('statTotalOwners').textContent = totalOwners;
+      document.getElementById('statActiveOwnersText').textContent = `${activeOwners} active & assigned`;
+      document.getElementById('tabOwnersCount').textContent = totalOwners;
+
       document.getElementById('statTotalCanteens').textContent = canteensList.length;
+      document.getElementById('tabCanteensCount').textContent = canteensList.length;
+
+      const totalOrders = ordersList.length;
+      document.getElementById('statTotalOrders').textContent = totalOrders;
+      document.getElementById('tabOrdersCount').textContent = totalOrders;
+
+      const activeOrders = ordersList.filter(o => o.status === 'PREPARING' || o.status === 'PENDING').length;
+      document.getElementById('statActiveOrdersBadge').textContent = `${activeOrders} in preparation`;
+
+      const totalRev = ordersList.reduce((acc, o) => acc + (Number(o.totalAmount) || 0), 0);
+      document.getElementById('statTotalRevenue').textContent = '₹' + Math.round(totalRev).toLocaleString('en-IN');
     }
 
     function renderOwnersTable(list) {
@@ -1749,7 +2550,7 @@
         tbody.innerHTML = `
           <tr>
             <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 3rem;">
-              No canteen owners found. Click <strong>"➕ Create New Canteen Owner"</strong> above to register one.
+              No canteen owners found. Click <strong>"Create New Canteen Owner"</strong> to provision one.
             </td>
           </tr>
         `;
@@ -1764,20 +2565,21 @@
         return `
           <tr id="row-${o.uid}">
             <td>
-              <div style="font-weight: 700; font-size: 0.95rem;">${escapeHtml(o.name || 'Canteen Owner')}</div>
-              <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">UID: ${o.uid}</div>
+              <div style="font-weight: 700; font-size: 0.95rem; color: #FFF;">${escapeHtml(o.name || 'Vendor')}</div>
+              <div style="font-size: 0.76rem; color: var(--text-subtle); font-family: 'JetBrains Mono', monospace; margin-top: 2px;">UID: ${o.uid}</div>
             </td>
             <td>
-              <div style="font-weight: 600;">${escapeHtml(o.email)}</div>
+              <div style="font-weight: 600; color: var(--text-main);">${escapeHtml(o.email)}</div>
               <div style="font-size: 0.8rem; color: var(--text-muted);">${escapeHtml(o.phone || '—')}</div>
             </td>
             <td>
               ${assigned && o.canteenId ? `
                 <div class="canteen-pill">
-                  <span>🏢</span> ${escapeHtml(canteenLabel)}
+                  <svg class="icon-sm canteen-icon" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+                  ${escapeHtml(canteenLabel)}
                 </div>
               ` : `
-                <span style="color: var(--text-muted); font-size: 0.85rem;">— Not Assigned —</span>
+                <span class="badge badge-amber">Unassigned</span>
               `}
             </td>
             <td>
@@ -1787,20 +2589,22 @@
                   <span class="slider"></span>
                 </label>
                 <span class="toggle-label ${assigned ? 'text-active' : 'text-inactive'}" id="status-label-${o.uid}">
-                  ${assigned ? 'Active (Assigned)' : 'Off (Access Denied)'}
+                  ${assigned ? 'Active (Granted)' : 'Disabled'}
                 </span>
               </div>
             </td>
             <td>
               <div class="actions-cell" style="justify-content: flex-end;">
-                <button class="btn-icon" onclick="openEditModal('${o.uid}')" title="Change canteen assignment">
-                  ✏️ Edit
+                <button class="btn-icon" onclick="openEditModal('${o.uid}')" title="Change Canteen Allocation">
+                  <svg class="icon-sm" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                  Edit
                 </button>
-                <button class="btn-icon" onclick="openResetPasswordModal('${o.uid}', '${escapeHtml(o.email)}')" title="Reset owner password">
-                  🔑 Key
+                <button class="btn-icon" onclick="openResetPasswordModal('${o.uid}', '${escapeHtml(o.email)}')" title="Reset Password">
+                  <svg class="icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                  Password
                 </button>
-                <button class="btn-icon delete" onclick="deleteOwner('${o.uid}', '${escapeHtml(o.email)}')" title="Delete owner">
-                  🗑️
+                <button class="btn-icon delete" onclick="deleteOwner('${o.uid}', '${escapeHtml(o.email)}')" title="Delete Vendor Account">
+                  <svg class="icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 </button>
               </div>
             </td>
@@ -1811,15 +2615,24 @@
 
     function filterOwnersTable() {
       const q = document.getElementById('ownerSearchInput').value.toLowerCase().trim();
-      if (!q) {
-        renderOwnersTable(ownersList);
-        return;
+      const status = document.getElementById('ownerStatusFilter').value;
+
+      let filtered = ownersList;
+
+      if (status === 'active') {
+        filtered = filtered.filter(o => o.canteenAssigned);
+      } else if (status === 'inactive') {
+        filtered = filtered.filter(o => !o.canteenAssigned);
       }
-      const filtered = ownersList.filter(o => 
-        (o.name && o.name.toLowerCase().includes(q)) ||
-        (o.email && o.email.toLowerCase().includes(q)) ||
-        (o.canteenId && o.canteenId.toLowerCase().includes(q))
-      );
+
+      if (q) {
+        filtered = filtered.filter(o =>
+          (o.name && o.name.toLowerCase().includes(q)) ||
+          (o.email && o.email.toLowerCase().includes(q)) ||
+          (o.canteenId && o.canteenId.toLowerCase().includes(q))
+        );
+      }
+
       renderOwnersTable(filtered);
     }
 
@@ -1831,7 +2644,7 @@
       label.textContent = isChecked ? 'Updating...' : 'Disabling...';
 
       if (isChecked && (!owner.canteenId || !owner.canteenId.trim())) {
-        showToast('⚠️ Please assign a canteen to this owner first.', 'error');
+        showToast('Please assign a canteen to this owner first.', 'error');
         document.getElementById(`toggle-${uid}`).checked = false;
         openEditModal(uid);
         return;
@@ -1848,112 +2661,91 @@
           })
         });
 
-        if (!res.ok) throw new Error('Failed to update status in MongoDB');
-
-        owner.canteenAssigned = isChecked;
-        label.textContent = isChecked ? 'Active (Assigned)' : 'Off (Access Denied)';
-        label.className = `toggle-label ${isChecked ? 'text-active' : 'text-inactive'}`;
-        updateStats();
-
-        showToast(
-          isChecked 
-            ? `✅ Access ENABLED for ${owner.email}. Owner can now log into Android.` 
-            : `⚠️ Access DISABLED for ${owner.email}. Android login rejected.`,
-          isChecked ? 'success' : 'error'
-        );
+        if (res.ok) {
+          owner.canteenAssigned = isChecked;
+          label.className = `toggle-label ${isChecked ? 'text-active' : 'text-inactive'}`;
+          label.textContent = isChecked ? 'Active (Granted)' : 'Disabled';
+          updateGlobalStats();
+          showToast(`Access ${isChecked ? 'granted' : 'disabled'} for ${owner.email}.`, 'success');
+        } else {
+          document.getElementById(`toggle-${uid}`).checked = !isChecked;
+          label.textContent = !isChecked ? 'Active (Granted)' : 'Disabled';
+          showToast('Failed to update access status.', 'error');
+        }
       } catch (err) {
         document.getElementById(`toggle-${uid}`).checked = !isChecked;
-        showToast('❌ Error updating toggle: ' + err.message, 'error');
+        showToast('Network error: ' + err.message, 'error');
       }
     }
+
+    function openModal(id) { document.getElementById(id).classList.add('active'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
     function openCreateOwnerModal() {
       document.getElementById('createOwnerForm').reset();
       document.getElementById('createCanteenAssigned').checked = true;
-      document.getElementById('createToggleLabel').textContent = 'Active (Assigned)';
-      document.getElementById('createToggleLabel').className = 'toggle-label text-active';
-      document.getElementById('createOwnerModal').classList.add('active');
+      document.getElementById('createToggleLabel').textContent = 'Active (Access Granted)';
+      openModal('createOwnerModal');
     }
 
-    document.getElementById('createCanteenAssigned').addEventListener('change', (e) => {
-      const label = document.getElementById('createToggleLabel');
-      label.textContent = e.target.checked ? 'Active (Assigned)' : 'Off (Access Denied)';
-      label.className = `toggle-label ${e.target.checked ? 'text-active' : 'text-inactive'}`;
-    });
-
     function onCreateCanteenSelectChange() {
-      const select = document.getElementById('createCanteenId');
-      const selected = select.options[select.selectedIndex];
-      document.getElementById('createBlock').value = selected ? (selected.dataset.block || '') : '';
+      const sel = document.getElementById('createCanteenId');
+      const opt = sel.options[sel.selectedIndex];
+      document.getElementById('createBlock').value = opt ? (opt.getAttribute('data-block') || '') : '';
     }
 
     async function submitCreateOwner(e) {
       e.preventDefault();
       const name = document.getElementById('createName').value.trim();
       const email = document.getElementById('createEmail').value.trim();
-      const password = document.getElementById('createPassword').value.trim();
+      const password = document.getElementById('createPassword').value;
       const phone = document.getElementById('createPhone').value.trim();
-      const canteenId = document.getElementById('createCanteenId').value.trim();
-      const block = document.getElementById('createBlock').value.trim();
+      const canteenId = document.getElementById('createCanteenId').value;
+      const block = document.getElementById('createBlock').value;
       const canteenAssigned = document.getElementById('createCanteenAssigned').checked;
-
-      if (!canteenId && canteenAssigned) {
-        showToast('Please select a canteen to assign', 'error');
-        return;
-      }
 
       try {
         const res = await fetch('/api/owners', {
           method: 'POST',
           headers: getAdminHeaders(),
-          body: JSON.stringify({
-            name,
-            email,
-            password,
-            phone,
-            canteenId,
-            block,
-            canteenAssigned,
-            role: 'owner'
-          })
+          body: JSON.stringify({ name, email, password, phone, canteenId, block, canteenAssigned, role: 'owner' })
         });
-
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to create owner');
-
-        showToast(`🎉 Canteen owner account created for ${email}! Synchronized in MongoDB Atlas.`, 'success');
-        closeModal('createOwnerModal');
-        fetchData();
+        if (res.ok && data.success) {
+          closeModal('createOwnerModal');
+          showToast(`Canteen owner created for ${email}!`, 'success');
+          fetchData();
+        } else {
+          showToast(data.error || 'Failed to create owner.', 'error');
+        }
       } catch (err) {
-        showToast('❌ Error creating owner: ' + err.message, 'error');
+        showToast('Error creating owner: ' + err.message, 'error');
       }
     }
 
     function openEditModal(uid) {
       const owner = ownersList.find(o => o.uid === uid);
       if (!owner) return;
-
-      document.getElementById('editOwnerUid').value = owner.uid;
-      document.getElementById('editModalSubtitle').textContent = `${owner.name} (${owner.email})`;
+      document.getElementById('editOwnerUid').value = uid;
+      document.getElementById('editModalSubtitle').textContent = `${owner.name || 'Owner'} (${owner.email})`;
       document.getElementById('editCanteenId').value = owner.canteenId || '';
       document.getElementById('editBlock').value = owner.block || '';
       document.getElementById('editCanteenAssigned').checked = Boolean(owner.canteenAssigned);
-
       updateEditToggleLabel();
-      document.getElementById('editModal').classList.add('active');
+      openModal('editModal');
     }
 
     function onEditCanteenSelectChange() {
-      const select = document.getElementById('editCanteenId');
-      const selected = select.options[select.selectedIndex];
-      document.getElementById('editBlock').value = selected ? (selected.dataset.block || '') : '';
+      const sel = document.getElementById('editCanteenId');
+      const opt = sel.options[sel.selectedIndex];
+      document.getElementById('editBlock').value = opt ? (opt.getAttribute('data-block') || '') : '';
     }
 
     function updateEditToggleLabel() {
-      const checked = document.getElementById('editCanteenAssigned').checked;
+      const isChecked = document.getElementById('editCanteenAssigned').checked;
       const label = document.getElementById('editToggleLabel');
-      label.textContent = checked ? 'Active (Assigned)' : 'Off (Access Denied)';
-      label.className = `toggle-label ${checked ? 'text-active' : 'text-inactive'}`;
+      label.textContent = isChecked ? 'Active (Access Granted)' : 'Disabled';
+      label.className = `toggle-label ${isChecked ? 'text-active' : 'text-inactive'}`;
     }
 
     async function submitEditAllocation(e) {
@@ -1967,35 +2759,32 @@
         const res = await fetch(`/api/owners/${encodeURIComponent(uid)}/assign`, {
           method: 'PATCH',
           headers: getAdminHeaders(),
-          body: JSON.stringify({
-            canteenAssigned,
-            canteenId: canteenAssigned ? canteenId : '',
-            block: canteenAssigned ? block : ''
-          })
+          body: JSON.stringify({ canteenId, block, canteenAssigned })
         });
-
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to save allocation');
-
-        showToast('✅ Canteen allocation updated and saved in MongoDB Atlas.', 'success');
-        closeModal('editModal');
-        fetchData();
+        if (res.ok) {
+          closeModal('editModal');
+          showToast('Canteen allocation successfully saved.', 'success');
+          fetchData();
+        } else {
+          showToast(data.error || 'Failed to save allocation.', 'error');
+        }
       } catch (err) {
-        showToast('❌ Error: ' + err.message, 'error');
+        showToast('Error saving allocation: ' + err.message, 'error');
       }
     }
 
     function openResetPasswordModal(uid, email) {
       document.getElementById('resetPasswordUid').value = uid;
-      document.getElementById('resetPasswordSubtitle').textContent = `Set new password for ${email}`;
+      document.getElementById('resetPasswordSubtitle').textContent = `Set new login password for ${email}`;
       document.getElementById('newPasswordInput').value = '';
-      document.getElementById('resetPasswordModal').classList.add('active');
+      openModal('resetPasswordModal');
     }
 
     async function submitResetPassword(e) {
       e.preventDefault();
       const uid = document.getElementById('resetPasswordUid').value;
-      const newPassword = document.getElementById('newPasswordInput').value.trim();
+      const newPassword = document.getElementById('newPasswordInput').value;
 
       try {
         const res = await fetch(`/api/owners/${encodeURIComponent(uid)}/password`, {
@@ -2003,66 +2792,474 @@
           headers: getAdminHeaders(),
           body: JSON.stringify({ newPassword })
         });
-
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to reset password');
-
-        showToast('🔑 Password successfully updated and bcrypt hashed in MongoDB Atlas.', 'success');
-        closeModal('resetPasswordModal');
+        if (res.ok) {
+          closeModal('resetPasswordModal');
+          showToast('Owner password successfully updated.', 'success');
+        } else {
+          showToast(data.error || 'Failed to update password.', 'error');
+        }
       } catch (err) {
-        showToast('❌ Error: ' + err.message, 'error');
+        showToast('Error updating password: ' + err.message, 'error');
       }
     }
 
     async function deleteOwner(uid, email) {
-      if (!confirm(`Are you sure you want to permanently delete the owner account for ${email} from MongoDB Atlas?`)) {
-        return;
-      }
-
+      if (!confirm(`Are you sure you want to permanently delete vendor account for ${email}?`)) return;
       try {
         const res = await fetch(`/api/owners/${encodeURIComponent(uid)}`, {
           method: 'DELETE',
           headers: getAdminHeaders()
         });
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to delete owner');
-
-        showToast(`🗑️ Owner ${email} removed from MongoDB Atlas.`, 'success');
-        fetchData();
+        if (res.ok) {
+          showToast(`Vendor ${email} removed.`, 'success');
+          fetchData();
+        } else {
+          showToast('Failed to delete vendor account.', 'error');
+        }
       } catch (err) {
-        showToast('❌ Error: ' + err.message, 'error');
+        showToast('Error deleting vendor: ' + err.message, 'error');
       }
     }
 
-    function closeModal(id) {
-      document.getElementById(id).classList.remove('active');
+    function renderCanteensGrid() {
+      const grid = document.getElementById('canteensCardsGrid');
+      const overviewContainer = document.getElementById('overviewCanteensContainer');
+      if (!grid) return;
+
+      if (!canteensList || canteensList.length === 0) {
+        grid.innerHTML = '<div style="color: var(--text-muted);">No campus canteens found in database.</div>';
+        if (overviewContainer) overviewContainer.innerHTML = '<div style="color: var(--text-muted);">No campus canteens active.</div>';
+        return;
+      }
+
+      let gridHtml = '';
+      let overviewHtml = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">';
+
+      canteensList.forEach(c => {
+        const isOpen = c.isOpen !== false; // defaults to true
+        const assignedOwners = ownersList.filter(o => o.canteenId === c.id);
+
+        gridHtml += `
+          <div class="canteen-card">
+            <div class="canteen-card-header">
+              <div>
+                <div class="canteen-name">
+                  <svg class="icon" style="color: var(--primary);" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+                  ${escapeHtml(c.name)}
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px;">${escapeHtml(c.location || 'Block ' + c.block)}</div>
+              </div>
+              <span class="badge ${isOpen ? 'badge-success' : 'badge-danger'}">
+                ${isOpen ? 'OPEN FOR ORDERS' : 'CLOSED'}
+              </span>
+            </div>
+
+            <div class="canteen-meta">
+              <div class="canteen-meta-row">
+                <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                <span>Operating Timings: <strong>${escapeHtml(c.timings || '8:30 AM - 9:00 PM')}</strong></span>
+              </div>
+              <div class="canteen-meta-row">
+                <svg class="icon-sm" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                <span>Assigned Vendors: <strong>${assignedOwners.length} registered</strong></span>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid var(--surface-border);">
+              <span style="font-size: 0.85rem; font-weight: 700;">Live Ordering Status</span>
+              <div class="toggle-wrapper">
+                <label class="switch">
+                  <input type="checkbox" ${isOpen ? 'checked' : ''} onchange="toggleCanteenOpenStatus('${c.id}', this.checked)">
+                  <span class="slider"></span>
+                </label>
+                <span class="toggle-label ${isOpen ? 'text-active' : 'text-inactive'}">${isOpen ? 'Accepting Orders' : 'Closed'}</span>
+              </div>
+            </div>
+          </div>
+        `;
+
+        overviewHtml += `
+          <div style="background: var(--surface-elevated); border: 1px solid var(--surface-border); border-radius: 12px; padding: 1.15rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <strong style="color: #FFF; font-size: 1rem;">${escapeHtml(c.name)}</strong>
+              <span class="badge ${isOpen ? 'badge-success' : 'badge-danger'}">${isOpen ? 'Open' : 'Closed'}</span>
+            </div>
+            <div style="font-size: 0.82rem; color: var(--text-muted);">${escapeHtml(c.location || 'Block ' + c.block)}</div>
+          </div>
+        `;
+      });
+
+      overviewHtml += '</div>';
+
+      grid.innerHTML = gridHtml;
+      if (overviewContainer) overviewContainer.innerHTML = overviewHtml;
     }
 
-    function showToast(msg, type = 'info') {
-      const toast = document.getElementById('toast');
-      toast.textContent = msg;
-      toast.className = `toast ${type}`;
-      toast.style.display = 'block';
-      setTimeout(() => { toast.style.display = 'none'; }, 4500);
+    async function toggleCanteenOpenStatus(canteenId, isOpen) {
+      try {
+        const res = await fetch(`/api/canteens/${encodeURIComponent(canteenId)}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isOpen })
+        });
+        if (res.ok) {
+          const c = canteensList.find(x => x.id === canteenId);
+          if (c) c.isOpen = isOpen;
+          renderCanteensGrid();
+          showToast(`Canteen ${canteenId} is now ${isOpen ? 'OPEN' : 'CLOSED'} to students.`, 'success');
+        } else {
+          showToast('Failed to update canteen status.', 'error');
+        }
+      } catch (err) {
+        showToast('Error toggling canteen status: ' + err.message, 'error');
+      }
     }
 
-    function escapeHtml(str) {
-      if (!str) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+    async function fetchOrders() {
+      try {
+        const res = await fetch('/api/orders');
+        if (res.ok) {
+          ordersList = await res.json();
+          renderOrdersTable(ordersList);
+          renderOverviewOrdersSnippet(ordersList);
+          updateGlobalStats();
+        }
+      } catch (err) {
+        console.warn('Orders fetch note:', err.message);
+      }
     }
 
-    // ── Code 128 Barcode Scanner & Pickup Verification ─────────────────────
+    function renderOrdersTable(list) {
+      const tbody = document.getElementById('ordersTableBody');
+      if (!tbody) return;
+
+      if (!list || list.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 3rem;">
+              No active campus orders in the system.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = list.map(o => {
+        const canteen = canteensList.find(c => c.id === o.canteenId);
+        const canteenName = canteen ? canteen.name : (o.canteenId || 'Canteen');
+        const itemsSummary = (o.items || []).map(i => `${i.quantity}x ${escapeHtml(i.name)}`).join(', ') || 'No item detail';
+        const statusBadgeClass = {
+          'READY': 'badge-success',
+          'PREPARING': 'badge-amber',
+          'PENDING': 'badge-blue',
+          'PICKED_UP': 'badge-success',
+          'COMPLETED': 'badge-success',
+          'CANCELLED': 'badge-danger'
+        }[o.status] || 'badge-amber';
+
+        return `
+          <tr>
+            <td><strong style="color: #FFF; font-family: 'JetBrains Mono', monospace;">#${o.orderId || o.id}</strong></td>
+            <td>
+              <div style="font-weight: 700; color: #FFF;">${escapeHtml(o.studentName || 'Student')}</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">${escapeHtml(o.studentRollNumber || o.studentId || '—')}</div>
+            </td>
+            <td><span class="badge badge-amber">${escapeHtml(canteenName)}</span></td>
+            <td style="max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(itemsSummary)}">
+              ${escapeHtml(itemsSummary)}
+            </td>
+            <td><strong style="color: var(--primary);">₹${Number(o.totalAmount || 0).toFixed(2)}</strong></td>
+            <td><span class="badge ${statusBadgeClass}">${o.status}</span></td>
+            <td style="font-size: 0.82rem; color: var(--text-muted);">${o.orderPlacedAtLocal || o.orderTime || 'Today'}</td>
+            <td style="text-align: right;">
+              ${o.status === 'READY' ? `
+                <button class="btn btn-secondary btn-sm" onclick="openPickupConfirmFromTable('${o.orderId || o.id}')">
+                  Mark Handed Over
+                </button>
+              ` : `
+                <button class="btn-icon" onclick="inspectOrder('${o.orderId || o.id}')" title="Inspect Order Details">
+                  <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                </button>
+              `}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderOverviewOrdersSnippet(list) {
+      const tbody = document.getElementById('overviewOrdersTableBody');
+      if (!tbody) return;
+
+      const snippet = list.slice(0, 6);
+      if (snippet.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No current orders.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = snippet.map(o => {
+        const canteen = canteensList.find(c => c.id === o.canteenId);
+        const canteenName = canteen ? canteen.name : o.canteenId;
+        const itemsSummary = (o.items || []).map(i => `${i.quantity}x ${escapeHtml(i.name)}`).join(', ');
+
+        return `
+          <tr>
+            <td><strong style="color: #FFF; font-family: 'JetBrains Mono', monospace;">#${o.orderId || o.id}</strong></td>
+            <td><strong>${escapeHtml(o.studentName || 'Student')}</strong></td>
+            <td><span class="badge badge-amber">${escapeHtml(canteenName)}</span></td>
+            <td style="max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(itemsSummary)}</td>
+            <td><strong style="color: var(--primary);">₹${Number(o.totalAmount || 0).toFixed(2)}</strong></td>
+            <td><span class="badge badge-success">${o.status}</span></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterOrdersTable() {
+      const q = document.getElementById('orderSearchInput').value.toLowerCase().trim();
+      const canteen = document.getElementById('orderCanteenFilter').value;
+      const status = document.getElementById('orderStatusFilter').value;
+
+      let filtered = ordersList;
+
+      if (canteen && canteen !== 'all') {
+        filtered = filtered.filter(o => o.canteenId === canteen);
+      }
+      if (status && status !== 'all') {
+        filtered = filtered.filter(o => o.status === status);
+      }
+      if (q) {
+        filtered = filtered.filter(o =>
+          (String(o.orderId || o.id).toLowerCase().includes(q)) ||
+          (o.studentName && o.studentName.toLowerCase().includes(q)) ||
+          (o.items && o.items.some(it => it.name && it.name.toLowerCase().includes(q)))
+        );
+      }
+
+      renderOrdersTable(filtered);
+    }
+
+    function openPickupConfirmFromTable(orderId) {
+      openBarcodeScannerModal();
+      document.getElementById('manualBarcodeInput').value = orderId;
+      verifyManualBarcode();
+    }
+
+    function inspectOrder(orderId) {
+      const order = ordersList.find(o => String(o.orderId || o.id) === String(orderId));
+      if (!order) return;
+      openBarcodeScannerModal();
+      showBarcodeVerifiedSuccess(order, order.verificationToken || orderId);
+    }
+
+    async function fetchMenuItems() {
+      try {
+        const res = await fetch('/api/items');
+        if (res.ok) {
+          menuItemsList = await res.json();
+          document.getElementById('tabItemsCount').textContent = menuItemsList.length;
+          renderMenuTable(menuItemsList);
+        }
+      } catch (err) {
+        console.warn('Menu fetch error:', err.message);
+      }
+    }
+
+    function renderMenuTable(list) {
+      const tbody = document.getElementById('menuTableBody');
+      if (!tbody) return;
+
+      if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 3rem;">No food items found.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(item => {
+        const canteen = canteensList.find(c => c.id === item.canteenId);
+        const canteenName = canteen ? canteen.name : item.canteenId;
+        const isAvailable = item.available !== false;
+
+        return `
+          <tr>
+            <td>
+              <div style="font-weight: 700; color: #FFF;">${escapeHtml(item.name)}</div>
+              <div style="font-size: 0.76rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px; margin-top: 2px;">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${item.isVeg ? '#10B981' : '#EF4444'};"></span>
+                <span>${item.isVeg ? 'Vegetarian' : 'Non-Veg'}</span>
+              </div>
+            </td>
+            <td><span class="badge badge-amber">${escapeHtml(canteenName)}</span></td>
+            <td><span class="badge badge-blue">${escapeHtml(item.category || 'Snacks')}</span></td>
+            <td><strong style="color: var(--primary);">₹${Number(item.price || 0).toFixed(2)}</strong></td>
+            <td><span style="color: var(--text-muted);">${item.prepTimeMinutes ? item.prepTimeMinutes + ' mins' : '10-15 mins'}</span></td>
+            <td>
+              <div class="toggle-wrapper">
+                <label class="switch">
+                  <input type="checkbox" ${isAvailable ? 'checked' : ''} onchange="toggleItemStock('${item.id}', this.checked)">
+                  <span class="slider"></span>
+                </label>
+                <span class="toggle-label ${isAvailable ? 'text-active' : 'text-inactive'}">
+                  ${isAvailable ? 'In Stock' : 'Sold Out'}
+                </span>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterMenuTable() {
+      const q = document.getElementById('menuSearchInput').value.toLowerCase().trim();
+      const canteen = document.getElementById('menuCanteenFilter').value;
+      const stock = document.getElementById('menuStockFilter').value;
+
+      let filtered = menuItemsList;
+
+      if (canteen && canteen !== 'all') {
+        filtered = filtered.filter(i => i.canteenId === canteen);
+      }
+      if (stock === 'in_stock') {
+        filtered = filtered.filter(i => i.available !== false);
+      } else if (stock === 'out_of_stock') {
+        filtered = filtered.filter(i => i.available === false);
+      }
+      if (q) {
+        filtered = filtered.filter(i =>
+          (i.name && i.name.toLowerCase().includes(q)) ||
+          (i.category && i.category.toLowerCase().includes(q))
+        );
+      }
+
+      renderMenuTable(filtered);
+    }
+
+    async function toggleItemStock(itemId, isAvailable) {
+      try {
+        const res = await fetch(`/api/items/${encodeURIComponent(itemId)}/availability`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ available: isAvailable })
+        });
+        if (res.ok) {
+          const item = menuItemsList.find(i => i.id === itemId);
+          if (item) item.available = isAvailable;
+          showToast(`Item availability updated to: ${isAvailable ? 'In Stock' : 'Sold Out'}.`, 'success');
+        } else {
+          showToast('Failed to toggle item availability.', 'error');
+        }
+      } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+      }
+    }
+
+    async function fetchSuggestions() {
+      try {
+        const res = await fetch('/api/suggestions/admin');
+        if (res.ok) {
+          const data = await res.json();
+          suggestionsList = data.suggestions || [];
+          document.getElementById('tabSuggestionsCount').textContent = suggestionsList.length;
+          renderSuggestionsTable(suggestionsList);
+        }
+      } catch (err) {
+        console.warn('Suggestions fetch notice:', err.message);
+      }
+    }
+
+    function renderSuggestionsTable(list) {
+      const tbody = document.getElementById('suggestionsTableBody');
+      if (!tbody) return;
+
+      if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 3rem;">No suggestions submitted yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(s => {
+        const canteen = canteensList.find(c => c.id === s.canteenId);
+        const canteenName = canteen ? canteen.name : s.canteenId;
+        const dateStr = s.createdAt ? new Date(s.createdAt).toLocaleDateString() : 'Recent';
+
+        return `
+          <tr>
+            <td><strong style="color: #FFF;">${escapeHtml(s.itemName || s.name)}</strong></td>
+            <td><span class="badge badge-amber">${escapeHtml(canteenName)}</span></td>
+            <td><span class="badge badge-blue">${escapeHtml(s.category || 'General')}</span></td>
+            <td>
+              <div style="font-weight: 600;">${escapeHtml(s.studentName || 'Student')}</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">${escapeHtml(s.studentRegistration || '—')}</div>
+            </td>
+            <td style="max-width: 250px;">${escapeHtml(s.description || s.reason || '—')}</td>
+            <td><span class="badge badge-success">${escapeHtml(s.status || 'New')}</span></td>
+            <td style="font-size: 0.82rem; color: var(--text-muted);">${dateStr}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function checkSystemLatency() {
+      const textEl = document.getElementById('apiLatencyText');
+      if (textEl) textEl.textContent = 'Pinging...';
+      const start = performance.now();
+      try {
+        const res = await fetch('/api/health');
+        const elapsed = Math.round(performance.now() - start);
+        if (res.ok) {
+          if (textEl) textEl.textContent = `${elapsed} ms (Optimal)`;
+          showToast(`Diagnostic check completed. Response latency: ${elapsed}ms`, 'success');
+        } else {
+          if (textEl) textEl.textContent = 'Degraded';
+        }
+      } catch (err) {
+        if (textEl) textEl.textContent = 'Offline';
+        showToast('System health ping failed.', 'error');
+      }
+    }
+
+    function exportOwnersCSV() {
+      if (ownersList.length === 0) {
+        showToast('No owner data available to export.', 'info');
+        return;
+      }
+      let csv = 'Full Name,Email,Phone,Assigned Canteen,Status\n';
+      ownersList.forEach(o => {
+        csv += `"${o.name || ''}","${o.email || ''}","${o.phone || ''}","${o.canteenId || ''}","${o.canteenAssigned ? 'Active' : 'Disabled'}"\n`;
+      });
+      downloadBlob(csv, 'quickbite_canteen_owners.csv', 'text/csv');
+      showToast('Canteen owners CSV downloaded.', 'success');
+    }
+
+    function exportOrdersCSV() {
+      if (ordersList.length === 0) {
+        showToast('No orders data available to export.', 'info');
+        return;
+      }
+      let csv = 'Order ID,Student Name,Roll Number,Canteen,Total Amount,Status,Placed Time\n';
+      ordersList.forEach(o => {
+        csv += `"${o.orderId || o.id}","${o.studentName || ''}","${o.studentRollNumber || o.studentId || ''}","${o.canteenId || ''}","${o.totalAmount || 0}","${o.status || ''}","${o.orderPlacedAtLocal || o.orderTime || ''}"\n`;
+      });
+      downloadBlob(csv, 'quickbite_campus_orders.csv', 'text/csv');
+      showToast('Campus orders CSV downloaded.', 'success');
+    }
+
+    function downloadBlob(content, filename, contentType) {
+      const blob = new Blob([content], { type: contentType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
     let html5QrCodeScanner = null;
     let currentScannedToken = '';
 
     function openBarcodeScannerModal() {
-      document.getElementById('barcodeScannerModal').classList.add('active');
+      openModal('barcodeScannerModal');
       resetBarcodeScanner();
     }
 
@@ -2073,20 +3270,14 @@
 
     function startHtml5Scanner() {
       if (typeof Html5Qrcode === 'undefined') return;
-      if (html5QrCodeScanner) {
-        stopHtml5Scanner();
-      }
+      if (html5QrCodeScanner) stopHtml5Scanner();
 
       const readerElem = document.getElementById('barcodeReader');
       if (!readerElem) return;
 
       try {
         html5QrCodeScanner = new Html5Qrcode("barcodeReader");
-        const config = {
-          fps: 15,
-          qrbox: { width: 280, height: 140 },
-          aspectRatio: 1.7777778,
-        };
+        const config = { fps: 15, qrbox: { width: 280, height: 140 }, aspectRatio: 1.7777778 };
 
         html5QrCodeScanner.start(
           { facingMode: "environment" },
@@ -2098,8 +3289,8 @@
             }
           },
           () => {}
-        ).catch((err) => {
-          console.warn('Camera scan start notice:', err.message || err);
+        ).catch(err => {
+          console.warn('Camera scan start note:', err.message || err);
         });
       } catch (e) {
         console.warn('Html5Qrcode init error:', e);
@@ -2132,7 +3323,7 @@
     function verifyManualBarcode() {
       const val = document.getElementById('manualBarcodeInput').value.trim();
       if (!val) {
-        showToast('Please enter a verification token', 'error');
+        showToast('Please enter a verification token or Order ID', 'error');
         return;
       }
       stopHtml5Scanner();
@@ -2156,7 +3347,7 @@
 
         showBarcodeVerifiedSuccess(data.order, token);
       } catch (err) {
-        showBarcodeError('NETWORK_ERROR', 'Unable to verify the order. Please check your internet connection and try again.');
+        showBarcodeError('NETWORK_ERROR', 'Unable to reach backend order verification service.');
       }
     }
 
@@ -2177,20 +3368,21 @@
       if (order.items && order.items.length > 0) {
         order.items.forEach(it => {
           const div = document.createElement('div');
-          div.style.cssText = 'display: flex; justify-content: space-between; margin-bottom: 4px; color: #cbd5e1;';
+          div.style.cssText = 'display: flex; justify-content: space-between; margin-bottom: 4px; color: var(--text-muted);';
           div.innerHTML = `<span>${it.quantity}x ${escapeHtml(it.name)}</span><span>₹${Number(it.price * it.quantity).toFixed(2)}</span>`;
           itemsContainer.appendChild(div);
         });
       } else {
-        itemsContainer.innerHTML = '<span style="color: #64748b;">No items listed</span>';
+        itemsContainer.innerHTML = '<span style="color: var(--text-subtle);">No items listed</span>';
       }
     }
 
+    // Pickup Confirmation: Atomically marks order as PICKED_UP in database
     async function confirmOrderPickup() {
       if (!currentScannedToken) return;
       const btn = document.getElementById('btnConfirmPickup');
       btn.disabled = true;
-      btn.textContent = 'Confirming Pickup...';
+      btn.innerHTML = '<span class="spinner"></span> Confirming Pickup...';
 
       try {
         const res = await fetch('/api/owners/orders/confirm-pickup', {
@@ -2200,7 +3392,7 @@
         });
         const data = await res.json();
         btn.disabled = false;
-        btn.textContent = '✓ CONFIRM ORDER PICKUP';
+        btn.innerHTML = 'CONFIRM ORDER PICKUP';
 
         if (!res.ok || !data.success) {
           showBarcodeError(data.code || 'CONFIRM_FAILED', data.error || 'Pickup confirmation failed');
@@ -2210,11 +3402,12 @@
         document.getElementById('barcodeVerifiedView').style.display = 'none';
         document.getElementById('barcodeCollectedView').style.display = 'block';
         document.getElementById('collectedSummaryText').textContent = `Order #${data.order?.orderId || currentScannedToken} verified and marked as Collected.`;
-        showToast('🎉 Order Successfully Collected!', 'success');
+        showToast('Order Successfully Collected!', 'success');
+        fetchOrders();
       } catch (err) {
         btn.disabled = false;
-        btn.textContent = '✓ CONFIRM ORDER PICKUP';
-        showBarcodeError('NETWORK_ERROR', 'Unable to verify the order. Please check your internet connection and try again.');
+        btn.innerHTML = 'CONFIRM ORDER PICKUP';
+        showBarcodeError('NETWORK_ERROR', 'Unable to complete order collection.');
       }
     }
 
@@ -2225,16 +3418,41 @@
       document.getElementById('barcodeErrorView').style.display = 'block';
 
       const titles = {
-        'INVALID_BARCODE': 'Invalid Barcode',
+        'INVALID_BARCODE': 'Invalid Barcode Token',
         'ALREADY_COLLECTED': 'Already Collected',
-        'WRONG_OWNER': 'Wrong Canteen',
-        'ORDER_NOT_READY': 'Order Not Ready',
+        'WRONG_OWNER': 'Wrong Canteen Assignment',
+        'ORDER_NOT_READY': 'Order Not Ready for Pickup',
         'EXPIRED_BARCODE': 'Barcode Expired',
-        'NETWORK_ERROR': 'Network Error'
+        'NETWORK_ERROR': 'Connection Error'
       };
 
-      document.getElementById('barcodeErrorTitle').textContent = titles[code] || 'Verification Failed';
+      document.getElementById('barcodeErrorTitle').textContent = titles[code] || 'Verification Notice';
       document.getElementById('barcodeErrorMessage').textContent = message;
+    }
+
+    let toastTimeout = null;
+    function showToast(msg, type = 'info') {
+      const toast = document.getElementById('toast');
+      if (!toast) return;
+
+      toast.className = `toast ${type}`;
+      toast.textContent = msg;
+      toast.style.display = 'flex';
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.style.display = 'none';
+      }, 4000);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
     }
   </script>
 </body>

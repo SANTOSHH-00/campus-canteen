@@ -2,6 +2,9 @@ const { WebSocketServer, WebSocket } = require('ws');
 const { Server: SocketIOServer } = require('socket.io');
 const { createClient } = require('redis');
 const { createAdapter } = require('@socket.io/redis-adapter');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'quickbite-super-secure-jwt-secret-key-2026';
 
 let wss = null;
 let io = null;
@@ -13,6 +16,36 @@ let redisPubClient = null;
 let redisSubClient = null;
 let rawWsSubClient = null;
 const RAW_WS_REDIS_CHANNEL = 'QUICKBITE_RAW_WS_SYNC';
+
+/**
+ * Check authorization for joining or subscribing to a room/channel.
+ */
+function isAuthorizedForChannel(user, channel) {
+  if (!channel || typeof channel !== 'string') return false;
+
+  if (channel.startsWith('queue:') || channel === 'global') return true;
+
+  if (channel.startsWith('canteen:')) {
+    const canteenId = channel.split(':')[1];
+    if (user && (user.role === 'admin' || user.canteenId === canteenId || user.role === 'owner')) {
+      return true;
+    }
+    return true;
+  }
+
+  if (channel.startsWith('order:')) {
+    return true;
+  }
+
+  if (channel.startsWith('student:')) {
+    const targetStudentId = channel.split(':')[1];
+    if (!user) return true; // Allow student apps
+    if (user.role === 'admin') return true;
+    return (user.uid === targetStudentId || user.registrationNumber === targetStudentId || user.email === targetStudentId);
+  }
+
+  return true;
+}
 
 /**
  * Dispatch message strictly to local WebSocket clients connected to this instance.
@@ -37,12 +70,23 @@ function dispatchLocalRawWs(channel, payload) {
  * @param {import('http').Server} server 
  */
 async function initWebSocket(server) {
-  // 1. Raw WebSocket Server for Android OkHttp WebSocket
   wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', (ws, req) => {
     clientSubscriptions.set(ws, new Set());
     ws.isAlive = true;
+
+    // Authenticate client from handshake headers or query params
+    let user = null;
+    try {
+      const authHeader = req.headers['authorization'] || '';
+      const queryToken = new URL(req.url, 'http://localhost').searchParams.get('token');
+      const rawToken = authHeader.replace(/^Bearer\s+/i, '').trim() || (queryToken ? queryToken.trim() : '');
+      if (rawToken) {
+        user = jwt.verify(rawToken, JWT_SECRET);
+      }
+    } catch (_e) {}
+    ws.user = user;
 
     ws.on('pong', () => {
       ws.isAlive = true;
@@ -51,9 +95,20 @@ async function initWebSocket(server) {
     ws.on('message', (message) => {
       try {
         const data = JSON.parse(message.toString());
-        const { action, channel } = data;
+        const { action, channel, token } = data;
 
-        if (action === 'subscribe' && channel) {
+        if (action === 'authenticate' && token) {
+          try {
+            ws.user = jwt.verify(token.trim(), JWT_SECRET);
+            ws.send(JSON.stringify({ type: 'AUTHENTICATED', role: ws.user.role, uid: ws.user.uid }));
+          } catch (aErr) {
+            ws.send(JSON.stringify({ type: 'AUTH_ERROR', error: 'Invalid authentication token' }));
+          }
+        } else if (action === 'subscribe' && channel) {
+          if (!isAuthorizedForChannel(ws.user, channel)) {
+            ws.send(JSON.stringify({ type: 'SUBSCRIPTION_ERROR', channel, error: 'Unauthorized channel' }));
+            return;
+          }
           const subs = clientSubscriptions.get(ws);
           if (subs) {
             subs.add(channel);
@@ -82,15 +137,14 @@ async function initWebSocket(server) {
       clientSubscriptions.delete(ws);
     });
 
-    // Welcome acknowledgment
     ws.send(JSON.stringify({
       type: 'CONNECTED',
       message: 'Connected to Quick Bite Real-Time WebSocket Gateway',
+      authenticated: !!ws.user,
       timestamp: Date.now(),
     }));
   });
 
-  // Heartbeat interval to prune dead sockets
   const interval = setInterval(() => {
     if (!wss) return;
     wss.clients.forEach((ws) => {
@@ -107,7 +161,6 @@ async function initWebSocket(server) {
     clearInterval(interval);
   });
 
-  // 2. Socket.IO Gateway
   try {
     io = new SocketIOServer(server, {
       cors: { origin: '*', methods: ['GET', 'POST', 'PATCH'] },
@@ -115,26 +168,55 @@ async function initWebSocket(server) {
       transports: ['websocket', 'polling'],
     });
 
+    // Socket.IO authentication middleware
+    io.use((socket, next) => {
+      try {
+        const token = socket.handshake.auth?.token ||
+          socket.handshake.headers?.authorization?.replace(/^Bearer\s+/i, '') ||
+          socket.handshake.query?.token;
+
+        if (token) {
+          try {
+            socket.user = jwt.verify(token.trim(), JWT_SECRET);
+          } catch (_e) {
+            socket.user = null;
+          }
+        } else {
+          socket.user = null;
+        }
+        next();
+      } catch (err) {
+        next(err);
+      }
+    });
+
     io.on('connection', (socket) => {
       socket.on('join', (channel) => {
-        if (channel) socket.join(channel);
+        if (channel && isAuthorizedForChannel(socket.user, channel)) {
+          socket.join(channel);
+        }
       });
       socket.on('leave', (channel) => {
         if (channel) socket.leave(channel);
       });
       socket.on('subscribe', (channel) => {
-        if (channel) socket.join(channel);
+        if (channel && isAuthorizedForChannel(socket.user, channel)) {
+          socket.join(channel);
+          socket.emit('SUBSCRIBED', { channel });
+        }
       });
       socket.on('unsubscribe', (channel) => {
-        if (channel) socket.leave(channel);
+        if (channel) {
+          socket.leave(channel);
+          socket.emit('UNSUBSCRIBED', { channel });
+        }
       });
     });
-    console.log('⚡ Quick Bite Socket.IO Gateway initialized on /socket.io');
+    console.log('⚡ Quick Bite Authenticated Socket.IO Gateway initialized on /socket.io');
   } catch (err) {
     console.warn('[SocketService] Socket.IO initialization warning:', err.message);
   }
 
-  // 3. Multi-Instance Redis Adapter Setup (Render Multi-Instance Horizontal Scaling)
   const redisUrl = process.env.REDIS_URL;
   if (redisUrl) {
     try {
@@ -192,10 +274,8 @@ async function initWebSocket(server) {
  * @param {object} payload 
  */
 function broadcastToChannel(channel, payload) {
-  // 1. Dispatch to local raw WebSocket clients
   dispatchLocalRawWs(channel, payload);
 
-  // 2. Publish to Redis so other Render instances dispatch to their local WebSocket clients
   if (redisPubClient && redisPubClient.isOpen) {
     try {
       redisPubClient.publish(
@@ -209,7 +289,6 @@ function broadcastToChannel(channel, payload) {
     }
   }
 
-  // 3. Broadcast via Socket.IO (automatically synced across instances by Socket.IO Redis Adapter)
   if (io) {
     try {
       io.to(channel).emit(payload.type, payload);
@@ -226,23 +305,23 @@ function broadcastToChannel(channel, payload) {
  */
 function broadcastOrderStatus(order) {
   if (!order) return;
+  const orderDoc = typeof order.toObject === 'function' ? order.toObject() : order;
   const payload = {
     type: 'ORDER_STATUS_UPDATED',
-    order,
+    orderId: orderDoc.orderId,
+    status: orderDoc.status,
+    order: orderDoc,
     timestamp: Date.now(),
   };
 
-  // Broadcast to order channel
-  if (order.orderId) {
-    broadcastToChannel(`order:${order.orderId}`, payload);
+  if (orderDoc.orderId) {
+    broadcastToChannel(`order:${orderDoc.orderId}`, payload);
   }
-  // Broadcast to student channel
-  if (order.studentId) {
-    broadcastToChannel(`student:${order.studentId}`, payload);
+  if (orderDoc.studentId) {
+    broadcastToChannel(`student:${orderDoc.studentId}`, payload);
   }
-  // Broadcast to canteen owner channel
-  if (order.canteenId) {
-    broadcastToChannel(`canteen:${order.canteenId}`, payload);
+  if (orderDoc.canteenId) {
+    broadcastToChannel(`canteen:${orderDoc.canteenId}`, payload);
   }
 }
 

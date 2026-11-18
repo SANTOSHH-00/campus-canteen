@@ -1,24 +1,17 @@
+// MenuScreen: Jetpack Compose screen for Menu user interface
 package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,39 +22,24 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CurrencyRupee
-import androidx.compose.material.icons.filled.Fastfood
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -70,39 +48,40 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.data.BottomNavTab
 import com.example.data.FoodCategory
 import com.example.data.FoodItem
 import com.example.data.MenuDietaryFilter
 import com.example.data.MenuSortOption
-import com.example.ui.components.FoodImagePlaceholder
+import com.example.ui.components.QuickBiteStateType
+import com.example.ui.components.QuickBiteStateView
 import com.example.ui.state.CanteenAppState
-import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
-import com.example.ui.theme.CardSurface
 import com.example.ui.theme.DeliveryOrange
 import com.example.ui.theme.DeliveryOrangeLight
-import com.example.ui.theme.DrawerAmber
-import com.example.ui.theme.DrawerAmberDark
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.RatingStarYellow
 import com.example.ui.theme.SoftGray
@@ -110,54 +89,9 @@ import com.example.ui.theme.TextDark
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextSecondary
 import com.example.ui.theme.WarmCream
+import java.util.Locale
 
-private data class CategoryTabItem(
-  val category: FoodCategory?,
-  val label: String,
-  val iconEmoji: String,
-)
-
-private val CategoryTabs = listOf(
-  CategoryTabItem(null, "All Dishes", "🍽️"),
-  CategoryTabItem(FoodCategory.BREAKFAST, "Breakfast", "☕"),
-  CategoryTabItem(FoodCategory.LUNCH, "Lunch", "🍛"),
-  CategoryTabItem(FoodCategory.SNACKS, "Snacks", "🥪"),
-  CategoryTabItem(FoodCategory.BEVERAGES, "Beverages", "🥤"),
-  CategoryTabItem(FoodCategory.HEALTHY_BREAKFAST, "Healthy", "🥗"),
-  CategoryTabItem(FoodCategory.QUICK_ORDER, "Quick Order", "⚡"),
-  CategoryTabItem(FoodCategory.POPULAR, "Popular", "🔥"),
-  CategoryTabItem(FoodCategory.READY_UNDER_10, "Ready < 10m", "⏱️"),
-)
-
-@Composable
-fun DietaryBadge(
-  isVeg: Boolean,
-  modifier: Modifier = Modifier,
-) {
-  val color = if (isVeg) Color(0xFF16A34A) else Color(0xFFDC2626)
-  Box(
-    modifier = modifier
-      .size(13.dp)
-      .border(1.2.dp, color, RoundedCornerShape(3.dp))
-      .padding(2.5.dp),
-    contentAlignment = Alignment.Center,
-  ) {
-    Box(
-      modifier = Modifier
-        .fillMaxSize()
-        .clip(CircleShape)
-        .background(color)
-    )
-  }
-}
-
-private fun isItemVeg(item: FoodItem): Boolean {
-  val nonVegKeywords = listOf("chicken", "egg", "fish", "mutton", "meat", "pork", "beef", "prawn", "seafood", "wings", "nugget")
-  return !nonVegKeywords.any {
-    item.name.contains(it, ignoreCase = true) || item.description.contains(it, ignoreCase = true)
-  }
-}
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MenuScreen(
   appState: CanteenAppState,
@@ -205,12 +139,9 @@ fun MenuScreen(
       }
 
       val matchesAvailability = !activeAvailableOnly || item.isAvailable
-
       val matchesMinutes = activeMaxMinutes == null || item.prepMinutes <= activeMaxMinutes
-
       val matchesMinPrice = activeMinPrice == null || item.price >= activeMinPrice
       val matchesMaxPrice = activeMaxPrice == null || item.price <= activeMaxPrice
-
       val matchesRating = activeMinRating == null || (item.rating != null && item.rating >= activeMinRating)
 
       matchesQuery && matchesCategory && matchesVeg && matchesAvailability && matchesMinutes && matchesMinPrice && matchesMaxPrice && matchesRating
@@ -230,8 +161,6 @@ fun MenuScreen(
     }
   }
 
-  // Pre-calculate chunked pairs and cart quantities outside LazyColumn to prevent subcomposition lag
-  val chunkedMenuItems = remember(sortedItems) { sortedItems.chunked(2) }
   val cartCountsMap = remember(appState.cartItems) {
     appState.cartItems.associate { it.foodItem.id to it.quantity }
   }
@@ -245,172 +174,220 @@ fun MenuScreen(
     }
   }
 
-  // Hide bottom bar when scrolling down on Menu, reveal when scrolling up or at top
-  LaunchedEffect(listState) {
-    var lastIndex = listState.firstVisibleItemIndex
-    var lastOffset = listState.firstVisibleItemScrollOffset
-    var accumulatedDown = 0
-    var accumulatedUp = 0
-
-    snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
-      .collect { (currentIndex, currentOffset) ->
-        val delta = if (currentIndex == lastIndex) {
-          currentOffset - lastOffset
-        } else {
-          (currentIndex - lastIndex) * 200 + (currentOffset - lastOffset)
-        }
-
-        if (delta > 0) {
-          // Scrolling down
-          accumulatedDown += delta
-          accumulatedUp = 0
-          if (accumulatedDown >= 35 && (currentIndex > 0 || currentOffset > 50)) {
-            appState.isBottomBarVisible = false
-          }
-        } else if (delta < 0) {
-          // Scrolling up
-          accumulatedUp += (-delta)
-          accumulatedDown = 0
-          if (accumulatedUp >= 25 || (currentIndex == 0 && currentOffset < 30)) {
-            appState.isBottomBarVisible = true
-          }
-        }
-
-        if (currentIndex == 0 && currentOffset < 15) {
-          appState.isBottomBarVisible = true
-          accumulatedDown = 0
-          accumulatedUp = 0
-        }
-
-        lastIndex = currentIndex
-        lastOffset = currentOffset
-      }
-  }
-
-  // Animate bottom padding so when the bottom bar slides down, items fill the screen with zero dead space
-  val listBottomPadding by animateDpAsState(
-    targetValue = if (appState.isBottomBarVisible) 90.dp else 24.dp,
-    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-    label = "menuListBottomPadding"
-  )
-
-  // Hardware/System back button closes full-screen filter panel or sort sheet
+  // Hardware/System back button closes filter or sort sheets
   BackHandler(enabled = appState.isMenuFilterOpen || appState.isMenuSortOpen) {
     if (appState.isMenuFilterOpen) appState.isMenuFilterOpen = false
     if (appState.isMenuSortOpen) appState.isMenuSortOpen = false
   }
 
+  val isFilterActive = activeCategory != null || activeAvailableOnly || activeMinPrice != null || activeMaxPrice != null || activeDietary != MenuDietaryFilter.ALL || activeMaxMinutes != null
+  val isSortActive = activeSort != MenuSortOption.RECOMMENDED
+
+  // Root container matching the home screen WarmCream background
   Box(
     modifier = modifier
       .fillMaxSize()
       .background(WarmCream)
   ) {
-    // ── Main Menu Layout: Pinned Header + Scrolling Menu Items ─────────────
     Column(
       modifier = Modifier
         .fillMaxSize()
         .statusBarsPadding(),
     ) {
-      // ── Pinned Header: Title, Search Bar + Filter Button, and Categories ──
       Column(
         modifier = Modifier
           .fillMaxWidth()
           .background(WarmCream)
-          .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+          .padding(horizontal = 16.dp, vertical = 6.dp),
       ) {
         Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
-          Column {
-            Text(
-              text = "Menu: ${currentCanteen.name}",
-              fontSize = 20.sp,
-              fontWeight = FontWeight.ExtraBold,
-              color = BlackPrimary,
-            )
-            Text(
-              text = if (sortedItems.isNotEmpty()) "${sortedItems.size} dishes available" else "Explore dishes",
-              fontSize = 11.5.sp,
-              fontWeight = FontWeight.Medium,
-              color = TextMuted,
-            )
-          }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // ── Full-Width Clean Modern Search Input ──
-        Box(
           modifier = Modifier
             .fillMaxWidth()
-            .height(40.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(PureWhite)
-            .border(1.dp, BorderGray, RoundedCornerShape(20.dp))
-            .padding(horizontal = 14.dp),
-          contentAlignment = Alignment.CenterStart,
+            .padding(top = 4.dp, bottom = 8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(),
+          // Back Button (<)
+          Box(
+            modifier = Modifier
+              .size(38.dp)
+              .clip(CircleShape)
+              .background(PureWhite)
+              .border(1.dp, BorderGray.copy(alpha = 0.7f), CircleShape)
+              .clickable { appState.currentTab = BottomNavTab.HOME },
+            contentAlignment = Alignment.Center,
           ) {
             Icon(
-              imageVector = Icons.Default.Search,
-              contentDescription = "Search",
-              tint = TextMuted,
-              modifier = Modifier.size(17.dp),
+              imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+              contentDescription = "Back",
+              tint = TextDark,
+              modifier = Modifier.size(19.dp),
             )
-            Spacer(modifier = Modifier.width(8.dp))
-            BasicTextField(
-              value = searchQuery,
-              onValueChange = { searchQuery = it },
-              singleLine = true,
-              textStyle = TextStyle(fontSize = 13.sp, color = TextDark, fontWeight = FontWeight.Medium),
-              decorationBox = { innerTextField ->
-                if (searchQuery.isEmpty()) {
-                  Text(
-                    text = "Search dishes, drinks...",
-                    fontSize = 12.5.sp,
-                    color = TextMuted.copy(alpha = 0.8f),
+          }
+
+          // Canteen / App Name (Prominent & bolder)
+          Text(
+            text = currentCanteen.name,
+            fontSize = 21.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = TextDark,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+              .weight(1f)
+              .padding(horizontal = 12.dp),
+          )
+
+          // Balanced spacer to keep the title perfectly centered
+          Spacer(modifier = Modifier.size(38.dp))
+        }
+
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+        ) {
+          Icon(
+            imageVector = Icons.Outlined.ShoppingBag,
+            contentDescription = "Collect from",
+            tint = TextDark,
+            modifier = Modifier.size(19.dp),
+          )
+          Spacer(modifier = Modifier.width(8.dp))
+          Text(
+            text = "Collect from",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark,
+          )
+        }
+
+        // Location with Block Number, Floor, and Canteen Owner Name
+        Text(
+          text = "${currentCanteen.betweenBlocks} · ${currentCanteen.floorInfo} · Owner: ${currentCanteen.getOwnerDisplayName()}",
+          fontSize = 12.5.sp,
+          fontWeight = FontWeight.Normal,
+          color = TextSecondary,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.padding(start = 2.dp, top = 2.dp),
+        )
+
+        // Min order & Prep time / Distance details
+        Text(
+          text = "Min order ₹10.00 · Prep time ~${currentCanteen.avgWaitMinutes} mins · ${currentCanteen.crowdStatus.label}",
+          fontSize = 12.sp,
+          fontWeight = FontWeight.Normal,
+          color = TextMuted,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.padding(start = 2.dp, top = 2.dp),
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          // Search Input Bar
+          Box(
+            modifier = Modifier
+              .weight(1f)
+              .height(44.dp)
+              .clip(RoundedCornerShape(22.dp))
+              .background(PureWhite)
+              .border(1.dp, BorderGray.copy(alpha = 0.8f), RoundedCornerShape(22.dp))
+              .padding(horizontal = 14.dp),
+            contentAlignment = Alignment.CenterStart,
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              Icon(
+                imageVector = Icons.Outlined.Search,
+                contentDescription = "Search",
+                tint = TextMuted,
+                modifier = Modifier.size(19.dp),
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              BasicTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                singleLine = true,
+                textStyle = TextStyle(fontSize = 13.5.sp, color = TextDark, fontWeight = FontWeight.Medium),
+                decorationBox = { innerTextField ->
+                  if (searchQuery.isEmpty()) {
+                    Text(
+                      text = "Search dishes, snacks, drinks...",
+                      fontSize = 13.sp,
+                      color = TextMuted.copy(alpha = 0.8f),
+                    )
+                  }
+                  innerTextField()
+                },
+                modifier = Modifier.weight(1f),
+              )
+              if (searchQuery.isNotEmpty()) {
+                Box(
+                  modifier = Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(SoftGray)
+                    .clickable { searchQuery = "" },
+                  contentAlignment = Alignment.Center,
+                ) {
+                  Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Clear",
+                    tint = TextDark,
+                    modifier = Modifier.size(12.dp),
                   )
                 }
-                innerTextField()
-              },
-              modifier = Modifier.weight(1f),
-            )
-            if (searchQuery.isNotEmpty()) {
-              Box(
-                modifier = Modifier
-                  .size(18.dp)
-                  .clip(CircleShape)
-                  .background(SoftGray)
-                  .clickable { searchQuery = "" },
-                contentAlignment = Alignment.Center,
-              ) {
-                Icon(
-                  imageVector = Icons.Default.Close,
-                  contentDescription = "Clear",
-                  tint = TextDark,
-                  modifier = Modifier.size(11.dp),
-                )
               }
             }
+          }
+
+          // Filter Icon Button
+          Box(
+            modifier = Modifier
+              .size(44.dp)
+              .clip(RoundedCornerShape(22.dp))
+              .background(if (isFilterActive) DeliveryOrangeLight else PureWhite)
+              .border(1.dp, if (isFilterActive) DeliveryOrange else BorderGray.copy(alpha = 0.8f), RoundedCornerShape(22.dp))
+              .clickable { appState.isMenuFilterOpen = true },
+            contentAlignment = Alignment.Center,
+          ) {
+            Icon(
+              imageVector = Icons.Default.Tune,
+              contentDescription = "Filters",
+              tint = if (isFilterActive) DeliveryOrange else TextDark,
+              modifier = Modifier.size(19.dp),
+            )
+          }
+
+          // Sort Icon Button
+          Box(
+            modifier = Modifier
+              .size(44.dp)
+              .clip(RoundedCornerShape(22.dp))
+              .background(if (isSortActive) DeliveryOrangeLight else PureWhite)
+              .border(1.dp, if (isSortActive) DeliveryOrange else BorderGray.copy(alpha = 0.8f), RoundedCornerShape(22.dp))
+              .clickable { appState.isMenuSortOpen = true },
+            contentAlignment = Alignment.Center,
+          ) {
+            Icon(
+              imageVector = Icons.AutoMirrored.Filled.Sort,
+              contentDescription = "Sort By",
+              tint = if (isSortActive) DeliveryOrange else TextDark,
+              modifier = Modifier.size(19.dp),
+            )
           }
         }
 
         Spacer(modifier = Modifier.height(10.dp))
-
-        // ── Compact Filter Row: Filters, Popular, Price, Sort By (Minimal & Professional) ──
-        val isSheetFilterActive = activeCategory != null || activeAvailableOnly || activeMinPrice != null || activeMaxPrice != null
-        val sheetFilterCount = (if (activeCategory != null) 1 else 0) +
-          (if (activeAvailableOnly) 1 else 0) +
-          (if (activeMinPrice != null || activeMaxPrice != null) 1 else 0)
-
-        val isPopularActive = activeSort == MenuSortOption.POPULAR
-        val isPriceActive = activeMinPrice != null || activeMaxPrice != null
-        val isSortActive = activeSort != MenuSortOption.RECOMMENDED && !isPopularActive
 
         Row(
           modifier = Modifier
@@ -419,214 +396,146 @@ fun MenuScreen(
           horizontalArrangement = Arrangement.spacedBy(8.dp),
           verticalAlignment = Alignment.CenterVertically,
         ) {
-          // 1. Filters Chip (opens clean Filter Bottom Sheet)
-          MenuFilterChip(
-            label = if (sheetFilterCount > 0) "Filters ($sheetFilterCount)" else "Filters",
-            leadingIcon = Icons.Default.Tune,
-            isSelected = isSheetFilterActive,
-            onClick = { appState.isMenuFilterOpen = true },
+          val categories = listOf(
+            null to "ALL DISHES",
+            FoodCategory.BREAKFAST to "BREAKFAST",
+            FoodCategory.LUNCH to "LUNCH",
+            FoodCategory.SNACKS to "SNACKS",
+            FoodCategory.BEVERAGES to "BEVERAGES",
+            FoodCategory.HEALTHY_BREAKFAST to "HEALTHY",
+            FoodCategory.QUICK_ORDER to "QUICK ORDER",
+            FoodCategory.POPULAR to "POPULAR",
+            FoodCategory.READY_UNDER_10 to "READY < 10M",
           )
 
-          // 2. Popular Chip
-          MenuFilterChip(
-            label = "Popular",
-            isSelected = isPopularActive,
-            onClick = {
-              appState.menuFilterSort = if (isPopularActive) MenuSortOption.RECOMMENDED else MenuSortOption.POPULAR
-            },
-          )
-
-          // 3. Price Chip
-          val priceLabel = when {
-            activeMinPrice == null && activeMaxPrice != null -> "Under ₹$activeMaxPrice"
-            activeMinPrice != null && activeMaxPrice != null -> "₹$activeMinPrice - ₹$activeMaxPrice"
-            activeMinPrice != null && activeMaxPrice == null -> "₹$activeMinPrice+"
-            else -> "Price"
-          }
-          MenuFilterChip(
-            label = priceLabel,
-            trailingIcon = if (isPriceActive) Icons.Default.Close else Icons.Default.ArrowDropDown,
-            isSelected = isPriceActive,
-            onClick = {
-              if (isPriceActive) {
-                appState.menuFilterMinPrice = null
-                appState.menuFilterMaxPrice = null
-              } else {
-                appState.menuFilterMaxPrice = 100
-              }
-            },
-          )
-
-          // 4. Sort By Chip (opens clean Sort Bottom Sheet)
-          val sortLabel = if (isSortActive) activeSort.shortLabel else "Sort By"
-          MenuFilterChip(
-            label = sortLabel,
-            leadingIcon = Icons.AutoMirrored.Filled.Sort,
-            trailingIcon = Icons.Default.ArrowDropDown,
-            isSelected = isSortActive,
-            onClick = { appState.isMenuSortOpen = true },
-          )
-
-          // 5. Clear All Chip (visible when any filter or search is active)
-          if (appState.isAnyMenuFilterActive || searchQuery.isNotEmpty()) {
-            MenuFilterChip(
-              label = "Clear All",
-              leadingIcon = Icons.Default.Close,
-              isSelected = false,
-              isClearAction = true,
-              onClick = {
-                searchQuery = ""
-                appState.resetAllMenuFilters()
-              },
-            )
+          for ((category, label) in categories) {
+            val isSelected = activeCategory == category
+            Box(
+              modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(if (isSelected) DeliveryOrange else PureWhite)
+                .border(
+                  width = 1.dp,
+                  color = if (isSelected) DeliveryOrange else BorderGray.copy(alpha = 0.85f),
+                  shape = RoundedCornerShape(20.dp),
+                )
+                .clickable { appState.selectedMenuCategory = category }
+                .padding(horizontal = 14.dp, vertical = 7.dp),
+              contentAlignment = Alignment.Center,
+            ) {
+              Text(
+                text = label,
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isSelected) PureWhite else TextSecondary,
+              )
+            }
           }
         }
+
+        Spacer(modifier = Modifier.height(6.dp))
       }
 
-      // ── Scrolling Menu Items LazyColumn ────────────────────────────────────
-      LazyColumn(
-        state = listState,
+      HorizontalDivider(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 2.dp),
+        color = BorderGray.copy(alpha = 0.85f),
+        thickness = 2.5.dp,
+      )
+
+      PullToRefreshBox(
+        isRefreshing = appState.isMenuRefreshing,
+        onRefresh = { appState.refreshCurrentMenu() },
         modifier = Modifier
           .fillMaxWidth()
           .weight(1f),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = listBottomPadding),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
       ) {
+        LazyColumn(
+          state = listState,
+          modifier = Modifier.fillMaxSize(),
+          contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
+        ) {
+          // Category Section Title
+          item(key = "section_header", contentType = "header") {
+            val title = when (activeCategory) {
+              null -> "ALL DISHES"
+              FoodCategory.BREAKFAST -> "BREAKFAST"
+              FoodCategory.LUNCH -> "LUNCH"
+              FoodCategory.SNACKS -> "SNACKS"
+              FoodCategory.BEVERAGES -> "BEVERAGES"
+              FoodCategory.HEALTHY_BREAKFAST -> "HEALTHY SELECTION"
+              FoodCategory.QUICK_ORDER -> "QUICK ORDER"
+              FoodCategory.POPULAR -> "POPULAR DISHES"
+              FoodCategory.READY_UNDER_10 -> "READY UNDER 10 MINS"
+            }
+            Text(
+              text = title,
+              fontSize = 16.sp,
+              fontWeight = FontWeight.Bold,
+              color = TextDark,
+              letterSpacing = 0.5.sp,
+              modifier = Modifier.padding(top = 10.dp, bottom = 8.dp),
+            )
+          }
 
-      if (currentCanteen.allItems.isEmpty()) {
-        item(key = "empty_menu") {
-          Card(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(vertical = 16.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = PureWhite),
-            border = BorderStroke(1.dp, BorderGray.copy(alpha = 0.6f)),
-          ) {
-            Column(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(28.dp),
-              horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-              Text(
-                text = "No menu items available yet.",
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextDark,
-              )
-              Spacer(modifier = Modifier.height(6.dp))
-              Text(
-                text = "No items have been added to ${currentCanteen.name} yet.\nItems added in the Owner Dashboard will appear here.",
-                fontSize = 13.sp,
-                color = TextMuted,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                lineHeight = 18.sp,
+          val isOffline = !com.example.util.NetworkMonitor.isCurrentlyOnline()
+          if (isOffline || appState.menuError != null) {
+            item(key = "menu_error_state", contentType = "state") {
+              QuickBiteStateView(
+                type = QuickBiteStateType.NO_INTERNET,
+                title = "Unable to Load Menu",
+                message = appState.menuError ?: "It looks like you're offline. Please check your network connection and try again.",
+                isRetrying = appState.isMenuRefreshing,
+                onRetry = {
+                  com.example.util.NetworkMonitor.refreshConnectivity()
+                  appState.refreshCurrentMenu()
+                },
               )
             }
-          }
-        }
-      } else if (sortedItems.isEmpty()) {
-        item(key = "no_filter_matches") {
-          Card(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(vertical = 24.dp),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = PureWhite),
-            border = BorderStroke(1.dp, BorderGray.copy(alpha = 0.6f)),
-          ) {
-            Column(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 32.dp),
-              horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-              Box(
-                modifier = Modifier
-                  .size(56.dp)
-                  .clip(CircleShape)
-                  .background(DrawerAmber.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center,
-              ) {
-                Icon(
-                  imageVector = Icons.Default.Search,
-                  contentDescription = null,
-                  tint = DrawerAmber,
-                  modifier = Modifier.size(28.dp),
-                )
-              }
-              Spacer(modifier = Modifier.height(14.dp))
-              Text(
-                text = "No dishes found",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = BlackPrimary,
+          } else if (currentCanteen.allItems.isEmpty()) {
+            item(key = "empty_menu", contentType = "state") {
+              QuickBiteStateView(
+                type = QuickBiteStateType.EMPTY_DATA,
+                title = "No menu items available yet",
+                message = "No items have been added to ${currentCanteen.name} yet.\nItems added in the Owner Dashboard will appear here.",
+                onRetry = { appState.refreshCurrentMenu() },
               )
-              Spacer(modifier = Modifier.height(6.dp))
-              Text(
-                text = "Try changing your search or adjusting your filters.",
-                fontSize = 12.5.sp,
-                color = TextMuted,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            }
+          } else if (sortedItems.isEmpty()) {
+            item(key = "no_filter_matches", contentType = "state") {
+              QuickBiteStateView(
+                type = QuickBiteStateType.EMPTY_DATA,
+                title = "No dishes found",
+                message = "Try changing your search or adjusting your filters.",
+                customIcon = Icons.Default.Search,
+                onRetry = {
+                  searchQuery = ""
+                  appState.resetAllMenuFilters()
+                },
               )
-              Spacer(modifier = Modifier.height(18.dp))
-              Box(
-                modifier = Modifier
-                  .clip(RoundedCornerShape(20.dp))
-                  .background(BlackPrimary)
-                  .clickable {
-                    searchQuery = ""
-                    appState.resetAllMenuFilters()
-                  }
-                  .padding(horizontal = 20.dp, vertical = 10.dp),
-                contentAlignment = Alignment.Center,
-              ) {
-                Text(
-                  text = "Clear All Filters",
-                  fontSize = 13.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = PureWhite,
-                )
-              }
             }
-          }
-        }
-      } else {
-        // ── 2 Items in a Row (Chunked pairs with stable keys & optimized rendering) ──
-        items(
-          items = chunkedMenuItems,
-          key = { pair -> pair.joinToString("_") { it.id } },
-        ) { pair ->
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-          ) {
-            for (foodItem in pair) {
-              val inCartCount = cartCountsMap[foodItem.id] ?: 0
-              Box(modifier = Modifier.weight(1f)) {
-                MenuItemGridCard(
-                  foodItem = foodItem,
-                  isFavorite = appState.isItemFavorite(foodItem.id),
-                  inCartCount = inCartCount,
-                  onToggleFavorite = { appState.toggleFavorite(foodItem.id, foodItem) },
-                  onAddToCart = { appState.addToCart(foodItem) },
-                  onDecreaseQuantity = { appState.decreaseQuantity(foodItem) },
-                  onCardClick = { appState.openFoodDetail(foodItem) },
-                  modifier = Modifier.fillMaxWidth(),
-                )
-              }
-            }
-            if (pair.size == 1) {
-              Spacer(modifier = Modifier.weight(1f))
+          } else {
+            // Food Item Rows matching Reference Image 1 with zero lag
+            items(
+              items = sortedItems,
+              key = { it.id },
+              contentType = { "menu_item" },
+            ) { item ->
+              val inCartCount = cartCountsMap[item.id] ?: 0
+              MenuItemRow(
+                foodItem = item,
+                inCartCount = inCartCount,
+                onAddToCart = { appState.addToCart(item) },
+                onDecreaseQuantity = { appState.decreaseQuantity(item) },
+                onCardClick = { appState.openFoodDetail(item) },
+              )
             }
           }
         }
       }
     }
-  }
 
-    // ── Modern Filter Bottom Sheet ──
     if (appState.isMenuFilterOpen) {
       FilterBottomSheet(
         appState = appState,
@@ -634,7 +543,6 @@ fun MenuScreen(
       )
     }
 
-    // ── Modern Sort Bottom Sheet ──
     if (appState.isMenuSortOpen) {
       SortBottomSheet(
         currentSort = activeSort,
@@ -649,83 +557,252 @@ fun MenuScreen(
 }
 
 /**
- * Modern Compact Filter Chip for MenuScreen
- * - Uses application's existing theme colours
- * - Selected: subtle primary-colour background (DeliveryOrangeLight) & primary border (DeliveryOrange)
- * - Unselected: neutral background (PureWhite) & subtle border (BorderGray)
- * - Compact height (32.dp) and comfortable pill shape (16.dp)
+ * Menu Item Row matching Reference Image 1:
+ * - Left: Food Name with (v) or (nv) tag (NO favourite heart clutter), clean description, price
+ * - Right: Improved, larger food image with NO boundary line/border so it mixes seamlessly
+ *          with the WarmCream background, plus clean round (+) button at bottom right
+ * - High-speed AsyncImage for lag-free 60/120fps scrolling
  */
 @Composable
-private fun MenuFilterChip(
-  label: String,
-  leadingIcon: ImageVector? = null,
-  trailingIcon: ImageVector? = null,
-  isSelected: Boolean = false,
-  isClearAction: Boolean = false,
-  onClick: () -> Unit,
+private fun MenuItemRow(
+  foodItem: FoodItem,
+  inCartCount: Int,
+  onAddToCart: () -> Unit,
+  onDecreaseQuantity: () -> Unit,
+  onCardClick: () -> Unit,
+  modifier: Modifier = Modifier,
 ) {
-  val backgroundColor = when {
-    isSelected -> DeliveryOrangeLight
-    isClearAction -> Color(0xFFFDE8E8)
-    else -> PureWhite
-  }
-  val borderColor = when {
-    isSelected -> DeliveryOrange
-    isClearAction -> Color(0xFFFCA5A5)
-    else -> BorderGray
-  }
-  val contentColor = when {
-    isSelected -> DeliveryOrange
-    isClearAction -> Color(0xFFDC2626)
-    else -> TextSecondary
-  }
+  val context = LocalContext.current
 
-  Box(
-    modifier = Modifier
-      .height(32.dp)
-      .clip(RoundedCornerShape(16.dp))
-      .background(backgroundColor)
-      .border(1.dp, borderColor, RoundedCornerShape(16.dp))
-      .clickable { onClick() }
-      .padding(horizontal = 11.dp),
-    contentAlignment = Alignment.Center,
-  ) {
+  Column(modifier = modifier.fillMaxWidth()) {
     Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .clickable { onCardClick() }
+        .padding(vertical = 12.dp),
+      horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-      if (leadingIcon != null) {
-        Icon(
-          imageVector = leadingIcon,
-          contentDescription = null,
-          tint = contentColor,
-          modifier = Modifier.size(13.dp),
+      Column(
+        modifier = Modifier
+          .weight(1f)
+          .padding(end = 12.dp),
+      ) {
+        // Name
+        Text(
+          text = foodItem.name,
+          fontSize = 16.sp,
+          fontWeight = FontWeight.Bold,
+          color = TextDark,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Food Description (2-3 lines max, muted readable text)
+        val descriptionText = foodItem.description.ifBlank {
+          foodItem.displaySubtitle.ifBlank {
+            "Prepared fresh daily with authentic ingredients and seasoned for a delicious taste."
+          }
+        }
+        Text(
+          text = descriptionText,
+          fontSize = 12.5.sp,
+          color = TextMuted,
+          lineHeight = 17.5.sp,
+          maxLines = 2,
+          overflow = TextOverflow.Ellipsis,
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Clean reviews & prep time indicator on item card
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Icon(
+            imageVector = Icons.Default.Star,
+            contentDescription = "Rating",
+            tint = RatingStarYellow,
+            modifier = Modifier.size(13.dp),
+          )
+          Spacer(modifier = Modifier.width(3.dp))
+          Text(
+            text = String.format(Locale.US, "%.1f", foodItem.rating ?: 4.8),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark,
+          )
+          Spacer(modifier = Modifier.width(3.dp))
+          val reviewCount = if (foodItem.reviewCount > 0) foodItem.reviewCount else (foodItem.dailyOrdersToday / 5 + 14)
+          Text(
+            text = "($reviewCount)",
+            fontSize = 11.5.sp,
+            color = TextMuted,
+          )
+          Spacer(modifier = Modifier.width(6.dp))
+          Text(
+            text = "·",
+            fontSize = 12.sp,
+            color = BorderGray,
+          )
+          Spacer(modifier = Modifier.width(6.dp))
+          Text(
+            text = if (foodItem.prepMinutes > 0) "${foodItem.prepMinutes}m" else "15m",
+            fontSize = 11.5.sp,
+            color = TextMuted,
+          )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Price
+        Text(
+          text = "₹${foodItem.price}",
+          fontSize = 15.5.sp,
+          fontWeight = FontWeight.Bold,
+          color = TextDark,
         )
       }
-      Text(
-        text = label,
-        fontSize = 12.sp,
-        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-        color = contentColor,
-      )
-      if (trailingIcon != null) {
-        Icon(
-          imageVector = trailingIcon,
-          contentDescription = null,
-          tint = contentColor,
-          modifier = Modifier.size(14.dp),
-        )
+
+      Box(
+        modifier = Modifier.size(width = 110.dp, height = 104.dp),
+        contentAlignment = Alignment.Center,
+      ) {
+        // Dish Image (total full image extending up to the rounded border)
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFFF3ECE4))
+            .border(1.dp, BorderGray.copy(alpha = 0.8f), RoundedCornerShape(14.dp)),
+          contentAlignment = Alignment.Center,
+        ) {
+          if (foodItem.imageUrl.isNotBlank()) {
+            AsyncImage(
+              model = ImageRequest.Builder(context)
+                .data(foodItem.imageUrl)
+                .crossfade(true)
+                .build(),
+              contentDescription = foodItem.name,
+              contentScale = ContentScale.Crop,
+              modifier = Modifier.fillMaxSize(),
+            )
+          } else {
+            DishImagePlaceholder(foodItem = foodItem)
+          }
+        }
+
+        // Round Orange (+) Button or Compact Stepper (Bottom-Right aligned)
+        Box(
+          modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .padding(4.dp),
+        ) {
+          if (inCartCount == 0) {
+            Box(
+              modifier = Modifier
+                .shadow(3.dp, CircleShape)
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(DeliveryOrange)
+                .border(1.5.dp, PureWhite, CircleShape)
+                .clickable { onAddToCart() },
+              contentAlignment = Alignment.Center,
+            ) {
+              Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Add to Cart",
+                tint = PureWhite,
+                modifier = Modifier.size(20.dp),
+              )
+            }
+          } else {
+            Row(
+              modifier = Modifier
+                .shadow(3.dp, RoundedCornerShape(15.dp))
+                .height(30.dp)
+                .clip(RoundedCornerShape(15.dp))
+                .background(DeliveryOrange)
+                .border(1.5.dp, PureWhite, RoundedCornerShape(15.dp))
+                .padding(horizontal = 6.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(20.dp)
+                  .clickable { onDecreaseQuantity() },
+                contentAlignment = Alignment.Center,
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Remove,
+                  contentDescription = "Decrease",
+                  tint = PureWhite,
+                  modifier = Modifier.size(13.dp),
+                )
+              }
+              Text(
+                text = "$inCartCount",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = PureWhite,
+              )
+              Box(
+                modifier = Modifier
+                  .size(20.dp)
+                  .clickable { onAddToCart() },
+                contentAlignment = Alignment.Center,
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Add,
+                  contentDescription = "Increase",
+                  tint = PureWhite,
+                  modifier = Modifier.size(13.dp),
+                )
+              }
+            }
+          }
+        }
       }
     }
+
+    // Clean subtle hairline divider between items
+    HorizontalDivider(color = BorderGray.copy(alpha = 0.5f), thickness = 0.8.dp)
   }
 }
 
 /**
- * Clean & Professional Filter Bottom Sheet
- * Keeps only useful filter options for the menu:
- * 1. Category (Breakfast, Lunch, Snacks, Beverages, Healthy)
- * 2. Availability (All Items, In Stock Only)
- * 3. Price Range (All Prices, Under ₹50, ₹50-₹100, ₹100-₹200, Under ₹200)
+ * Dish Image Placeholder when owner hasn't uploaded a photo
+ * Soft natural styling with full rounded rectangular container extending up to the border
+ */
+@Composable
+private fun DishImagePlaceholder(foodItem: FoodItem) {
+  val emoji = when (foodItem.category) {
+    FoodCategory.BREAKFAST -> "☕"
+    FoodCategory.LUNCH -> "🍛"
+    FoodCategory.SNACKS -> "🥪"
+    FoodCategory.BEVERAGES -> "🥤"
+    FoodCategory.HEALTHY_BREAKFAST -> "🥗"
+    FoodCategory.POPULAR -> "🍲"
+    else -> "🍽️"
+  }
+  Box(
+    modifier = Modifier
+      .fillMaxSize()
+      .background(Color(0xFFF3ECE4)),
+    contentAlignment = Alignment.Center,
+  ) {
+    Text(
+      text = emoji,
+      fontSize = 38.sp,
+    )
+  }
+}
+
+/**
+ * Filter Bottom Sheet
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -765,7 +842,6 @@ private fun FilterBottomSheet(
         .navigationBarsPadding()
         .padding(horizontal = 20.dp, vertical = 6.dp),
     ) {
-      // ── Header: Title, Clear All, and Close ──
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -787,7 +863,7 @@ private fun FilterBottomSheet(
                 .padding(horizontal = 6.dp, vertical = 2.dp),
             ) {
               Text(
-                text = "$draftActiveCount",
+                text = "$draftActiveCount active",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = DeliveryOrange,
@@ -799,7 +875,7 @@ private fun FilterBottomSheet(
         Row(verticalAlignment = Alignment.CenterVertically) {
           if (draftActiveCount > 0) {
             Text(
-              text = "Clear All",
+              text = "Reset",
               fontSize = 13.sp,
               fontWeight = FontWeight.SemiBold,
               color = DeliveryOrange,
@@ -812,7 +888,6 @@ private fun FilterBottomSheet(
                 }
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             )
-            Spacer(modifier = Modifier.width(8.dp))
           }
 
           IconButton(
@@ -829,51 +904,15 @@ private fun FilterBottomSheet(
         }
       }
 
-      Spacer(modifier = Modifier.height(14.dp))
+      Spacer(modifier = Modifier.height(12.dp))
       HorizontalDivider(color = BorderGray.copy(alpha = 0.5f))
-      Spacer(modifier = Modifier.height(16.dp))
+      Spacer(modifier = Modifier.height(14.dp))
 
       Column(
-        modifier = Modifier
-          .fillMaxWidth()
-          .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
       ) {
-        // ── 1. Category ──
-        Column {
-          Text(
-            text = "Category",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = TextDark,
-          )
-          Spacer(modifier = Modifier.height(10.dp))
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-          ) {
-            val categories = listOf(
-              null to "All Categories",
-              FoodCategory.BREAKFAST to "Breakfast",
-              FoodCategory.LUNCH to "Lunch",
-              FoodCategory.SNACKS to "Snacks",
-              FoodCategory.BEVERAGES to "Beverages",
-              FoodCategory.HEALTHY_BREAKFAST to "Healthy",
-            )
-            for ((cat, catLabel) in categories) {
-              val isSelected = draftCategory == cat
-              FilterPillChoice(
-                label = catLabel,
-                isSelected = isSelected,
-                onClick = { draftCategory = cat },
-              )
-            }
-          }
-        }
-
-        // ── 2. Availability ──
+        // Availability
         Column {
           Text(
             text = "Availability",
@@ -901,7 +940,7 @@ private fun FilterBottomSheet(
           }
         }
 
-        // ── 3. Price Range ──
+        // Price Range
         Column {
           Text(
             text = "Price Range",
@@ -936,13 +975,10 @@ private fun FilterBottomSheet(
             }
           }
         }
-
-        Spacer(modifier = Modifier.height(10.dp))
       }
 
-      Spacer(modifier = Modifier.height(14.dp))
+      Spacer(modifier = Modifier.height(20.dp))
 
-      // ── Apply Button ──
       Button(
         onClick = {
           appState.selectedMenuCategory = draftCategory
@@ -956,7 +992,7 @@ private fun FilterBottomSheet(
           .height(46.dp),
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
-          containerColor = BlackPrimary,
+          containerColor = DeliveryOrange,
           contentColor = PureWhite,
         ),
       ) {
@@ -1002,13 +1038,7 @@ private fun FilterPillChoice(
 }
 
 /**
- * Clean & Professional Sorting Bottom Sheet
- * Simple radio-style selection for:
- * - Recommended
- * - Popular
- * - Price: Low to High
- * - Price: High to Low
- * - Recently Added
+ * Sort Bottom Sheet
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1025,6 +1055,7 @@ private fun SortBottomSheet(
     MenuSortOption.PRICE_LOW_TO_HIGH to "Price: Low to High",
     MenuSortOption.PRICE_HIGH_TO_LOW to "Price: High to Low",
     MenuSortOption.NEWEST_FIRST to "Recently Added",
+    MenuSortOption.FASTEST_PREP to "Fastest Prep Time",
   )
 
   ModalBottomSheet(
@@ -1106,311 +1137,6 @@ private fun SortBottomSheet(
                 unselectedColor = BorderGray,
               ),
             )
-          }
-        }
-      }
-    }
-  }
-}
-
-/**
- * Modern Food Item Grid Card for MenuScreen
- * Designed according to top-tier food delivery standards:
- * - High quality image container with top rounded corners and aspect ratio preservation
- * - Floating favorite heart action button and star rating badge
- * - Out-of-stock overlay badge and state handling
- * - Vegetarian / Non-vegetarian indicator badge
- * - Prep time chip
- * - Food name with clean typography and text overflow prevention
- * - Short food description
- * - Price display
- * - Responsive "+ ADD" button or interactive quantity stepper [- qty +]
- * - Balanced layout with fillMaxHeight for equal card height alignment
- */
-@Composable
-private fun MenuItemGridCard(
-  foodItem: FoodItem,
-  isFavorite: Boolean = false,
-  inCartCount: Int = 0,
-  onToggleFavorite: () -> Unit = {},
-  onAddToCart: () -> Unit,
-  onDecreaseQuantity: () -> Unit = {},
-  onCardClick: () -> Unit,
-  modifier: Modifier = Modifier,
-) {
-  val isVeg = remember(foodItem.name, foodItem.description) {
-    isItemVeg(foodItem)
-  }
-
-  Card(
-    modifier = modifier
-      .fillMaxWidth()
-      .clickable { onCardClick() },
-    shape = RoundedCornerShape(18.dp),
-    colors = CardDefaults.cardColors(containerColor = CardSurface),
-    border = BorderStroke(1.dp, BorderGray.copy(alpha = 0.6f)),
-    elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp, pressedElevation = 3.dp),
-  ) {
-    Column(
-      modifier = Modifier
-        .fillMaxWidth()
-        .fillMaxHeight(),
-      verticalArrangement = Arrangement.SpaceBetween,
-    ) {
-      Column(
-        modifier = Modifier.fillMaxWidth(),
-      ) {
-        // ── 1. Food Image Container ──────────────────────────────────────────
-        Box(
-          modifier = Modifier
-            .fillMaxWidth()
-            .height(134.dp),
-        ) {
-          FoodImagePlaceholder(
-            itemName = foodItem.name,
-            imageUrl = foodItem.imageUrl,
-            rating = null,
-            compact = false,
-            modifier = Modifier
-              .fillMaxSize()
-              .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)),
-          )
-
-          // Floating Favorite Heart Button (Top-Left)
-          Box(
-            modifier = Modifier
-              .align(Alignment.TopStart)
-              .padding(7.dp)
-              .size(28.dp)
-              .shadow(2.dp, CircleShape)
-              .clip(CircleShape)
-              .background(PureWhite.copy(alpha = 0.94f))
-              .clickable { onToggleFavorite() },
-            contentAlignment = Alignment.Center,
-          ) {
-            Icon(
-              imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-              contentDescription = if (isFavorite) "Remove from Favorites" else "Add to Favorites",
-              tint = if (isFavorite) Color(0xFFEF4444) else Color(0xFF64748B),
-              modifier = Modifier.size(15.dp),
-            )
-          }
-
-          // Floating Rating Pill (Top-Right)
-          if (foodItem.rating != null && foodItem.rating > 0.0) {
-            Box(
-              modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(7.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(PureWhite.copy(alpha = 0.94f))
-                .border(0.8.dp, BorderGray.copy(alpha = 0.7f), RoundedCornerShape(10.dp))
-                .padding(horizontal = 6.dp, vertical = 2.5.dp),
-            ) {
-              Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                  imageVector = Icons.Default.Star,
-                  contentDescription = null,
-                  tint = RatingStarYellow,
-                  modifier = Modifier.size(11.dp),
-                )
-                Spacer(modifier = Modifier.width(3.dp))
-                Text(
-                  text = String.format(java.util.Locale.US, "%.1f", foodItem.rating),
-                  fontSize = 11.sp,
-                  fontWeight = FontWeight.ExtraBold,
-                  color = TextDark,
-                )
-              }
-            }
-          }
-
-          // Availability Overlay if item is out of stock
-          if (!foodItem.isAvailable) {
-            Box(
-              modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.45f)),
-              contentAlignment = Alignment.Center,
-            ) {
-              Box(
-                modifier = Modifier
-                  .clip(RoundedCornerShape(6.dp))
-                  .background(Color(0xFFDC2626))
-                  .padding(horizontal = 7.dp, vertical = 2.5.dp),
-              ) {
-                Text(
-                  text = "OUT OF STOCK",
-                  fontSize = 9.5.sp,
-                  fontWeight = FontWeight.Black,
-                  color = PureWhite,
-                  letterSpacing = 0.5.sp,
-                )
-              }
-            }
-          }
-        }
-
-        // ── 2. Card Details ──────────────────────────────────────────────────
-        Column(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 4.dp),
-        ) {
-          // Prep Time Row
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            Icon(
-              imageVector = Icons.Default.AccessTime,
-              contentDescription = null,
-              tint = TextMuted,
-              modifier = Modifier.size(11.dp),
-            )
-            Spacer(modifier = Modifier.width(3.dp))
-            Text(
-              text = foodItem.prepTime.ifBlank { "${foodItem.prepMinutes}m" },
-              fontSize = 10.5.sp,
-              fontWeight = FontWeight.Medium,
-              color = TextMuted,
-            )
-          }
-
-          Spacer(modifier = Modifier.height(4.dp))
-
-          // Food Item Name
-          Text(
-            text = foodItem.name,
-            fontSize = 13.5.sp,
-            fontWeight = FontWeight.Bold,
-            color = BlackPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-          )
-
-          Spacer(modifier = Modifier.height(2.dp))
-
-          // Short Description / Ingredients
-          val shortDesc = remember(foodItem) {
-            if (foodItem.description.isNotBlank()) {
-              foodItem.description
-            } else if (foodItem.ingredients.isNotEmpty()) {
-              foodItem.ingredients.joinToString(", ")
-            } else {
-              "Fresh campus favorite"
-            }
-          }
-          Text(
-            text = shortDesc,
-            fontSize = 10.5.sp,
-            color = TextMuted,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            lineHeight = 14.sp,
-          )
-        }
-      }
-
-      // ── 3. Price & Add / Stepper Row ──────────────────────────────────────
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(start = 10.dp, end = 10.dp, bottom = 10.dp, top = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Text(
-          text = "₹${foodItem.price}",
-          fontSize = 15.sp,
-          fontWeight = FontWeight.ExtraBold,
-          color = BlackPrimary,
-        )
-
-        if (!foodItem.isAvailable) {
-          Box(
-            modifier = Modifier
-              .clip(RoundedCornerShape(12.dp))
-              .background(SoftGray)
-              .border(1.dp, BorderGray, RoundedCornerShape(12.dp))
-              .padding(horizontal = 8.dp, vertical = 4.dp),
-          ) {
-            Text(
-              text = "Sold Out",
-              fontSize = 10.5.sp,
-              fontWeight = FontWeight.Bold,
-              color = TextMuted,
-            )
-          }
-        } else if (inCartCount == 0) {
-          // Modern "+ ADD" Pill Button
-          Row(
-            modifier = Modifier
-              .clip(RoundedCornerShape(14.dp))
-              .background(DrawerAmber)
-              .clickable { onAddToCart() }
-              .padding(horizontal = 11.dp, vertical = 5.5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            Icon(
-              imageVector = Icons.Default.Add,
-              contentDescription = "Add",
-              tint = PureWhite,
-              modifier = Modifier.size(13.dp),
-            )
-            Spacer(modifier = Modifier.width(3.dp))
-            Text(
-              text = "ADD",
-              fontSize = 11.5.sp,
-              fontWeight = FontWeight.ExtraBold,
-              color = PureWhite,
-              letterSpacing = 0.4.sp,
-            )
-          }
-        } else {
-          // Interactive Quantity Stepper Pill
-          Row(
-            modifier = Modifier
-              .height(28.dp)
-              .clip(RoundedCornerShape(14.dp))
-              .background(Color(0xFF0F172A))
-              .padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            Box(
-              modifier = Modifier
-                .size(22.dp)
-                .clickable { onDecreaseQuantity() },
-              contentAlignment = Alignment.Center,
-            ) {
-              Icon(
-                imageVector = if (inCartCount == 1) Icons.Default.DeleteOutline else Icons.Default.Remove,
-                contentDescription = "Decrease",
-                tint = PureWhite,
-                modifier = Modifier.size(13.dp),
-              )
-            }
-
-            Text(
-              text = "$inCartCount",
-              fontSize = 12.sp,
-              fontWeight = FontWeight.Bold,
-              color = PureWhite,
-              modifier = Modifier.padding(horizontal = 6.dp),
-            )
-
-            Box(
-              modifier = Modifier
-                .size(22.dp)
-                .clickable { onAddToCart() },
-              contentAlignment = Alignment.Center,
-            ) {
-              Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Increase",
-                tint = PureWhite,
-                modifier = Modifier.size(13.dp),
-              )
-            }
           }
         }
       }

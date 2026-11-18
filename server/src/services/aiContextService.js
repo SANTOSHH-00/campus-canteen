@@ -9,6 +9,7 @@ const Order = require('../models/Order');
 const Canteen = require('../models/Canteen');
 const Item = require('../models/Item');
 const User = require('../models/User');
+const { TERMINAL_STATUSES, buildOrderTimeline } = require('./aiToolsService');
 
 const ACTIVE_STATUS_LIST = [
   'NEW', 'WAITING', 'PLACED', 'PENDING', 'CONFIRMED', 'ACCEPTED', 'PREPARING', 'READY', 'READY_FOR_PICKUP',
@@ -16,7 +17,6 @@ const ACTIVE_STATUS_LIST = [
   'Ready for Pickup', 'Waiting', 'Preparing', 'Placed', 'Pending', 'Confirmed', 'Accepted'
 ];
 
-// ── In-Memory Caches for High-Performance Latency Optimization ──
 let cachedCanteens = null;
 let cachedCanteensTimestamp = 0;
 const CANTEEN_CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
@@ -106,6 +106,7 @@ function mapOrderToDto(o) {
     pickupLocation: o.pickupLocation || o.pickupCounter || 'Counter 1',
     itemsSummary,
     statusExplanation: getStatusHumanDescription(o.status, o.orderId, token),
+    timeline: buildOrderTimeline(o),
   };
 }
 
@@ -135,7 +136,6 @@ async function buildAiContext({
   let activeOrders = [];
   let trackedOrder = null;
 
-  // 1. Time-of-Day Calculation (Indian Standard Time: UTC+5:30)
   const nowUtc = new Date();
   const istOffsetMs = 5.5 * 60 * 60 * 1000;
   const istNow = new Date(nowUtc.getTime() + istOffsetMs);
@@ -154,10 +154,8 @@ async function buildAiContext({
     timeGreeting = 'Good evening';
   }
 
-  // 2. Greeting Intent Detection
   const isGreeting = /^(hi|hello|hey|good\s+morning|good\s+afternoon|good\s+evening|gm|morning|evening|afternoon|howdy|sup|what'?s\s+up|namaste)\b/i.test(normalizedQuery);
 
-  // 3. User Identity Resolution (supports uid, registrationNumber, email)
   const userQueryConditions = [];
   if (studentId && studentId !== 'guest_student') {
     userQueryConditions.push({ uid: studentId });
@@ -180,7 +178,6 @@ async function buildAiContext({
   const effectiveName = student?.name || studentName || 'Student';
   const firstName = effectiveName.trim().split(' ')[0].replace(/^./, c => c.toUpperCase());
 
-  // Aggregate ALL possible student identities to ensure 100% order matching
   const candidateIdentities = [
     studentId,
     studentId ? studentId.toLowerCase() : null,
@@ -213,7 +210,6 @@ async function buildAiContext({
 - Avoid repeating greetings unnecessarily on follow-up questions.`);
   }
 
-  // 4. Intent classification
   const isOrderRelated = normalizedQuery.includes('order') ||
                          normalizedQuery.includes('track') ||
                          normalizedQuery.includes('where') ||
@@ -231,31 +227,51 @@ async function buildAiContext({
                         normalizedQuery.includes('popular') ||
                         normalizedQuery.includes('veg') ||
                         normalizedQuery.includes('price') ||
+                        normalizedQuery.includes('cost') ||
+                        normalizedQuery.includes('rate') ||
                         normalizedQuery.includes('under') ||
                         normalizedQuery.includes('snack') ||
                         normalizedQuery.includes('tasty') ||
                         normalizedQuery.includes('suggest') ||
                         normalizedQuery.includes('breakfast') ||
                         normalizedQuery.includes('lunch') ||
-                        normalizedQuery.includes('dinner');
+                        normalizedQuery.includes('dinner') ||
+                        normalizedQuery.includes('available') ||
+                        normalizedQuery.includes('have') ||
+                        normalizedQuery.includes('get') ||
+                        normalizedQuery.includes('serve') ||
+                        normalizedQuery.includes('dish') ||
+                        normalizedQuery.includes('item') ||
+                        normalizedQuery.includes('pancake') ||
+                        normalizedQuery.includes('dosa') ||
+                        normalizedQuery.includes('burger') ||
+                        normalizedQuery.includes('pizza') ||
+                        normalizedQuery.includes('coffee') ||
+                        normalizedQuery.includes('tea') ||
+                        normalizedQuery.includes('shake') ||
+                        normalizedQuery.includes('juice') ||
+                        normalizedQuery.includes('sandwich') ||
+                        normalizedQuery.includes('chole') ||
+                        normalizedQuery.includes('biryani') ||
+                        normalizedQuery.includes('favourite') ||
+                        normalizedQuery.includes('favorite') ||
+                        normalizedQuery.includes('cart');
 
-  // 5. Specific Order ID or Token check
   const orderIdMatch = message.match(/(?:order\s*(?:number\s*|no\.?\s*|#\s*)?|#)\s*([A-Za-z0-9_-]{3,24})/i) ||
                        message.match(/\b(QB[0-9]{3,8}|ORD-[0-9]{3,14}(?:-[0-9]{3,6})?)\b/i);
   const requestedOrderId = orderIdMatch ? orderIdMatch[1].toUpperCase() : null;
 
-  // 6. Parallel DB Execution (Active Orders, Canteens, Specific Order)
   const dbPromises = [
     getCachedCanteens(),
   ];
 
   if (uniqueIdentities.length > 0) {
-    // Active orders query: match by ANY of the student's unique IDs and ANY active status (waiting, preparing, ready, etc.)
+    // Active orders query: match by ANY of the student's unique IDs and exclude all terminal statuses
     dbPromises.push(
       Order.find({
         studentId: { $in: uniqueIdentities },
-        status: { $in: ACTIVE_STATUS_LIST },
-      }).sort({ orderPlacedAt: -1, createdAt: -1 }).limit(5).lean()
+        status: { $nin: TERMINAL_STATUSES },
+      }).sort({ createdAt: -1, orderPlacedAt: -1 }).limit(10).lean()
     );
   } else {
     dbPromises.push(Promise.resolve([]));
@@ -275,14 +291,13 @@ async function buildAiContext({
     dbPromises.push(Promise.resolve(null));
   }
 
-  // Past orders if history explicitly requested
   if (isOrderRelated && (normalizedQuery.includes('history') || normalizedQuery.includes('past') || normalizedQuery.includes('previous'))) {
     if (uniqueIdentities.length > 0) {
       dbPromises.push(
         Order.find({
           studentId: { $in: uniqueIdentities },
-          status: { $nin: ACTIVE_STATUS_LIST },
-        }).sort({ orderPlacedAt: -1, createdAt: -1 }).limit(3).lean()
+          status: { $in: TERMINAL_STATUSES },
+        }).sort({ createdAt: -1, orderPlacedAt: -1 }).limit(5).lean()
       );
     } else {
       dbPromises.push(Promise.resolve([]));
@@ -293,7 +308,6 @@ async function buildAiContext({
 
   const [allCanteens, activeDbOrders, specificOrder, pastDbOrders] = await Promise.all(dbPromises);
 
-  // 7. Process Specific Order Verification
   if (specificOrder) {
     const isOwner = uniqueIdentities.length === 0 || uniqueIdentities.some(id =>
       id.toLowerCase() === (specificOrder.studentId || '').toLowerCase()
@@ -320,7 +334,6 @@ async function buildAiContext({
 - Note: Order ID #${requestedOrderId} was not found in the system for this student.`);
   }
 
-  // 8. Process Active Orders
   activeOrders = (activeDbOrders || []).map(mapOrderToDto);
 
   if (!trackedOrder && isOrderRelated) {
@@ -357,7 +370,6 @@ None. Student currently has no pending, waiting, or preparing orders in the data
 ---`);
   }
 
-  // 9. Past Orders (if requested)
   if (pastDbOrders && pastDbOrders.length > 0) {
     const pastListText = pastDbOrders.map(o => {
       const itemsSummary = (o.items || []).map(i => `${i.name} x${i.quantity}`).join(', ');
@@ -368,7 +380,6 @@ ${pastListText}
 ---`);
   }
 
-  // 10. Available Canteens
   if (allCanteens && allCanteens.length > 0) {
     const canteensList = allCanteens.map(c => {
       const status = c.isOpen ? 'OPEN' : `CLOSED (${c.closeReason || 'Closed'})`;
@@ -379,7 +390,6 @@ ${canteensList}
 ---`);
   }
 
-  // 11. Food Menu Context (Only fetched if food/menu is relevant, skipping for pure order tracking)
   if (isFoodRelated || (!isOrderRelated && !isGreeting && normalizedQuery.length < 30)) {
     let maxBudget = null;
     const budgetMatch = normalizedQuery.match(/(?:under|below|less than|within)\s*(?:₹|rs\.?|inr)?\s*(\d+)/i) ||
@@ -431,6 +441,64 @@ ${canteensList}
       contextParts.push(`\nMATCHING MENU ITEMS FROM DATABASE:
 ${itemsSummary}
 ---`);
+    }
+
+    const dishMatch = normalizedQuery.match(/(?:are|is|do you have|can i get|have you got|got any|any|price of|cost of|order)\s+([a-z0-9\s'-]+?)(?:\s+available|\s+today|\s+on the menu|\s+in canteen|\s+now|\?|$)/i) ||
+                      normalizedQuery.match(/^([a-z0-9\s'-]+?)\s+(?:available|price|cost)\??$/i);
+    if (dishMatch) {
+      const candidateDish = dishMatch[1].replace(/^(there|the|a|an)\s+/i, '').trim();
+      if (candidateDish && !['food', 'items', 'dishes', 'anything', 'something', 'order', 'orders', 'menu'].includes(candidateDish.toLowerCase())) {
+        const dishEscaped = String(candidateDish).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const foundItem = await Item.findOne({ name: new RegExp(dishEscaped, 'i') }).lean();
+        if (foundItem) {
+          const c = (allCanteens || []).find(can => can.id === foundItem.canteenId);
+          const cName = c ? c.name : foundItem.canteenId;
+          const isAvail = foundItem.available !== false;
+          contextParts.push(`\nSPECIFIC DISH INQUIRY ("${candidateDish}"):
+- Item: ${foundItem.name}
+- Price: ₹${foundItem.price}
+- Canteen: ${cName}
+- Status: ${isAvail ? 'AVAILABLE' : 'CURRENTLY SOLD OUT / UNAVAILABLE'}
+- Rating: ${foundItem.rating || 4.5}⭐
+- Note: Answer the student's question accurately about ${foundItem.name}. It is ${isAvail ? 'available' : 'sold out'} at ${cName} for ₹${foundItem.price}.`);
+        } else {
+          contextParts.push(`\nSPECIFIC DISH INQUIRY ("${candidateDish}"):
+- Result: "${candidateDish}" is NOT offered on any campus canteen menu.
+- Note: State clearly that "${candidateDish}" is not currently offered on any campus canteen menu. Suggest real available options from the menu instead of hallucinating.`);
+        }
+      }
+    }
+
+    if (normalizedQuery.includes('favourite') || normalizedQuery.includes('favorite')) {
+      const favIds = student?.favorites || [];
+      if (favIds.length > 0) {
+        const favDbItems = await Item.find({ id: { $in: favIds } }).lean();
+        if (favDbItems.length > 0) {
+          const canteenMap = new Map((allCanteens || []).map(c => [c.id, c.name]));
+          const favText = favDbItems.map(it => `• ${it.name} - ₹${it.price} at ${canteenMap.get(it.canteenId) || it.canteenId} (${it.available !== false ? 'Available' : 'Sold Out'})`).join('\n');
+          contextParts.push(`\nSTUDENT'S SAVED FAVOURITE DISHES:
+${favText}`);
+        }
+      } else {
+        contextParts.push(`\nSTUDENT'S SAVED FAVOURITE DISHES:
+None saved yet. Inform the student they can tap the heart icon on any food item to save it to their favourites.`);
+      }
+    }
+
+    if (normalizedQuery.includes('recently') || normalizedQuery.includes('recent order') || normalizedQuery.includes('what did i order') || normalizedQuery.includes('order history')) {
+      if (!contextParts.some(p => p.includes('STUDENT\'S RECENT ORDERS') || p.includes('RECENT COMPLETED ORDERS'))) {
+        if (uniqueIdentities.length > 0) {
+          const past = await Order.find({ studentId: { $in: uniqueIdentities } }).sort({ createdAt: -1 }).limit(5).lean();
+          if (past.length > 0) {
+            const pastText = past.map(o => `• Order #${o.orderId} at ${o.pickupCanteenName || o.canteenId}: ${(o.items || []).map(i => `${i.name} x${i.quantity}`).join(', ')} — ₹${o.totalAmount} (${o.status})`).join('\n');
+            contextParts.push(`\nSTUDENT'S RECENT ORDERS:
+${pastText}`);
+          } else {
+            contextParts.push(`\nSTUDENT'S RECENT ORDERS:
+No previous orders found in database.`);
+          }
+        }
+      }
     }
   }
 

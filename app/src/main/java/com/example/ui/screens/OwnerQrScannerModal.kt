@@ -1,3 +1,4 @@
+// OwnerQrScannerModal: Jetpack Compose screen for OwnerQrScannerModal user interface
 package com.example.ui.screens
 
 import android.Manifest
@@ -203,7 +204,6 @@ fun OwnerQrScannerModal(
       Box(modifier = Modifier.fillMaxSize()) {
 
         if (hasCameraPermission) {
-          // ── CameraX Preview View ──────────────────────────────────────────
           AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
@@ -260,11 +260,9 @@ fun OwnerQrScannerModal(
             }
           )
 
-          // ── Viewfinder Reticle & Laser Scan Line Overlay ───────────────────
           ViewfinderOverlay(isScanning = !isVerifying && verificationResult is VerificationResultState.Idle)
 
         } else {
-          // ── Camera Permission Required Fallback ───────────────────────────
           Column(
             modifier = Modifier
               .fillMaxSize()
@@ -312,7 +310,6 @@ fun OwnerQrScannerModal(
           }
         }
 
-        // ── Top Action Bar (Close, Torch, Title, Manual Entry) ───────────────
         Row(
           modifier = Modifier
             .fillMaxWidth()
@@ -387,7 +384,6 @@ fun OwnerQrScannerModal(
           }
         }
 
-        // ── In-Flight Verification Loading Indicator ─────────────────────────
         if (isVerifying) {
           Box(
             modifier = Modifier
@@ -424,7 +420,6 @@ fun OwnerQrScannerModal(
           }
         }
 
-        // ── Result Bottom Sheet / Modal (Success & Error States) ─────────────
         AnimatedVisibility(
           visible = verificationResult !is VerificationResultState.Idle,
           enter = slideInVertically { it } + fadeIn(),
@@ -454,7 +449,6 @@ fun OwnerQrScannerModal(
     }
   }
 
-  // ── Manual Token Input Fallback Dialog ─────────────────────────────────────
   if (showManualInputDialog) {
     Dialog(onDismissRequest = { showManualInputDialog = false }) {
       Surface(
@@ -632,7 +626,6 @@ private fun ScanSuccessSheet(
         .fillMaxWidth()
         .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
-      // Header: Green Check & Success Title
       Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically

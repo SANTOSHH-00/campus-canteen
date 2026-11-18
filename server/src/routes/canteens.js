@@ -1,3 +1,4 @@
+// Canteen Management Routes: Canteen directory, operational status, and timing updates
 const express = require('express');
 const router = express.Router();
 const Canteen = require('../models/Canteen');

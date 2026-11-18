@@ -1,3 +1,4 @@
+// ManageItemsScreen: Jetpack Compose screen for ManageItems user interface
 package com.example.ui.screens
 
 import android.net.Uri
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -39,7 +41,12 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.CircularProgressIndicator
+import com.example.data.api.ApiClient
+import com.example.data.api.MongoRepository
+import kotlinx.coroutines.launch
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -67,6 +74,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -92,12 +100,16 @@ import com.example.ui.theme.TextMuted
 import com.example.ui.viewmodel.ItemActionState
 import com.example.ui.viewmodel.ItemViewModel
 
-private val OrangeAccent = Color(0xFFF97316)
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberLight
+import com.example.ui.theme.WarmCream
+
+private val OrangeAccent = DrawerAmber
 private val VegGreen = Color(0xFF16A34A)
 private val NonVegRed = Color(0xFFB91C1C)
-private val CardBorderColor = Color(0xFFF3F4F6)
-private val InactiveFilterBg = Color(0xFFF8F9FA)
-private val InactiveFilterBorder = Color(0xFFE5E7EB)
+private val CardBorderColor = BorderGray
+private val InactiveFilterBg = WarmCream
+private val InactiveFilterBorder = BorderGray
 
 // Categories matching Image 1 exactly: All, Meals, Snacks, Beverages, Combos
 private val MenuCategories = listOf("All", "Meals", "Snacks", "Beverages", "Combos")
@@ -119,22 +131,27 @@ fun ManageItemsScreen(
   val actionState by viewModel.actionState.collectAsState()
 
   var activeCategory by remember { mutableStateOf("All") }
+  var menuViewTab by remember { mutableStateOf("ACTIVE") } // "ACTIVE" vs "OUT_OF_STOCK"
   var showAddEditDialog by remember { mutableStateOf(false) }
   var itemToEdit by remember { mutableStateOf<ItemDocument?>(null) }
   var itemToDelete by remember { mutableStateOf<ItemDocument?>(null) }
   var itemForQuickPrep by remember { mutableStateOf<ItemDocument?>(null) }
   var itemForQuickStock by remember { mutableStateOf<ItemDocument?>(null) }
 
-  val displayItems = remember(allItems, activeCategory) {
-    val sourceList = allItems
+  val displayItems = remember(allItems, activeCategory, menuViewTab) {
+    val tabFiltered = if (menuViewTab == "ACTIVE") {
+      allItems.filter { it.available && it.stock > 0 }
+    } else {
+      allItems.filter { !it.available || it.stock <= 0 }
+    }
 
     when (activeCategory) {
-      "All" -> sourceList
-      "Meals" -> sourceList.filter { it.category.equals("MEALS", ignoreCase = true) || it.name.contains("Dosa", true) || it.name.contains("Roll", true) || it.name.contains("Thali", true) || it.name.contains("Rice", true) }
-      "Snacks" -> sourceList.filter { it.category.equals("SNACKS", ignoreCase = true) || it.category.equals("QUICK_ORDER", ignoreCase = true) || it.name.contains("Sandwich", true) || it.name.contains("Samosa", true) || it.name.contains("Puff", true) }
-      "Beverages" -> sourceList.filter { it.category.equals("BEVERAGES", ignoreCase = true) || it.name.contains("Coffee", true) || it.name.contains("Tea", true) || it.name.contains("Juice", true) || it.name.contains("Shake", true) }
-      "Combos" -> sourceList.filter { it.category.equals("COMBOS", ignoreCase = true) || it.category.equals("POPULAR", ignoreCase = true) || it.name.contains("Combo", true) || it.name.contains("Special", true) }
-      else -> sourceList
+      "All" -> tabFiltered
+      "Meals" -> tabFiltered.filter { it.category.equals("MEALS", ignoreCase = true) || it.name.contains("Dosa", true) || it.name.contains("Roll", true) || it.name.contains("Thali", true) || it.name.contains("Rice", true) }
+      "Snacks" -> tabFiltered.filter { it.category.equals("SNACKS", ignoreCase = true) || it.category.equals("QUICK_ORDER", ignoreCase = true) || it.name.contains("Sandwich", true) || it.name.contains("Samosa", true) || it.name.contains("Puff", true) }
+      "Beverages" -> tabFiltered.filter { it.category.equals("BEVERAGES", ignoreCase = true) || it.name.contains("Coffee", true) || it.name.contains("Tea", true) || it.name.contains("Juice", true) || it.name.contains("Shake", true) }
+      "Combos" -> tabFiltered.filter { it.category.equals("COMBOS", ignoreCase = true) || it.category.equals("POPULAR", ignoreCase = true) || it.name.contains("Combo", true) || it.name.contains("Special", true) }
+      else -> tabFiltered
     }
   }
 
@@ -147,7 +164,6 @@ fun ManageItemsScreen(
       .testTag("manage_items_screen"),
   ) {
     Column(modifier = Modifier.fillMaxSize()) {
-      // ── Top Header matching Image 1 ───────────────────────────────────────
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -205,9 +221,118 @@ fun ManageItemsScreen(
         }
       }
 
-      Spacer(modifier = Modifier.height(6.dp))
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 4.dp)
+          .clip(RoundedCornerShape(12.dp))
+          .background(Color(0xFFF3F4F6))
+          .padding(4.dp),
+      ) {
+        val activeCount = remember(allItems) { allItems.count { it.available && it.stock > 0 } }
+        val outOfStockCount = remember(allItems) { allItems.count { !it.available || it.stock <= 0 } }
 
-      // ── Category Filter Chips matching Image 1 (All, Meals, Snacks, Beverages, Combos) ─
+        // Active Menu Tab
+        Box(
+          modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(9.dp))
+            .background(if (menuViewTab == "ACTIVE") PureWhite else Color.Transparent)
+            .clickable { menuViewTab = "ACTIVE" }
+            .padding(vertical = 8.dp)
+            .testTag("tab_active_menu"),
+          contentAlignment = Alignment.Center,
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+              text = "Active Menu",
+              fontSize = 13.sp,
+              fontWeight = if (menuViewTab == "ACTIVE") FontWeight.Bold else FontWeight.Medium,
+              color = if (menuViewTab == "ACTIVE") OrangeAccent else TextMuted,
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Box(
+              modifier = Modifier
+                .clip(CircleShape)
+                .background(if (menuViewTab == "ACTIVE") OrangeAccent else Color(0xFFE5E7EB))
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+            ) {
+              Text(
+                text = "$activeCount",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (menuViewTab == "ACTIVE") PureWhite else TextDark,
+              )
+            }
+          }
+        }
+
+        // Out of Stock & Inactive Tab
+        Box(
+          modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(9.dp))
+            .background(if (menuViewTab == "OUT_OF_STOCK") PureWhite else Color.Transparent)
+            .clickable { menuViewTab = "OUT_OF_STOCK" }
+            .padding(vertical = 8.dp)
+            .testTag("tab_out_of_stock_menu"),
+          contentAlignment = Alignment.Center,
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+              text = "Out of Stock / Off",
+              fontSize = 13.sp,
+              fontWeight = if (menuViewTab == "OUT_OF_STOCK") FontWeight.Bold else FontWeight.Medium,
+              color = if (menuViewTab == "OUT_OF_STOCK") Color(0xFFDC2626) else TextMuted,
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Box(
+              modifier = Modifier
+                .clip(CircleShape)
+                .background(if (menuViewTab == "OUT_OF_STOCK") Color(0xFFDC2626) else Color(0xFFE5E7EB))
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+            ) {
+              Text(
+                text = "$outOfStockCount",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (menuViewTab == "OUT_OF_STOCK") PureWhite else TextDark,
+              )
+            }
+          }
+        }
+      }
+
+      Spacer(modifier = Modifier.height(4.dp))
+
+      if (menuViewTab == "OUT_OF_STOCK") {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFFFEF2F2))
+            .border(1.dp, Color(0xFFFCA5A5), RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Icon(
+            imageVector = Icons.Default.Inventory,
+            contentDescription = null,
+            tint = Color(0xFFDC2626),
+            modifier = Modifier.size(16.dp),
+          )
+          Spacer(modifier = Modifier.width(8.dp))
+          Text(
+            text = "These items are turned OFF or out of stock (hidden from students). Switch toggle ON or Restock to return them to the Active Menu.",
+            color = Color(0xFF991B1B),
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+          )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+      }
+
       LazyRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -237,7 +362,6 @@ fun ManageItemsScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // ── Action Error Feedback ─────────────────────────────────────────────
       if (actionState is ItemActionState.Error) {
         val err = (actionState as ItemActionState.Error).error
         Row(
@@ -264,10 +388,20 @@ fun ManageItemsScreen(
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f),
           )
+          IconButton(
+            onClick = { viewModel.resetActionState() },
+            modifier = Modifier.size(24.dp),
+          ) {
+            Icon(
+              imageVector = Icons.Default.Close,
+              contentDescription = "Dismiss",
+              tint = Color(0xFF9A3412),
+              modifier = Modifier.size(16.dp),
+            )
+          }
         }
       }
 
-      // ── Item Cards List matching Image 1 ──────────────────────────────────
       if (displayItems.isEmpty()) {
         Box(
           modifier = Modifier
@@ -278,18 +412,28 @@ fun ManageItemsScreen(
         ) {
           Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
-              imageVector = Icons.Default.Fastfood,
+              imageVector = if (menuViewTab == "ACTIVE") Icons.Default.Fastfood else Icons.Default.Inventory,
               contentDescription = null,
               tint = Color(0xFFD1D5DB),
               modifier = Modifier.size(48.dp),
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-              text = "No items in $activeCategory",
+              text = if (menuViewTab == "ACTIVE") "No active items in $activeCategory" else "No out of stock / disabled items in $activeCategory",
               fontSize = 15.sp,
               fontWeight = FontWeight.Bold,
               color = TextDark,
+              textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
+            if (menuViewTab == "ACTIVE" && allItems.any { !it.available || it.stock <= 0 }) {
+              Spacer(modifier = Modifier.height(6.dp))
+              Text(
+                text = "Items turned OFF or with 0 stock are shown separately in the 'Out of Stock / Off' tab.",
+                fontSize = 13.sp,
+                color = TextMuted,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+              )
+            }
           }
         }
       } else {
@@ -340,7 +484,6 @@ fun ManageItemsScreen(
     }
   }
 
-  // ── QUICK PREP TIME DIALOG ───────────────────────────────────────────────
   if (itemForQuickPrep != null) {
     val target = itemForQuickPrep!!
     val prepOptions = listOf(5, 7, 10, 12, 15, 20)
@@ -404,7 +547,6 @@ fun ManageItemsScreen(
     )
   }
 
-  // ── QUICK STOCK DIALOG ───────────────────────────────────────────────────
   if (itemForQuickStock != null) {
     val target = itemForQuickStock!!
     var stockCount by remember { mutableStateOf(target.stock.toString()) }
@@ -450,7 +592,6 @@ fun ManageItemsScreen(
     )
   }
 
-  // ── ADD / EDIT ITEM DIALOG ──────────────────────────────────────────────
   if (showAddEditDialog) {
     AddEditItemDialog(
       item = itemToEdit,
@@ -476,7 +617,6 @@ fun ManageItemsScreen(
     )
   }
 
-  // ── DELETE ITEM CONFIRMATION DIALOG ──────────────────────────────────────
   if (itemToDelete != null) {
     val target = itemToDelete!!
     AlertDialog(
@@ -504,7 +644,6 @@ fun ManageItemsScreen(
   }
 }
 
-// ── MENU ITEM CARD (MATCHES IMAGE 1 PRECISELY) ──────────────────────────────
 
 @Composable
 private fun MenuItemCard(
@@ -548,7 +687,6 @@ private fun MenuItemCard(
         .padding(12.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      // 1. Food Thumbnail Image matching user-side FoodCards
       FoodImagePlaceholder(
         itemName = item.name,
         imageUrl = item.imageUrl,
@@ -558,7 +696,6 @@ private fun MenuItemCard(
 
       Spacer(modifier = Modifier.width(14.dp))
 
-      // 2. Center Content: Name, Price, Veg Badge + Prep Time
       Column(modifier = Modifier.weight(1f)) {
         Text(
           text = item.name,
@@ -580,7 +717,6 @@ private fun MenuItemCard(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // Badge Row: Veg / Non-Veg + Clock Prep Time
         Row(verticalAlignment = Alignment.CenterVertically) {
           if (isBeverage) {
             Text(
@@ -628,15 +764,57 @@ private fun MenuItemCard(
             fontSize = 11.5.sp,
             color = Color(0xFF6B7280),
           )
+
+          if (item.stock <= 0) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Box(
+              modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color(0xFFFEE2E2))
+                .padding(horizontal = 5.dp, vertical = 2.dp),
+            ) {
+              Text(
+                text = "Stock: 0",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFDC2626),
+              )
+            }
+          } else if (!item.available) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Box(
+              modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color(0xFFFEF3C7))
+                .padding(horizontal = 5.dp, vertical = 2.dp),
+            ) {
+              Text(
+                text = "Off",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFB45309),
+              )
+            }
+          }
         }
       }
 
       Spacer(modifier = Modifier.width(8.dp))
 
-      // 3. Right: Orange Switch + 3-dots Menu Button
       Row(verticalAlignment = Alignment.CenterVertically) {
+        if (!item.available || item.stock <= 0) {
+          TextButton(
+            onClick = onUpdateStock,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+            modifier = Modifier.height(28.dp),
+          ) {
+            Text("Restock", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = OrangeAccent)
+          }
+          Spacer(modifier = Modifier.width(2.dp))
+        }
+
         Switch(
-          checked = item.available,
+          checked = item.available && item.stock > 0,
           onCheckedChange = onToggleAvailable,
           colors = SwitchDefaults.colors(
             checkedThumbColor = PureWhite,
@@ -660,7 +838,6 @@ private fun MenuItemCard(
             )
           }
 
-          // ── 3-DOTS FEATURES DROPDOWN ─────────────────────────────────────
           DropdownMenu(
             expanded = menuExpanded,
             onDismissRequest = { menuExpanded = false },
@@ -714,7 +891,6 @@ private fun MenuItemCard(
   }
 }
 
-// ── ADD / EDIT ITEM DIALOG ──────────────────────────────────────────────────
 
 private data class EditableAddon(
   val id: Long = System.currentTimeMillis() + (0..100000).random(),
@@ -750,6 +926,9 @@ private fun AddEditItemDialog(
   var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
   var errorMessage by remember { mutableStateOf<String?>(null) }
   var categoryExpanded by remember { mutableStateOf(false) }
+  val scope = rememberCoroutineScope()
+  val mongoRepo = remember { MongoRepository() }
+  var isGeneratingAiDesc by remember { mutableStateOf(false) }
 
   // Ingredients, Customization & Add-ons state
   var ingredientsStr by remember { mutableStateOf(item?.ingredients?.joinToString(", ") ?: "") }
@@ -797,7 +976,6 @@ private fun AddEditItemDialog(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Image Preview / Upload
         Row(
           modifier = Modifier.fillMaxWidth(),
           verticalAlignment = Alignment.CenterVertically,
@@ -862,13 +1040,62 @@ private fun AddEditItemDialog(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Description
+        // Description Header with AI Draft Action
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Text(
+            text = "Description",
+            fontSize = 13.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = TextDark,
+          )
+
+          TextButton(
+            onClick = {
+              if (name.isBlank()) {
+                errorMessage = "Please enter an item name first to draft an AI description."
+                return@TextButton
+              }
+              isGeneratingAiDesc = true
+              errorMessage = null
+              scope.launch {
+                val parsedIngs = ingredientsStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                val res = mongoRepo.generateItemDescription(name = name.trim(), category = category, ingredients = parsedIngs)
+                res.onSuccess { draft ->
+                  description = draft
+                }.onFailure { err ->
+                  errorMessage = "AI draft note: ${err.message}"
+                }
+                isGeneratingAiDesc = false
+              }
+            },
+            enabled = !isGeneratingAiDesc,
+          ) {
+            if (isGeneratingAiDesc) {
+              CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp, color = OrangeAccent)
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Drafting...", fontSize = 12.sp, color = OrangeAccent)
+            } else {
+              Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = OrangeAccent,
+                modifier = Modifier.size(15.dp),
+              )
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("✨ AI Draft", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = OrangeAccent)
+            }
+          }
+        }
+
         OutlinedTextField(
           value = description,
           onValueChange = { description = it },
-          label = { Text("Description") },
-          placeholder = { Text("Fresh vegetables with mint chutney") },
-          maxLines = 2,
+          placeholder = { Text("Describe main ingredients, style and taste...", fontSize = 13.sp, color = TextMuted) },
+          maxLines = 3,
           colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = OrangeAccent, focusedLabelColor = OrangeAccent),
           modifier = Modifier.fillMaxWidth(),
         )
@@ -956,7 +1183,6 @@ private fun AddEditItemDialog(
         HorizontalDivider(thickness = 0.5.dp, color = CardBorderColor)
         Spacer(modifier = Modifier.height(12.dp))
 
-        // ── 7. INGREDIENTS SECTION ──────────────────────────────────────────
         Text(
           text = "Ingredients",
           fontSize = 15.sp,
@@ -978,7 +1204,6 @@ private fun AddEditItemDialog(
         HorizontalDivider(thickness = 0.5.dp, color = CardBorderColor)
         Spacer(modifier = Modifier.height(12.dp))
 
-        // ── 8. CUSTOMIZATION SECTION ────────────────────────────────────────
         Text(
           text = "Customization Options",
           fontSize = 15.sp,
@@ -1010,7 +1235,6 @@ private fun AddEditItemDialog(
         HorizontalDivider(thickness = 0.5.dp, color = CardBorderColor)
         Spacer(modifier = Modifier.height(12.dp))
 
-        // ── 9. ADD-ONS SECTION ──────────────────────────────────────────────
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.SpaceBetween,

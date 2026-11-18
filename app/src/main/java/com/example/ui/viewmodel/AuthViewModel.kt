@@ -1,3 +1,4 @@
+// AuthViewModel: ViewModel managing UI state and business logic for Auth
 package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel

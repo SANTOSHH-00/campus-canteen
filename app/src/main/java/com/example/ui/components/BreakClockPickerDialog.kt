@@ -1,3 +1,4 @@
+// BreakClockPickerDialog: Reusable Jetpack Compose UI component
 package com.example.ui.components
 
 import androidx.compose.foundation.Canvas
@@ -144,7 +145,6 @@ fun BreakClockPickerDialog(
           .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
       ) {
-        // ── Top Bar: Title & Close ──────────────────────────────────────────
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.SpaceBetween,
@@ -188,7 +188,6 @@ fun BreakClockPickerDialog(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // ── Digital Time Display + AM/PM Toggle ─────────────────────────────
         Row(
           modifier = Modifier
             .fillMaxWidth()
@@ -296,7 +295,6 @@ fun BreakClockPickerDialog(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // ── Interactive Clock Layout Dial ───────────────────────────────────
         InteractiveClockDial(
           mode = pickerMode,
           selectedValue = if (pickerMode == ClockPickerMode.HOURS) selectedHour else selectedMinute,
@@ -313,7 +311,6 @@ fun BreakClockPickerDialog(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // ── Break Duration Options ──────────────────────────────────────────
         Column(modifier = Modifier.fillMaxWidth()) {
           Text(
             text = "Break Duration",
@@ -350,7 +347,6 @@ fun BreakClockPickerDialog(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // ── Quick Campus Shortcuts ──────────────────────────────────────────
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -394,7 +390,6 @@ fun BreakClockPickerDialog(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // ── Result Summary Card ─────────────────────────────────────────────
         Box(
           modifier = Modifier
             .fillMaxWidth()
@@ -443,7 +438,6 @@ fun BreakClockPickerDialog(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // ── Bottom Action Buttons ───────────────────────────────────────────
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.End,

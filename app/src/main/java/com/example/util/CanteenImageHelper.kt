@@ -1,3 +1,4 @@
+// CanteenImageHelper: Core utility and helper functions
 package com.example.util
 
 import android.content.Context
@@ -57,14 +58,12 @@ object CanteenImageHelper {
     val cleanId = canteenId.trim().lowercase()
     val num = cleanId.filter { it.isDigit() }.ifBlank { cleanId.removePrefix("canteen_") }
 
-    // 1. Delete all old local cached images for this canteen
     dir.listFiles()?.forEach { file ->
       if (file.name.contains(cleanId) || file.name.contains(num)) {
         file.delete()
       }
     }
 
-    // 2. Save with unique timestamp so Coil cache key is fresh
     val newFile = File(dir, "canteen_${num}_${System.currentTimeMillis()}.jpg")
     context.contentResolver.openInputStream(uri)?.use { input ->
       FileOutputStream(newFile).use { output ->
@@ -72,12 +71,10 @@ object CanteenImageHelper {
       }
     }
 
-    // 3. Clear Coil memory cache so previous image is instantly dropped
     try {
       Coil.imageLoader(context).memoryCache?.clear()
     } catch (e: Exception) {}
 
-    // 4. Update session manager with the new absolute file path
     SessionManager.saveCanteenProfile(
       canteenId = canteenId,
       imageUrl = newFile.absolutePath,
@@ -98,7 +95,6 @@ object CanteenImageHelper {
    * 4. Fallback: null (Coil shows default monogram / placeholder)
    */
   fun resolveCanteenImageSource(context: Context, canteenId: String, currentUrl: String? = null): Any? {
-    // 1. Priority 1: Explicitly provided currentUrl
     val candidate = currentUrl?.ifBlank { null }
     if (!candidate.isNullOrBlank()) {
       if (candidate.startsWith("http://") || candidate.startsWith("https://")) {
@@ -114,7 +110,6 @@ object CanteenImageHelper {
       }
     }
 
-    // 2. Priority 2: SessionManager saved URL
     val saved = SessionManager.getCanteenImage(canteenId)
     if (!saved.isNullOrBlank()) {
       if (saved.startsWith("http://") || saved.startsWith("https://")) {
@@ -130,13 +125,11 @@ object CanteenImageHelper {
       }
     }
 
-    // 3. Priority 3: Local cached profile file
     val localFile = getLocalProfileFile(context, canteenId)
     if (localFile != null && localFile.exists() && localFile.length() > 0) {
       return localFile
     }
 
-    // 4. Fallback: null (Coil shows default monogram)
     return null
   }
 }

@@ -137,6 +137,7 @@ dependencies {
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
+  implementation(libs.razorpay.checkout)
 
 
   testImplementation(libs.androidx.compose.ui.test.junit4)

@@ -1,3 +1,4 @@
+// OwnerSuggestionsScreen: Jetpack Compose screen for OwnerSuggestions user interface
 package com.example.ui.screens
 
 import android.widget.Toast
@@ -175,7 +176,6 @@ fun OwnerSuggestionsScreen(
       }
     }
 
-    // Content Body
     if (isLoading) {
       Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(color = DrawerAmber)
@@ -271,7 +271,6 @@ private fun SuggestionOwnerCard(
     modifier = Modifier.fillMaxWidth(),
   ) {
     Column(modifier = Modifier.padding(16.dp)) {
-      // Header: Student Name + Date + Status Pill
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -322,7 +321,6 @@ private fun SuggestionOwnerCard(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // Footer: Date + Status Change Dropdown
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -398,3 +396,4 @@ private fun SuggestionOwnerCard(
     }
   }
 }
+

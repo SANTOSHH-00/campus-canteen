@@ -1,3 +1,4 @@
+// Type: Application design system theme styling and color definitions
 package com.example.ui.theme
 
 import androidx.compose.material3.Typography

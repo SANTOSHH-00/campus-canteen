@@ -1,3 +1,4 @@
+// OwnerViewModel: ViewModel managing UI state and business logic for Owner
 package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel

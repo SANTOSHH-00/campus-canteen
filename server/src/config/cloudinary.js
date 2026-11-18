@@ -1,8 +1,8 @@
+// Cloud Storage Configuration: Configures Cloudinary CDN and Multer upload middleware for menu item images
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
 
-// Configure Cloudinary from environment variables
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -10,7 +10,7 @@ cloudinary.config({
   secure: true,
 });
 
-// Configure Multer storage engine for Cloudinary
+// Multer storage engine routing image uploads directly to Cloudinary with optimization transforms
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
@@ -19,7 +19,7 @@ const storage = new CloudinaryStorage({
       folder: `campus-canteen/items/${canteenId}`,
       allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
       transformation: [
-        { width: 800, height: 800, crop: 'limit' }, // Optimize & resize without distorting
+        { width: 800, height: 800, crop: 'limit' },
         { quality: 'auto', fetch_format: 'auto' }
       ],
       public_id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
@@ -29,7 +29,7 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);

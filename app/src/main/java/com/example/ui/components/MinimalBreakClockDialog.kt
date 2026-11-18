@@ -1,3 +1,4 @@
+// MinimalBreakClockDialog: Reusable Jetpack Compose UI component
 package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
@@ -163,7 +164,6 @@ fun MinimalBreakClockDialog(
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
         ) {
-          // ── 1. Top Header ─────────────────────────────────────────────────
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -214,7 +214,6 @@ fun MinimalBreakClockDialog(
 
           Spacer(modifier = Modifier.height(16.dp))
 
-          // ── 2. Campus Quick Slots (Order & Structure) ─────────────────────
           Text(
             text = "CAMPUS BREAK PRESETS",
             fontSize = 10.5.sp,
@@ -271,7 +270,6 @@ fun MinimalBreakClockDialog(
 
           Spacer(modifier = Modifier.height(18.dp))
 
-          // ── 3. Structured Digital Time Card + AM/PM + Nudge Buttons ───────
           Text(
             text = "CUSTOM START TIME",
             fontSize = 10.5.sp,
@@ -444,7 +442,6 @@ fun MinimalBreakClockDialog(
 
           Spacer(modifier = Modifier.height(14.dp))
 
-          // ── 4. Structured Number Grid Selector (Decent & Organized UI) ────
           Column(
             modifier = Modifier
               .fillMaxWidth()
@@ -580,7 +577,6 @@ fun MinimalBreakClockDialog(
 
           Spacer(modifier = Modifier.height(16.dp))
 
-          // ── 5. Break Duration Selector ────────────────────────────────────
           Column(modifier = Modifier.fillMaxWidth()) {
             Row(
               modifier = Modifier.fillMaxWidth(),
@@ -630,7 +626,6 @@ fun MinimalBreakClockDialog(
 
           Spacer(modifier = Modifier.height(16.dp))
 
-          // ── 6. Live Result Summary Card ───────────────────────────────────
           Box(
             modifier = Modifier
               .fillMaxWidth()
@@ -692,7 +687,6 @@ fun MinimalBreakClockDialog(
 
           Spacer(modifier = Modifier.height(20.dp))
 
-          // ── 7. Action Buttons ─────────────────────────────────────────────
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),

@@ -1,3 +1,4 @@
+// Person Vector Graphics: Custom Canvas drawings for profile screens and empty illustration states
 package com.example.ui.components
 
 import androidx.compose.foundation.Canvas
@@ -43,11 +44,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// ── Shared illustration design tokens ────────────────────────────────────────
 private val OutlineColor  = Color(0xFF1C1C1E)
 private val YellowAccent  = Color(0xFFE8B84B)
 private val CardBg        = Color(0xFFFFFFFF)
-private val IlluBg        = Color(0xFFF5F0E8)   // warm cream fill
+private val IlluBg        = Color(0xFFF5F0E8)
 private val TextDarkIllu  = Color(0xFF1C1C1E)
 private val TextMutedIllu = Color(0xFF8A8078)
 private val GreenAccent   = Color(0xFF2EC4B6)
@@ -66,7 +66,6 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
         modifier         = modifier.size(300.dp).testTag("person_slide_one_image"),
         contentAlignment = Alignment.Center,
     ) {
-        // ── White card frame ───────────────────────────────────────────────
         Box(
             modifier = Modifier
                 .size(260.dp)
@@ -74,7 +73,6 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
                 .clip(RoundedCornerShape(32.dp))
                 .background(CardBg),
         ) {
-            // Warm cream lower fill
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -83,7 +81,6 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
                     .background(IlluBg),
             )
 
-            // ── Phone mockup (Canvas) ──────────────────────────────────────
             Canvas(
                 modifier = Modifier
                     .size(112.dp, 204.dp)
@@ -92,7 +89,6 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
                 val w = size.width
                 val h = size.height
 
-                // Phone shell
                 drawRoundRect(CardBg, cornerRadius = CornerRadius(18.dp.toPx()))
                 drawRoundRect(
                     OutlineColor,
@@ -100,7 +96,6 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
                     style = Stroke(2.5.dp.toPx()),
                 )
 
-                // Notch
                 drawRoundRect(
                     OutlineColor,
                     topLeft = Offset(w * 0.28f, h * 0.010f),
@@ -108,17 +103,14 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
                     cornerRadius = CornerRadius(5f),
                 )
 
-                // App header (dark bar)
                 drawRoundRect(
                     OutlineColor,
                     topLeft = Offset(w * 0.05f, h * 0.048f),
                     size    = Size(w * 0.90f, h * 0.075f),
                     cornerRadius = CornerRadius(7f),
                 )
-                // Header accent dot
                 drawCircle(YellowAccent, 3.5f, Offset(w * 0.14f, h * 0.086f))
 
-                // ── Food card 1 (active / highlighted) ─────────────────────
                 drawRoundRect(
                     YellowAccent.copy(alpha = 0.16f),
                     topLeft = Offset(w * 0.05f, h * 0.155f),
@@ -133,7 +125,6 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
                     style = Stroke(1.5f),
                 )
                 drawCircle(YellowAccent, 13f, Offset(w * 0.18f, h * 0.237f))
-                // Title + price mocks
                 drawRoundRect(
                     OutlineColor.copy(alpha = 0.80f),
                     topLeft = Offset(w * 0.32f, h * 0.175f),
@@ -150,7 +141,6 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
                     size    = Size(w * 0.17f, h * 0.020f), cornerRadius = CornerRadius(3f),
                 )
 
-                // ── Food card 2 ─────────────────────────────────────────────
                 drawRoundRect(
                     IlluBg,
                     topLeft = Offset(w * 0.05f, h * 0.348f),
@@ -172,7 +162,6 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
                     size    = Size(w * 0.24f, h * 0.015f), cornerRadius = CornerRadius(3f),
                 )
 
-                // ── Food card 3 ─────────────────────────────────────────────
                 drawRoundRect(
                     IlluBg,
                     topLeft = Offset(w * 0.05f, h * 0.524f),
@@ -194,7 +183,6 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
                     size    = Size(w * 0.28f, h * 0.015f), cornerRadius = CornerRadius(3f),
                 )
 
-                // ── Golden "Order Now" button ───────────────────────────────
                 drawRoundRect(
                     YellowAccent,
                     topLeft = Offset(w * 0.07f, h * 0.85f),
@@ -209,8 +197,6 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
                 )
             }
 
-            // ── Floating food emoji circles ────────────────────────────────
-            // Top-left
             Box(
                 modifier = Modifier
                     .size(46.dp)
@@ -221,7 +207,6 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
                 contentAlignment = Alignment.Center,
             ) { Text("☕", fontSize = 22.sp) }
 
-            // Top-right
             Box(
                 modifier = Modifier
                     .size(46.dp)
@@ -232,7 +217,6 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
                 contentAlignment = Alignment.Center,
             ) { Text("🍛", fontSize = 22.sp) }
 
-            // Bottom-left
             Box(
                 modifier = Modifier
                     .size(42.dp)
@@ -243,7 +227,6 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
                 contentAlignment = Alignment.Center,
             ) { Text("🥙", fontSize = 20.sp) }
 
-            // Bottom-right
             Box(
                 modifier = Modifier
                     .size(42.dp)
@@ -255,7 +238,6 @@ fun PersonSlideOneImage(modifier: Modifier = Modifier) {
             ) { Text("🍵", fontSize = 20.sp) }
         }
 
-        // ── Floating badges (outside card) ─────────────────────────────────
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -319,7 +301,6 @@ fun PersonSlideTwoImage(modifier: Modifier = Modifier) {
         modifier         = modifier.size(300.dp).testTag("person_slide_two_image"),
         contentAlignment = Alignment.Center,
     ) {
-        // ── White card frame ───────────────────────────────────────────────
         Box(
             modifier = Modifier
                 .size(260.dp)
@@ -327,7 +308,6 @@ fun PersonSlideTwoImage(modifier: Modifier = Modifier) {
                 .clip(RoundedCornerShape(32.dp))
                 .background(CardBg),
         ) {
-            // Cream lower fill
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -336,7 +316,6 @@ fun PersonSlideTwoImage(modifier: Modifier = Modifier) {
                     .background(IlluBg),
             )
 
-            // ── Notification bell (top-center) ─────────────────────────────
             Box(
                 modifier = Modifier
                     .size(40.dp)
@@ -354,7 +333,6 @@ fun PersonSlideTwoImage(modifier: Modifier = Modifier) {
                 )
             }
 
-            // ── Large token circle ─────────────────────────────────────────
             Box(
                 modifier = Modifier
                     .size(128.dp)
@@ -395,7 +373,6 @@ fun PersonSlideTwoImage(modifier: Modifier = Modifier) {
                 }
             }
 
-            // ── Counter desk + staff and student figures ───────────────────
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -406,7 +383,6 @@ fun PersonSlideTwoImage(modifier: Modifier = Modifier) {
                 val h  = size.height
                 val sk = Stroke(2f, cap = StrokeCap.Round, join = StrokeJoin.Round)
 
-                // Counter desk line
                 drawLine(
                     OutlineColor.copy(alpha = 0.7f),
                     Offset(w * 0.06f, h * 0.30f),
@@ -420,11 +396,9 @@ fun PersonSlideTwoImage(modifier: Modifier = Modifier) {
                     cornerRadius = CornerRadius(4f),
                 )
 
-                // Staff (chef) figure — left side
                 val chefX = w * 0.22f
                 drawCircle(SkinLight, 14f, Offset(chefX, h * 0.13f))
                 drawCircle(OutlineColor, 14f, Offset(chefX, h * 0.13f), style = Stroke(2f))
-                // Chef hat
                 val hat = Path().apply {
                     moveTo(chefX - 13f, h * 0.07f)
                     cubicTo(chefX - 15f, h * -0.01f, chefX + 15f, h * -0.01f, chefX + 13f, h * 0.07f)
@@ -432,7 +406,6 @@ fun PersonSlideTwoImage(modifier: Modifier = Modifier) {
                 }
                 drawPath(hat, CardBg)
                 drawPath(hat, OutlineColor, style = Stroke(1.8f))
-                // Chef body
                 val chefBody = Path().apply {
                     moveTo(chefX - 15f, h * 0.30f)
                     lineTo(chefX - 11f, h * 0.19f)
@@ -441,10 +414,8 @@ fun PersonSlideTwoImage(modifier: Modifier = Modifier) {
                 }
                 drawPath(chefBody, Color(0xFFF0EDE8))
                 drawPath(chefBody, OutlineColor, style = sk)
-                // Chef arm reaching forward
                 drawLine(OutlineColor, Offset(chefX + 11f, h * 0.21f), Offset(chefX + 28f, h * 0.24f), 2.2f, StrokeCap.Round)
 
-                // Student figure — right side, arms slightly raised (excited)
                 val stuX = w * 0.78f
                 drawCircle(SkinMed, 14f, Offset(stuX, h * 0.13f))
                 drawCircle(OutlineColor, 14f, Offset(stuX, h * 0.13f), style = Stroke(2f))
@@ -462,13 +433,11 @@ fun PersonSlideTwoImage(modifier: Modifier = Modifier) {
                 }
                 drawPath(stuBody, Color(0xFFF0EDE8))
                 drawPath(stuBody, OutlineColor, style = sk)
-                // Arms raised slightly
                 drawLine(OutlineColor, Offset(stuX - 11f, h * 0.21f), Offset(stuX - 22f, h * 0.12f), 2.2f, StrokeCap.Round)
                 drawLine(OutlineColor, Offset(stuX + 11f, h * 0.21f), Offset(stuX + 22f, h * 0.12f), 2.2f, StrokeCap.Round)
             }
         }
 
-        // ── Badges ────────────────────────────────────────────────────────
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -528,7 +497,6 @@ fun PersonSlideThreeImage(modifier: Modifier = Modifier) {
         modifier         = modifier.size(300.dp).testTag("person_slide_three_image"),
         contentAlignment = Alignment.Center,
     ) {
-        // ── White card frame ───────────────────────────────────────────────
         Box(
             modifier = Modifier
                 .size(260.dp)
@@ -536,7 +504,6 @@ fun PersonSlideThreeImage(modifier: Modifier = Modifier) {
                 .clip(RoundedCornerShape(32.dp))
                 .background(CardBg),
         ) {
-            // Cream lower fill
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -545,7 +512,6 @@ fun PersonSlideThreeImage(modifier: Modifier = Modifier) {
                     .background(IlluBg),
             )
 
-            // ── Food tray overhead (Canvas) ────────────────────────────────
             Canvas(
                 modifier = Modifier
                     .size(224.dp)
@@ -555,7 +521,6 @@ fun PersonSlideThreeImage(modifier: Modifier = Modifier) {
                 val w = size.width
                 val h = size.height
 
-                // Tray background (warm oval)
                 drawRoundRect(
                     color    = Color(0xFFEDE8DF),
                     topLeft  = Offset(w * 0.03f, h * 0.12f),
@@ -570,21 +535,18 @@ fun PersonSlideThreeImage(modifier: Modifier = Modifier) {
                     style    = Stroke(1.8f),
                 )
 
-                // ── Main round plate (left-center) ──────────────────────────
                 val plateCx = w * 0.40f
                 val plateCy = h * 0.51f
                 val plateR  = w * 0.235f
 
                 drawCircle(CardBg, plateR, Offset(plateCx, plateCy))
 
-                // Rice section — left half (cream dots = rice grains)
                 drawArc(
                     color     = Color(0xFFF5F0E8),
                     startAngle = 90f, sweepAngle = 180f, useCenter = true,
                     topLeft   = Offset(plateCx - plateR, plateCy - plateR),
                     size      = Size(plateR * 2, plateR * 2),
                 )
-                // Rice grain dots
                 val dotSpacing = 8.dp.toPx()
                 for (row in -4..4) {
                     for (col in -5..-1) {
@@ -596,7 +558,6 @@ fun PersonSlideThreeImage(modifier: Modifier = Modifier) {
                     }
                 }
 
-                // Curry section — right half (golden)
                 drawArc(
                     color     = YellowAccent.copy(alpha = 0.82f),
                     startAngle = 270f, sweepAngle = 180f, useCenter = true,
@@ -604,7 +565,6 @@ fun PersonSlideThreeImage(modifier: Modifier = Modifier) {
                     size      = Size(plateR * 2, plateR * 2),
                 )
 
-                // Plate outline + divider
                 drawCircle(OutlineColor, plateR, Offset(plateCx, plateCy), style = Stroke(2f))
                 drawLine(
                     OutlineColor.copy(alpha = 0.3f),
@@ -613,7 +573,6 @@ fun PersonSlideThreeImage(modifier: Modifier = Modifier) {
                     strokeWidth = 1.5f,
                 )
 
-                // ── Salad bowl (top-right of tray) ─────────────────────────
                 val saladCx = w * 0.75f
                 val saladCy = h * 0.29f
                 val saladR  = w * 0.115f
@@ -625,44 +584,34 @@ fun PersonSlideThreeImage(modifier: Modifier = Modifier) {
                 drawCircle(Color(0xFF5BB87A), 4.5f, Offset(saladCx - 4f,  saladCy - 9f))
                 drawCircle(Color(0xFFFCC96B), 3f,   Offset(saladCx + 7f,  saladCy + 4f))
 
-                // ── Tea/coffee cup (bottom-right of tray) ──────────────────
                 val cupX = w * 0.75f
                 val cupY = h * 0.625f
                 drawRoundRect(CardBg,        Offset(cupX - 14f, cupY - 17f), Size(28f, 34f), CornerRadius(5f))
                 drawRoundRect(OutlineColor,  Offset(cupX - 14f, cupY - 17f), Size(28f, 34f), CornerRadius(5f), style = Stroke(2f))
-                // Hot drink surface
                 drawRoundRect(
                     Color(0xFF8B5A2B).copy(alpha = 0.55f),
                     Offset(cupX - 12f, cupY - 15f),
                     Size(24f, 7f),
                     CornerRadius(3f),
                 )
-                // Cup handle
                 drawArc(
                     OutlineColor, -60f, 120f, false,
                     Offset(cupX + 8f, cupY - 10f), Size(16f, 20f),
                     style = Stroke(2f),
                 )
-                // Steam
                 drawLine(Color(0xFFB0A090), Offset(cupX - 3f, cupY - 24f), Offset(cupX - 3f, cupY - 19f), 2f, StrokeCap.Round)
                 drawLine(Color(0xFFB0A090), Offset(cupX + 4f, cupY - 27f), Offset(cupX + 4f, cupY - 22f), 2f, StrokeCap.Round)
 
-                // ── Utensils (bottom-left of tray) ─────────────────────────
                 val uY = h * 0.70f
-                // Fork
                 drawLine(OutlineColor, Offset(w * 0.11f, uY), Offset(w * 0.11f, uY + h * 0.14f), 3f, StrokeCap.Round)
-                // Fork tines
                 for (t in -1..1) {
                     drawLine(OutlineColor, Offset(w * 0.11f + t * 3.5f, uY), Offset(w * 0.11f + t * 3.5f, uY - h * 0.03f), 2f, StrokeCap.Round)
                 }
-                // Spoon handle
                 drawLine(OutlineColor, Offset(w * 0.19f, uY), Offset(w * 0.19f, uY + h * 0.14f), 3f, StrokeCap.Round)
-                // Spoon bowl
                 drawOval(CardBg,       Offset(w * 0.155f, uY - h * 0.044f), Size(w * 0.07f, h * 0.036f))
                 drawOval(OutlineColor, Offset(w * 0.155f, uY - h * 0.044f), Size(w * 0.07f, h * 0.036f), style = Stroke(1.8f))
             }
 
-            // ── "20 min saved" badge inside card ──────────────────────────
             Box(
                 modifier = Modifier
                     .size(58.dp)
@@ -679,7 +628,6 @@ fun PersonSlideThreeImage(modifier: Modifier = Modifier) {
             }
         }
 
-        // ── Badges ────────────────────────────────────────────────────────
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)

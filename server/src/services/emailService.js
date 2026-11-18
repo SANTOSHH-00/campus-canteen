@@ -30,7 +30,6 @@ function getTransporter() {
 
 let cachedBrevoSender = null;
 
-// Dynamically fetch the verified sender email registered in the Brevo account
 async function getBrevoSenderEmail(apiKey) {
   if (cachedBrevoSender) return cachedBrevoSender;
   const configured = (process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_USER || '').trim();
@@ -79,7 +78,6 @@ async function getBrevoSenderEmail(apiKey) {
   });
 }
 
-// Brevo API (port 443 HTTPS - 300 free emails/day, no credit card required)
 async function sendViaBrevo(apiKey, { to, subject, html, text }) {
   const senderEmail = await getBrevoSenderEmail(apiKey);
   console.log(`[EmailService] Attempting Brevo HTTPS send from <${senderEmail}> to <${to}>`);
@@ -124,7 +122,6 @@ async function sendViaBrevo(apiKey, { to, subject, html, text }) {
   });
 }
 
-// Resend API (port 443 HTTPS - 3,000 free emails/month)
 function sendViaResend(apiKey, { to, subject, html, text }) {
   const sender = process.env.RESEND_FROM || 'onboarding@resend.dev';
   const data = JSON.stringify({
@@ -174,7 +171,6 @@ function sendViaResend(apiKey, { to, subject, html, text }) {
 async function sendEmail({ to, subject, html, text }) {
   const recipient = to.trim().toLowerCase();
 
-  // 1. Check for Brevo API key (HTTPS port 443 - works on Render Free Tier)
   if (process.env.BREVO_API_KEY) {
     try {
       return await sendViaBrevo(process.env.BREVO_API_KEY.trim(), { to: recipient, subject, html, text });
@@ -183,7 +179,6 @@ async function sendEmail({ to, subject, html, text }) {
     }
   }
 
-  // 2. Check for Resend API key (HTTPS port 443 - works on Render Free Tier)
   if (process.env.RESEND_API_KEY) {
     try {
       return await sendViaResend(process.env.RESEND_API_KEY.trim(), { to: recipient, subject, html, text });
@@ -192,7 +187,6 @@ async function sendEmail({ to, subject, html, text }) {
     }
   }
 
-  // 3. Fallback to Gmail SMTP (Works on local machine or paid clouds)
   const user = process.env.EMAIL_USER;
   const pass = process.env.EMAIL_APP_PASSWORD;
 

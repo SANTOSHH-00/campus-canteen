@@ -71,14 +71,12 @@ export default function () {
     },
   };
 
-  // 1. Initial Order Placement
   const res1 = http.post(`${BASE_URL}/api/orders`, payload, params);
 
   check(res1, {
     'Order created successfully (201)': (r) => r.status === 201,
   });
 
-  // 2. Simulated Rapid Double-Tap by impatient student (Idempotency Test)
   const res2 = http.post(`${BASE_URL}/api/orders`, payload, params);
 
   check(res2, {

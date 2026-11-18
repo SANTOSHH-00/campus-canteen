@@ -1,3 +1,4 @@
+// Owner & Admin Portal Routes: 2-factor authentication, administrative management, and counter pickup verification
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
@@ -13,7 +14,7 @@ const OrderVerification = require('../models/OrderVerification');
 const { hashVerificationToken } = require('../services/qrVerificationService');
 const { broadcastOrderStatus, broadcastQueueUpdate } = require('../services/socketService');
 const { sendPushToUser } = require('../services/fcmService');
-const { formatIstDateTime, formatIstTime } = require('../utils/timeHelper');
+const { formatIstDateTime, formatIstTime, formatIstDate } = require('../utils/timeHelper');
 const { sendOwnerOTP, sendAdminPortalOTP } = require('../services/emailService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'quickbite-super-secure-jwt-secret-key-2026';
@@ -23,7 +24,7 @@ function hashOtp(otp) {
   return crypto.createHash('sha256').update(otp.trim()).digest('hex');
 }
 
-// ── POST /api/owner/login (Owner Email & Password -> Sends 6-digit OTP) ─────
+// Owner Login: Authenticates owner credentials and sends 6-digit OTP for 2FA
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -33,7 +34,6 @@ router.post('/login', async (req, res) => {
 
     const trimmedEmail = email.trim().toLowerCase();
 
-    // 1. Fetch owner from MongoDB
     const owner = await Owner.findOne({ email: trimmedEmail });
     if (!owner) {
       return res.status(404).json({
@@ -41,38 +41,32 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // 2. Role validation
     if (!owner.role || owner.role.toLowerCase() !== 'owner') {
       return res.status(403).json({
         error: "Access denied: This account does not have canteen owner privileges.",
       });
     }
 
-    // 3. Strict canteen allocation validation
     if (!owner.canteenAssigned || !owner.canteenId || !owner.canteenId.trim()) {
       return res.status(403).json({
         error: "Access Denied: Your account is registered, but no canteen has been assigned to you yet. Please contact the campus administrator to assign your canteen.",
       });
     }
 
-    // 4. Verify password
     if (owner.password && owner.password.trim()) {
       const isMatch = await bcrypt.compare(password, owner.password);
       if (!isMatch) {
         return res.status(401).json({ error: "Incorrect password. Please verify and try again." });
       }
     } else {
-      // First-time owner initialization: hash and save the password
       owner.password = await bcrypt.hash(password, 10);
       await owner.save();
     }
 
-    // 5. Generate secure 6-digit OTP
     const rawOtp = crypto.randomInt(100000, 1000000).toString();
     const otpHash = hashOtp(rawOtp);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    // 6. Save or update OtpVerification in MongoDB
     await OtpVerification.findOneAndUpdate(
       { email: trimmedEmail },
       {
@@ -89,13 +83,11 @@ router.post('/login', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // 7. Dispatch OTP through Gmail SMTP in background (non-blocking)
     console.log(`[OwnerAuth] Dispatching 6-digit OTP code to ${trimmedEmail} (Code: ${rawOtp})...`);
     sendOwnerOTP(trimmedEmail, rawOtp, owner.name || 'Canteen Owner').catch(err => {
       console.error('[OwnerAuth] Error sending owner OTP email in background:', err.message);
     });
 
-    // 8. Return response without exposing OTP
     const ownerObj = owner.toObject ? owner.toObject() : { ...owner };
     delete ownerObj.password;
     res.json({
@@ -110,7 +102,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ── POST /api/owner/verify-otp (Verify 6-digit OTP -> Generates JWT) ─────────
+// Owner OTP Verification: Validates OTP against stored hash and issues signed JWT session token
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -125,7 +117,6 @@ router.post('/verify-otp', async (req, res) => {
       return res.status(400).json({ error: 'Please enter a valid 6-digit OTP code.' });
     }
 
-    // 1. Fetch OTP record
     const otpRecord = await OtpVerification.findOne({ email: trimmedEmail });
     if (!otpRecord) {
       return res.status(400).json({
@@ -133,7 +124,6 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
 
-    // 2. Check expiration
     if (new Date() > new Date(otpRecord.expiresAt)) {
       await OtpVerification.deleteOne({ _id: otpRecord._id });
       return res.status(400).json({
@@ -141,7 +131,6 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
 
-    // 3. Check attempt limit
     if (otpRecord.attempts >= otpRecord.maxAttempts) {
       await OtpVerification.deleteOne({ _id: otpRecord._id });
       return res.status(429).json({
@@ -149,7 +138,6 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
 
-    // 4. Validate OTP hash
     const inputHash = hashOtp(trimmedOtp);
     if (inputHash !== otpRecord.otpHash) {
       otpRecord.attempts += 1;
@@ -160,10 +148,8 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
 
-    // 5. Success: Invalidate OTP (single-use)
     await OtpVerification.deleteOne({ _id: otpRecord._id });
 
-    // 6. Fetch owner and sign JWT
     const owner = await Owner.findOne({ email: trimmedEmail }).lean();
     if (!owner) {
       return res.status(404).json({ error: 'Owner record not found.' });
@@ -189,7 +175,7 @@ router.post('/verify-otp', async (req, res) => {
   }
 });
 
-// ── POST /api/owner/resend-otp (Enforce cooldown -> Resend 6-digit OTP) ──────
+// Resends 6-digit OTP enforcing a cooldown interval
 router.post('/resend-otp', async (req, res) => {
   try {
     const { email } = req.body;
@@ -199,13 +185,11 @@ router.post('/resend-otp', async (req, res) => {
 
     const trimmedEmail = email.trim().toLowerCase();
 
-    // Verify owner exists
     const owner = await Owner.findOne({ email: trimmedEmail });
     if (!owner) {
       return res.status(404).json({ error: 'No canteen owner found with this email.' });
     }
 
-    // Cooldown check (60 seconds)
     const existing = await OtpVerification.findOne({ email: trimmedEmail });
     if (existing && existing.lastSentAt) {
       const elapsed = Date.now() - new Date(existing.lastSentAt).getTime();
@@ -218,7 +202,6 @@ router.post('/resend-otp', async (req, res) => {
       }
     }
 
-    // Generate new OTP
     const rawOtp = crypto.randomInt(100000, 1000000).toString();
     const otpHash = hashOtp(rawOtp);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
@@ -239,7 +222,6 @@ router.post('/resend-otp', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Send through Gmail SMTP in background (non-blocking)
     console.log(`[OwnerAuth] Resending OTP code to ${trimmedEmail} (Code: ${rawOtp})...`);
     sendOwnerOTP(trimmedEmail, rawOtp, owner.name || 'Canteen Owner').catch(err => {
       console.error('[OwnerAuth] Error resending owner OTP email in background:', err.message);
@@ -256,7 +238,7 @@ router.post('/resend-otp', async (req, res) => {
   }
 });
 
-// ── Middleware: Verify Admin JWT Token (Strictly Admins Only) ─────────────────
+// Middleware: Verifies administrator JWT token for privileged management endpoints
 function requireAdminAuth(req, res, next) {
   const authHeader = req.headers['authorization'] || '';
   const token = authHeader.startsWith('Bearer ')
@@ -281,7 +263,7 @@ function requireAdminAuth(req, res, next) {
   }
 }
 
-// ── Middleware: Verify Owner JWT Token & Authoritative Canteen Allocation ─────
+// Middleware: Verifies canteen owner JWT token and attaches authorized canteenId to request
 async function requireOwnerAuth(req, res, next) {
   const authHeader = req.headers['authorization'] || '';
   const token = authHeader.startsWith('Bearer ')
@@ -306,7 +288,26 @@ async function requireOwnerAuth(req, res, next) {
       });
     }
 
-    // Lookup owner record in MongoDB to verify active status and authoritative canteen assignment
+    if (decoded.role === 'admin') {
+      let admin = null;
+      if (decoded.email) {
+        admin = await Admin.findOne({ email: decoded.email.trim().toLowerCase() }).lean();
+      }
+      if (!admin && decoded.uid) {
+        admin = await Admin.findOne({ uid: decoded.uid }).lean();
+      }
+      if (admin) {
+        req.owner = {
+          uid: admin.uid || decoded.uid,
+          email: admin.email,
+          name: admin.name || 'Campus Administrator',
+          role: 'admin',
+          canteenId: '', // Campus-wide access
+        };
+        return next();
+      }
+    }
+
     let owner = null;
     if (decoded.email) {
       owner = await Owner.findOne({ email: decoded.email.trim().toLowerCase() }).lean();
@@ -356,7 +357,7 @@ async function requireOwnerAuth(req, res, next) {
   }
 }
 
-// ── POST /api/owners/admin/register (Admin Registration -> Sends 6-digit OTP) ─
+// Admin Registration: Registers new administrator and initiates 2FA email verification
 router.post('/admin/register', async (req, res) => {
   try {
     const { name, email, password, phone } = req.body || {};
@@ -373,12 +374,10 @@ router.post('/admin/register', async (req, res) => {
 
     const trimmedEmail = email.trim().toLowerCase();
 
-    // Basic email format check
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       return res.status(400).json({ error: 'Please enter a valid email address format.' });
     }
 
-    // 1. Check if an admin already exists with this email
     const existingAdmin = (await Admin.findOne({ email: trimmedEmail })) || (await User.findOne({ email: trimmedEmail, role: 'admin' }));
     if (existingAdmin) {
       return res.status(400).json({
@@ -386,7 +385,6 @@ router.post('/admin/register', async (req, res) => {
       });
     }
 
-    // 2. Check if registered as an Owner
     const existingOwner = await Owner.findOne({ email: trimmedEmail });
     if (existingOwner) {
       return res.status(400).json({
@@ -394,13 +392,11 @@ router.post('/admin/register', async (req, res) => {
       });
     }
 
-    // 3. Hash password and generate 6-digit OTP
     const passwordHash = await bcrypt.hash(password.trim(), 10);
     const rawOtp = crypto.randomInt(100000, 1000000).toString();
     const otpHash = hashOtp(rawOtp);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    // 4. Save pending registration data and OTP in OtpVerification
     await OtpVerification.findOneAndUpdate(
       { email: trimmedEmail },
       {
@@ -423,7 +419,6 @@ router.post('/admin/register', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // 5. Dispatch OTP via Gmail SMTP in background
     console.log(`[AdminAuth] Dispatching registration OTP to ${trimmedEmail} (Code: ${rawOtp})...`);
     sendAdminPortalOTP(trimmedEmail, rawOtp, name.trim()).catch(err => {
       console.error('[AdminAuth] Error sending admin registration OTP email:', err.message);
@@ -442,7 +437,7 @@ router.post('/admin/register', async (req, res) => {
   }
 });
 
-// ── POST /api/owners/admin/verify-register-otp (Verify OTP -> Creates Admin in MongoDB)
+// Admin Registration Verification: Completes administrator account creation upon valid OTP
 router.post('/admin/verify-register-otp', async (req, res) => {
   try {
     const { email, otp } = req.body || {};
@@ -457,7 +452,6 @@ router.post('/admin/verify-register-otp', async (req, res) => {
       return res.status(400).json({ error: 'Please enter a valid 6-digit verification code.' });
     }
 
-    // 1. Fetch OTP record
     const otpRecord = await OtpVerification.findOne({ email: trimmedEmail });
     if (!otpRecord || !otpRecord.tempData || otpRecord.tempData.mode !== 'register') {
       return res.status(400).json({
@@ -465,7 +459,6 @@ router.post('/admin/verify-register-otp', async (req, res) => {
       });
     }
 
-    // 2. Check expiration
     if (new Date() > new Date(otpRecord.expiresAt)) {
       await OtpVerification.deleteOne({ _id: otpRecord._id });
       return res.status(400).json({
@@ -473,7 +466,6 @@ router.post('/admin/verify-register-otp', async (req, res) => {
       });
     }
 
-    // 3. Check attempts
     if (otpRecord.attempts >= otpRecord.maxAttempts) {
       await OtpVerification.deleteOne({ _id: otpRecord._id });
       return res.status(429).json({
@@ -481,7 +473,6 @@ router.post('/admin/verify-register-otp', async (req, res) => {
       });
     }
 
-    // 4. Validate OTP hash
     const inputHash = hashOtp(trimmedOtp);
     if (inputHash !== otpRecord.otpHash) {
       otpRecord.attempts += 1;
@@ -492,11 +483,9 @@ router.post('/admin/verify-register-otp', async (req, res) => {
       });
     }
 
-    // 5. Invalidate OTP
     const { name, phone, passwordHash } = otpRecord.tempData;
     await OtpVerification.deleteOne({ _id: otpRecord._id });
 
-    // 6. Create Admin document in MongoDB
     const uid = 'admin_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex');
     const newAdmin = await Admin.create({
       uid,
@@ -508,7 +497,6 @@ router.post('/admin/verify-register-otp', async (req, res) => {
       isSuperAdmin: true,
     });
 
-    // 7. Issue JWT token with role: 'admin'
     const token = jwt.sign(
       {
         uid: newAdmin.uid,
@@ -540,7 +528,7 @@ router.post('/admin/verify-register-otp', async (req, res) => {
   }
 });
 
-// ── POST /api/owners/admin/login (Admin Sign In -> Sends 6-digit OTP; Rejects Owners/Users)
+// Admin Sign In: Authenticates administrator credentials and dispatches 2FA OTP
 router.post('/admin/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -550,13 +538,11 @@ router.post('/admin/login', async (req, res) => {
 
     const trimmedEmail = email.trim().toLowerCase();
 
-    // 1. Strictly look for Admin account
     let adminAccount = await Admin.findOne({ email: trimmedEmail });
     if (!adminAccount) {
       adminAccount = await User.findOne({ email: trimmedEmail, role: 'admin' });
     }
 
-    // 2. If not an admin, check if owner or student to give an explicit rejection message
     if (!adminAccount) {
       const isOwner = await Owner.findOne({ email: trimmedEmail });
       if (isOwner) {
@@ -577,18 +563,15 @@ router.post('/admin/login', async (req, res) => {
       });
     }
 
-    // 3. Verify bcrypt password
     const isMatch = await bcrypt.compare(password, adminAccount.password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Incorrect password. Please verify and try again.' });
     }
 
-    // 4. Generate secure 6-digit numeric OTP
     const rawOtp = crypto.randomInt(100000, 1000000).toString();
     const otpHash = hashOtp(rawOtp);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    // 5. Save or update OtpVerification in MongoDB
     await OtpVerification.findOneAndUpdate(
       { email: trimmedEmail },
       {
@@ -606,7 +589,6 @@ router.post('/admin/login', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // 6. Dispatch OTP through Gmail SMTP in background
     console.log(`[AdminAuth] Dispatching 6-digit login verification code to ${trimmedEmail} (Code: ${rawOtp})...`);
     sendAdminPortalOTP(trimmedEmail, rawOtp, adminAccount.name || 'Administrator').catch(err => {
       console.error('[AdminAuth] Error sending admin login OTP email in background:', err.message);
@@ -627,7 +609,7 @@ router.post('/admin/login', async (req, res) => {
   }
 });
 
-// ── POST /api/owners/admin/verify-otp (Verify 6-digit Login OTP -> Issues JWT Token) ────
+// Admin OTP Verification: Validates 2FA OTP and issues administrator JWT session token
 router.post('/admin/verify-otp', async (req, res) => {
   try {
     const { email, otp } = req.body || {};
@@ -642,7 +624,6 @@ router.post('/admin/verify-otp', async (req, res) => {
       return res.status(400).json({ error: 'Please enter a valid 6-digit verification code.' });
     }
 
-    // 1. Fetch OTP record
     const otpRecord = await OtpVerification.findOne({ email: trimmedEmail });
     if (!otpRecord) {
       return res.status(400).json({
@@ -650,7 +631,6 @@ router.post('/admin/verify-otp', async (req, res) => {
       });
     }
 
-    // 2. Check expiration
     if (new Date() > new Date(otpRecord.expiresAt)) {
       await OtpVerification.deleteOne({ _id: otpRecord._id });
       return res.status(400).json({
@@ -658,7 +638,6 @@ router.post('/admin/verify-otp', async (req, res) => {
       });
     }
 
-    // 3. Check attempt limit
     if (otpRecord.attempts >= otpRecord.maxAttempts) {
       await OtpVerification.deleteOne({ _id: otpRecord._id });
       return res.status(429).json({
@@ -666,7 +645,6 @@ router.post('/admin/verify-otp', async (req, res) => {
       });
     }
 
-    // 4. Validate OTP hash
     const inputHash = hashOtp(trimmedOtp);
     if (inputHash !== otpRecord.otpHash) {
       otpRecord.attempts += 1;
@@ -677,10 +655,8 @@ router.post('/admin/verify-otp', async (req, res) => {
       });
     }
 
-    // 5. Invalidate OTP (single-use)
     await OtpVerification.deleteOne({ _id: otpRecord._id });
 
-    // 6. Look up Admin account
     let adminAccount = await Admin.findOne({ email: trimmedEmail }).lean();
     if (!adminAccount) {
       adminAccount = await User.findOne({ email: trimmedEmail, role: 'admin' }).lean();
@@ -692,7 +668,6 @@ router.post('/admin/verify-otp', async (req, res) => {
       });
     }
 
-    // 7. Generate JWT token with role: 'admin'
     const token = jwt.sign(
       {
         uid: adminAccount.uid,
@@ -722,7 +697,7 @@ router.post('/admin/verify-otp', async (req, res) => {
   }
 });
 
-// ── POST /api/owners/admin/resend-otp (Enforce cooldown -> Resend 6-digit OTP) ──────
+// Resends administrator 2FA OTP with cooldown enforcement
 router.post('/admin/resend-otp', async (req, res) => {
   try {
     const { email } = req.body || {};
@@ -732,13 +707,11 @@ router.post('/admin/resend-otp', async (req, res) => {
 
     const trimmedEmail = email.trim().toLowerCase();
 
-    // 1. Fetch OTP session
     const existing = await OtpVerification.findOne({ email: trimmedEmail });
     if (!existing) {
       return res.status(404).json({ error: 'No active session found. Please sign in or register.' });
     }
 
-    // 2. Cooldown check (60 seconds)
     if (existing.lastSentAt) {
       const elapsed = Date.now() - new Date(existing.lastSentAt).getTime();
       const cooldownMs = 60 * 1000;
@@ -750,7 +723,6 @@ router.post('/admin/resend-otp', async (req, res) => {
       }
     }
 
-    // 3. Generate new OTP
     const rawOtp = crypto.randomInt(100000, 1000000).toString();
     const otpHash = hashOtp(rawOtp);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
@@ -788,7 +760,6 @@ router.post('/admin/resend-otp', async (req, res) => {
   }
 });
 
-// ── GET /api/owners/admin/verify-token (Verify current session JWT token) ─────────
 router.get('/admin/verify-token', requireAdminAuth, (req, res) => {
   res.json({
     success: true,
@@ -797,7 +768,7 @@ router.get('/admin/verify-token', requireAdminAuth, (req, res) => {
   });
 });
 
-// ── GET /api/owners - List all owners (Requires Admin/Owner Auth) ────────────
+// Owner Accounts: CRUD operations for managing canteen owner profiles
 router.get('/', requireAdminAuth, async (req, res) => {
   try {
     const owners = await Owner.find({}).sort({ createdAt: -1 }).select('-password').lean();
@@ -807,7 +778,6 @@ router.get('/', requireAdminAuth, async (req, res) => {
   }
 });
 
-// ── GET /api/owners/:uid - Get owner details by uid or email ─────────────────
 router.get('/:uid', async (req, res) => {
   try {
     const query = req.params.uid.includes('@')
@@ -822,7 +792,6 @@ router.get('/:uid', async (req, res) => {
   }
 });
 
-// ── POST /api/owners - Create or update owner profile (Requires Admin Auth) ──
 router.post('/', requireAdminAuth, async (req, res) => {
   try {
     let { uid, name, email, password, role, canteenAssigned, canteenId, block, phone } = req.body;
@@ -833,12 +802,10 @@ router.post('/', requireAdminAuth, async (req, res) => {
 
     const trimmedEmail = email.trim().toLowerCase();
     
-    // Basic email format check
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       return res.status(400).json({ error: 'Please enter a valid email address format.' });
     }
 
-    // Generate clean UID if not provided
     if (!uid || !uid.trim()) {
       uid = 'owner_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex');
     }
@@ -854,7 +821,6 @@ router.post('/', requireAdminAuth, async (req, res) => {
       block: canteenAssigned ? (block || '').trim() : '',
     };
 
-    // If password provided, hash it with bcrypt
     if (password && password.trim()) {
       if (password.trim().length < 6) {
         return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
@@ -862,14 +828,12 @@ router.post('/', requireAdminAuth, async (req, res) => {
       updateDoc.password = await bcrypt.hash(password.trim(), 10);
     }
 
-    // Check if updating existing owner or creating new
     const existing = await Owner.findOne({
       $or: [{ uid }, { email: trimmedEmail }]
     });
 
     let owner;
     if (existing) {
-      // Don't overwrite existing password if no new password was submitted
       if (!updateDoc.password) {
         delete updateDoc.password;
       }
@@ -895,7 +859,6 @@ router.post('/', requireAdminAuth, async (req, res) => {
   }
 });
 
-// ── PATCH /api/owners/:uid/assign - Assign or unassign a canteen ─────────────
 router.patch('/:uid/assign', requireAdminAuth, async (req, res) => {
   try {
     const { canteenAssigned, canteenId, block } = req.body;
@@ -923,7 +886,6 @@ router.patch('/:uid/assign', requireAdminAuth, async (req, res) => {
   }
 });
 
-// ── PATCH /api/owners/:uid/password - Admin reset owner password ──────────────
 router.patch('/:uid/password', requireAdminAuth, async (req, res) => {
   try {
     const { newPassword } = req.body;
@@ -950,7 +912,6 @@ router.patch('/:uid/password', requireAdminAuth, async (req, res) => {
   }
 });
 
-// ── DELETE /api/owners/:uid - Remove owner account from MongoDB ───────────────
 router.delete('/:uid', requireAdminAuth, async (req, res) => {
   try {
     const query = req.params.uid.includes('@')
@@ -966,7 +927,7 @@ router.delete('/:uid', requireAdminAuth, async (req, res) => {
   }
 });
 
-// ── POST /api/owner/orders/verify-qr - Dynamic QR Code Order Pickup Verification ─────
+// QR Code Verification: Validates dynamic QR token presented at pickup counter
 router.post('/orders/verify-qr', requireOwnerAuth, async (req, res) => {
   try {
     const { token } = req.body || {};
@@ -981,138 +942,27 @@ router.post('/orders/verify-qr', requireOwnerAuth, async (req, res) => {
     const cleanToken = token.trim();
     const tokenHash = hashVerificationToken(cleanToken);
 
-    // 1. Locate verification record by hashed token or fallback directly by Order ID / Token Number
     const verification = await OrderVerification.findOne({ tokenHash });
     let order = null;
 
-    if (!verification) {
+    if (verification) {
+      order = await Order.findOne({ orderId: verification.orderId });
+    }
+    if (!order) {
       order = await findOrderByTokenOrId(cleanToken);
-      if (!order) {
-        return res.status(404).json({
-          success: false,
-          code: 'INVALID_QR',
-          error: 'Invalid QR code. Verification record or order ID not found.',
-        });
-      }
-
-      // Check canteen allocation
-      if (order.canteenId && req.owner.canteenId && order.canteenId !== req.owner.canteenId) {
-        const orderCanteen = await Canteen.findOne({ id: order.canteenId }).select('name').lean();
-        const orderCanteenName = orderCanteen?.name || order.canteenId;
-        return res.status(403).json({
-          success: false,
-          code: 'WRONG_CANTEEN',
-          error: `Wrong canteen: This order belongs to ${orderCanteenName}. You are only authorized to verify orders for your assigned canteen.`,
-        });
-      }
-
-      if (order.status === 'CANCELLED') {
-        return res.status(400).json({
-          success: false,
-          code: 'ORDER_CANCELLED',
-          error: 'This order has been cancelled and cannot be picked up.',
-        });
-      }
-
-      if (order.status === 'PICKED_UP' || order.status === 'COMPLETED') {
-        return res.status(400).json({
-          success: false,
-          code: 'ALREADY_REDEEMED',
-          error: 'This order has already been marked as picked up.',
-        });
-      }
-
-      // Mark as PICKED_UP
-      const now = new Date();
-      const nowLocal = formatIstDateTime(now);
-      order.status = 'PICKED_UP';
-      order.pickedUpAt = now;
-      order.pickedUpAtLocal = nowLocal;
-      order.completedAt = now;
-      order.completedAtLocal = nowLocal;
-      order.verifiedByOwnerId = req.owner.uid;
-      if (!order.statusHistory) order.statusHistory = [];
-      order.statusHistory.push({
-        status: 'PICKED_UP',
-        timestamp: now,
-        timestampLocal: nowLocal,
-      });
-      await order.save();
-
-      try {
-        broadcastOrderStatus(order);
-        broadcastQueueUpdate(order.canteenId);
-        if (order.studentId && order.studentId !== 'student_guest') {
-          sendPushToUser(order.studentId, {
-            title: `Order #${order.tokenNumber || order.orderId} Picked Up!`,
-            body: 'Your order has been verified and picked up. Enjoy your meal!',
-            data: { orderId: order.orderId, type: 'ORDER_PICKED_UP', status: 'PICKED_UP' },
-          }).catch(() => {});
-        }
-      } catch (realtimeErr) {
-        console.warn('[OwnerVerification] Direct QR realtime broadcast warning:', realtimeErr.message);
-      }
-
-      return res.status(200).json({
-        success: true,
-        code: 'VERIFIED_SUCCESS',
-        message: 'Order verified and redeemed successfully via Order ID QR.',
-        order: {
-          orderId: order.orderId,
-          tokenNumber: order.tokenNumber,
-          studentName: order.studentName,
-          studentPhone: order.studentPhone,
-          canteenId: order.canteenId,
-          pickupCanteenName: order.pickupCanteenName,
-          pickupCounter: order.pickupCounter,
-          totalAmount: order.totalAmount,
-          items: order.items,
-          status: 'PICKED_UP',
-          pickedUpAt: now,
-          pickedUpAtLocal: nowLocal,
-        },
-        verification: {
-          verifiedAt: now,
-          verifiedBy: req.owner.uid,
-        },
-      });
     }
 
-    // 2. Check if already used/redeemed
-    if (verification.status === 'REDEEMED') {
-      return res.status(400).json({
+    if (!order) {
+      return res.status(404).json({
         success: false,
-        code: 'ALREADY_REDEEMED',
-        error: `This QR code has already been redeemed${verification.usedAt ? ` at ${formatIstTime(verification.usedAt)}` : ''}.`,
+        code: 'INVALID_QR',
+        error: 'Invalid QR code. Verification record or order ID not found.',
       });
     }
 
-    // 3. Check if verification was cancelled
-    if (verification.status === 'CANCELLED') {
-      return res.status(400).json({
-        success: false,
-        code: 'ORDER_CANCELLED',
-        error: 'Cancelled order. This order has been cancelled.',
-      });
-    }
-
-    // 4. Validate expiration (explicit date validation, never relying solely on TTL)
-    const now = new Date();
-    if (now > new Date(verification.expiresAt) || verification.status === 'EXPIRED') {
-      if (verification.status === 'ACTIVE') {
-        await OrderVerification.updateOne({ _id: verification._id }, { $set: { status: 'EXPIRED' } }).catch(() => {});
-      }
-      return res.status(400).json({
-        success: false,
-        code: 'EXPIRED_QR',
-        error: 'This QR code has expired. Please ask the customer to refresh their order screen to get a new code.',
-      });
-    }
-
-    // 5. Verify canteen allocation strictly from authenticated owner account
-    if (verification.canteenId !== req.owner.canteenId) {
-      const orderCanteen = await Canteen.findOne({ id: verification.canteenId }).select('name').lean();
-      const orderCanteenName = orderCanteen?.name || verification.canteenId;
+    if (order.canteenId && req.owner.canteenId && order.canteenId !== req.owner.canteenId) {
+      const orderCanteen = await Canteen.findOne({ id: order.canteenId }).select('name').lean();
+      const orderCanteenName = orderCanteen?.name || order.canteenId;
       return res.status(403).json({
         success: false,
         code: 'WRONG_CANTEEN',
@@ -1120,120 +970,73 @@ router.post('/orders/verify-qr', requireOwnerAuth, async (req, res) => {
       });
     }
 
-    // 6. Fetch associated order
-    order = await Order.findOne({ orderId: verification.orderId });
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        code: 'ORDER_NOT_FOUND',
-        error: 'Associated order was not found in database.',
-      });
-    }
-
-    // 7. Validate Order Status: Must be in READY state
-    if (order.status === 'CANCELLED') {
+    const now = new Date();
+    if ((verification && (now > new Date(verification.expiresAt) || verification.status === 'EXPIRED')) ||
+        (order.expiresAt && now > new Date(order.expiresAt))) {
       return res.status(400).json({
         success: false,
-        code: 'ORDER_CANCELLED',
-        error: 'This order has been cancelled and cannot be picked up.',
+        code: 'EXPIRED_QR',
+        error: 'This QR code has expired. Please ask the customer to refresh their order screen to get a new code.',
       });
     }
 
-    if (order.status === 'PICKED_UP' || order.status === 'COMPLETED') {
-      return res.status(400).json({
-        success: false,
-        code: 'ALREADY_REDEEMED',
-        error: 'This order has already been marked as picked up.',
-      });
-    }
-
-    if (order.status !== 'READY') {
-      return res.status(400).json({
-        success: false,
-        code: 'ORDER_NOT_READY',
-        error: `Order not ready. Current status is "${order.status}". Orders must be in READY state before pickup verification.`,
-        currentStatus: order.status,
-      });
-    }
-
-    // 8. Atomic conditional redemption (prevents race condition / simultaneous scans)
-    const redeemedVerification = await OrderVerification.findOneAndUpdate(
-      {
-        _id: verification._id,
-        status: 'ACTIVE',
-        expiresAt: { $gt: now },
-      },
-      {
-        $set: {
-          status: 'REDEEMED',
-          usedAt: now,
-          verifiedBy: req.owner.uid,
-        },
-      },
-      { new: true }
-    );
-
-    if (!redeemedVerification) {
-      return res.status(409).json({
-        success: false,
-        code: 'CONCURRENT_REDEEM',
-        error: 'Concurrent redemption detected. This QR code was just redeemed by another device or request.',
-      });
-    }
-
-    // 9. Update Order status to PICKED_UP with server-authoritative timestamps
-    const nowLocal = formatIstDateTime(now);
-    order.status = 'PICKED_UP';
-    order.pickedUpAt = now;
-    order.pickedUpAtLocal = nowLocal;
-    order.completedAt = now;
-    order.completedAtLocal = nowLocal;
-    order.verifiedByOwnerId = req.owner.uid;
-    if (!order.statusHistory) order.statusHistory = [];
-    order.statusHistory.push({
-      status: 'PICKED_UP',
-      timestamp: now,
-      timestampLocal: nowLocal,
-    });
-    await order.save();
-
-    // 10. Real-time updates & notifications
-    try {
-      broadcastOrderStatus(order);
-      broadcastQueueUpdate(order.canteenId);
-      if (order.studentId && order.studentId !== 'student_guest') {
-        sendPushToUser(order.studentId, {
-          title: `Order #${order.tokenNumber || order.orderId} Picked Up!`,
-          body: 'Your order has been verified and picked up. Enjoy your meal!',
-          data: { orderId: order.orderId, type: 'ORDER_PICKED_UP', status: 'PICKED_UP' },
-        }).catch(() => {});
+    let studentRollNumber = order.studentRollNumber || '';
+    if (!studentRollNumber && order.studentId) {
+      const studentUser = await User.findOne({
+        $or: [
+          { uid: order.studentId },
+          { registrationNumber: order.studentId },
+          { email: order.studentId.toLowerCase() },
+        ],
+      }).select('registrationNumber').lean();
+      if (studentUser && studentUser.registrationNumber) {
+        studentRollNumber = studentUser.registrationNumber;
       }
-    } catch (realtimeErr) {
-      console.warn('[OwnerVerification] Realtime broadcast warning:', realtimeErr.message);
     }
 
-    // 11. Return structured success response
+    const category = getOrderStatusCategory(order.status, order.barcodeStatus);
+    const statusMessage = STATUS_MESSAGES[category] || STATUS_MESSAGES.PREPARING;
+    const eligibleForPickup = (category === 'READY');
+
+    const orderDate = order.orderDate || formatIstDate(order.orderPlacedAt || order.createdAt);
+    const orderTime = order.orderTime || formatIstTime(order.orderPlacedAt || order.createdAt);
+
     return res.status(200).json({
       success: true,
-      code: 'VERIFIED_SUCCESS',
-      message: 'Order verified and redeemed successfully.',
+      code: category,
+      message: statusMessage,
+      statusMessage: statusMessage,
+      eligibleForPickup: eligibleForPickup,
+      currentStatus: order.status,
+      collectedAt: order.collectedAt || order.pickedUpAt || null,
+      collectedAtLocal: order.pickedUpAtLocal || order.completedAtLocal || '',
+      collectedBy: order.collectedBy || order.verifiedByOwnerId || null,
       order: {
         orderId: order.orderId,
         tokenNumber: order.tokenNumber,
-        studentName: order.studentName,
-        studentPhone: order.studentPhone,
+        studentName: order.studentName || 'Student',
+        studentRollNumber: studentRollNumber,
+        studentPhone: order.studentPhone || '',
+        studentCourse: order.studentCourse || '',
         canteenId: order.canteenId,
         pickupCanteenName: order.pickupCanteenName,
-        pickupCounter: order.pickupCounter,
+        pickupCounter: order.pickupCounter || 'Counter 1',
         totalAmount: order.totalAmount,
-        items: order.items,
-        status: 'PICKED_UP',
-        pickedUpAt: now,
-        pickedUpAtLocal: nowLocal,
-      },
-      verification: {
-        verifiedAt: now,
-        verifiedBy: req.owner.uid,
+        items: (order.items || []).map(it => ({
+          itemId: it.itemId,
+          name: it.name,
+          quantity: it.quantity,
+          price: it.price,
+          subtotal: it.subtotal || (it.price * it.quantity),
+          prepMinutes: it.prepMinutes || 7,
+          selectedOption: it.selectedOption || null,
+        })),
+        status: order.status,
+        orderDate: orderDate,
+        orderTime: orderTime,
+        orderPlacedAtLocal: order.orderPlacedAtLocal || `${orderDate}, ${orderTime}`,
+        verificationToken: order.verificationToken || cleanToken,
+        statusHistory: order.statusHistory || [],
       },
     });
   } catch (err) {
@@ -1249,35 +1052,133 @@ router.post('/orders/verify-qr', requireOwnerAuth, async (req, res) => {
 /**
  * Helper to find an order by verification token (Code 128 barcode or QR token hash or orderId)
  */
+function escapeRegex(str) {
+  return str.replace(/[/\-\^$*+?.()|[\]{}]/g, '\\$&');
+}
+
+/**
+ * Robust Helper to find an order by verification token:
+ * - Case-insensitive Code 128 barcode token (with or without 'QB-' prefix)
+ * - Raw token from QR codes or parsed JSON QR payloads
+ * - OrderVerification tokenHash
+ * - OrderId (case-insensitive)
+ * - MongoDB ObjectId
+ * - TokenNumber with prefix variations (#, Q, #Q)
+ */
 async function findOrderByTokenOrId(token) {
   if (!token || typeof token !== 'string') return null;
   const clean = token.trim();
+  if (!clean) return null;
 
-  // 1. Direct match on verificationToken
-  let order = await Order.findOne({ verificationToken: clean });
+  // 1. If scanned input is a JSON string (e.g. from QR scanner)
+  if (clean.startsWith('{') && clean.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(clean);
+      if (parsed.token) {
+        const found = await findOrderByTokenOrId(parsed.token);
+        if (found) return found;
+      }
+      if (parsed.orderId) {
+        const found = await findOrderByTokenOrId(parsed.orderId);
+        if (found) return found;
+      }
+      if (parsed.verificationToken) {
+        const found = await findOrderByTokenOrId(parsed.verificationToken);
+        if (found) return found;
+      }
+    } catch (_) {}
+  }
+
+  // 2. Direct case-insensitive match on verificationToken
+  let order = await Order.findOne({
+    verificationToken: { $regex: new RegExp(`^${escapeRegex(clean)}$`, 'i') },
+  });
   if (order) return order;
 
-  // 2. Check OrderVerification by SHA-256 hash (backward compatibility for QR tokens)
-  const tokenHash = hashVerificationToken(clean);
-  const verification = await OrderVerification.findOne({ tokenHash });
-  if (verification) {
-    order = await Order.findOne({ orderId: verification.orderId });
+  // 2b. Try with / without "QB-" prefix
+  const upper = clean.toUpperCase();
+  const withPrefix = upper.startsWith('QB-') ? upper : `QB-${upper}`;
+  const withoutPrefix = upper.startsWith('QB-') ? upper.slice(3) : upper;
+  order = await Order.findOne({
+    verificationToken: { $in: [withPrefix, withoutPrefix] },
+  });
+  if (order) return order;
+
+  // 3. Match OrderVerification tokenHash
+  try {
+    const tokenHash = hashVerificationToken(clean);
+    const verification = await OrderVerification.findOne({ tokenHash });
+    if (verification) {
+      order = await Order.findOne({ orderId: verification.orderId });
+      if (order) return order;
+    }
+  } catch (_) {}
+
+  // 4. Case-insensitive match on orderId
+  order = await Order.findOne({
+    orderId: { $regex: new RegExp(`^${escapeRegex(clean)}$`, 'i') },
+  });
+  if (order) return order;
+
+  // 5. MongoDB ObjectId match
+  const mongoose = require('mongoose');
+  if (mongoose.Types.ObjectId.isValid(clean)) {
+    order = await Order.findById(clean);
     if (order) return order;
   }
 
-  // 3. Fallback match by orderId
-  order = await Order.findOne({ orderId: clean });
-  if (order) return order;
-
-  // 4. Fallback match by token number candidates
+  // 6. Token number match (e.g. "101", "#101", "Q101")
   const rawNum = clean.replace(/^[^0-9]+/g, '').trim();
   if (rawNum) {
-    order = await Order.findOne({ tokenNumber: { $in: [clean, rawNum, `#${rawNum}`, `#Q${rawNum}`, `Q${rawNum}`] } }).sort({ createdAt: -1 });
+    order = await Order.findOne({
+      tokenNumber: { $in: [clean, rawNum, `#${rawNum}`, `#Q${rawNum}`, `Q${rawNum}`] },
+    }).sort({ createdAt: -1 });
+    if (order) return order;
   }
-  return order;
+
+  return null;
 }
 
-// ── POST /api/owner/orders/verify-barcode - Step 1: Secure Barcode Inspection & Validation ──
+const STATUS_MESSAGES = {
+  PENDING: 'Order is pending owner confirmation.',
+  ORDER_PLACED: 'Order has been placed and is waiting for canteen confirmation.',
+  ACCEPTED: 'Order has been accepted. Kitchen preparation will begin shortly.',
+  PREPARING: 'Order is currently being prepared. Not ready for pickup yet.',
+  READY: 'Order is ready for pickup! Hand over food to student.',
+  COLLECTED: 'This order has already been collected.',
+  CANCELLED: 'This order has been cancelled and cannot be collected.',
+  REJECTED: 'This order was rejected and cannot be collected.',
+};
+
+function getOrderStatusCategory(status, barcodeStatus) {
+  const normStatus = (status || '').toUpperCase().trim();
+  const normBarcodeStatus = (barcodeStatus || '').toUpperCase().trim();
+
+  if (normStatus === 'CANCELLED' || normBarcodeStatus === 'CANCELLED') {
+    return 'CANCELLED';
+  }
+  if (normStatus === 'REJECTED') {
+    return 'REJECTED';
+  }
+  if (normStatus === 'COMPLETED' || normStatus === 'PICKED_UP' || normStatus === 'COLLECTED' || normBarcodeStatus === 'USED') {
+    return 'COLLECTED';
+  }
+  if (normStatus === 'READY') {
+    return 'READY';
+  }
+  if (normStatus === 'PREPARING') {
+    return 'PREPARING';
+  }
+  if (normStatus === 'ACCEPTED' || normStatus === 'CONFIRMED') {
+    return 'ACCEPTED';
+  }
+  if (['NEW', 'WAITING', 'PLACED', 'ORDER_PLACED', 'PENDING'].includes(normStatus)) {
+    return 'PENDING';
+  }
+  return 'PREPARING';
+}
+
+// Barcode Verification: Validates 1D Code 128 barcode at pickup counter and verifies order status
 router.post('/orders/verify-barcode', requireOwnerAuth, async (req, res) => {
   try {
     const { token } = req.body || {};
@@ -1285,50 +1186,31 @@ router.post('/orders/verify-barcode', requireOwnerAuth, async (req, res) => {
       return res.status(400).json({
         success: false,
         code: 'INVALID_BARCODE',
-        error: 'This barcode is invalid. Please scan a valid Quick Bite order barcode.',
+        error: 'Please scan or enter a valid QuickBite order barcode.',
       });
     }
 
     const cleanToken = token.trim();
     const order = await findOrderByTokenOrId(cleanToken);
 
-    // Condition 1 & 2: Does the barcode exist in the database and belong to an actual order?
     if (!order) {
       return res.status(404).json({
         success: false,
         code: 'INVALID_BARCODE',
-        error: 'This barcode is invalid. Please scan a valid Quick Bite order barcode.',
+        error: 'No order found matching this barcode. Please scan a valid QuickBite order barcode.',
       });
     }
 
-    // Condition 3: Is the order associated with the currently authenticated canteen owner?
-    if (order.canteenId !== req.owner.canteenId) {
+    // Canteen authorization check
+    if (req.owner.role !== 'admin' && order.canteenId !== req.owner.canteenId) {
+      const orderCanteen = await Canteen.findOne({ id: order.canteenId }).lean();
+      const orderCanteenName = orderCanteen?.name || order.pickupCanteenName || order.canteenId;
       return res.status(403).json({
         success: false,
         code: 'WRONG_OWNER',
-        error: 'This order does not belong to your canteen.',
+        error: `This order belongs to ${orderCanteenName}, not your canteen.`,
         orderCanteenId: order.canteenId,
         ownerCanteenId: req.owner.canteenId,
-      });
-    }
-
-    // Condition 4: Has the order already been collected?
-    if (order.status === 'PICKED_UP' || order.status === 'COMPLETED' || order.barcodeStatus === 'USED') {
-      return res.status(400).json({
-        success: false,
-        code: 'ALREADY_COLLECTED',
-        error: 'This order has already been collected.',
-        collectedAt: order.collectedAt || order.pickedUpAt,
-        collectedAtLocal: order.pickedUpAtLocal || order.completedAtLocal,
-      });
-    }
-
-    // Condition 5: Is the barcode valid, active, and not cancelled/expired?
-    if (order.status === 'CANCELLED' || order.barcodeStatus === 'CANCELLED') {
-      return res.status(400).json({
-        success: false,
-        code: 'ORDER_CANCELLED',
-        error: 'This order has been cancelled.',
       });
     }
 
@@ -1337,38 +1219,55 @@ router.post('/orders/verify-barcode', requireOwnerAuth, async (req, res) => {
       return res.status(400).json({
         success: false,
         code: 'EXPIRED_BARCODE',
-        error: 'This barcode has expired. Please contact the canteen owner.',
+        error: 'This pickup barcode has expired. Please contact support.',
       });
     }
 
-    // Condition 6: Is the order eligible for collection? (Must be in READY / Ready for Pickup state)
-    if (order.status !== 'READY') {
-      return res.status(400).json({
-        success: false,
-        code: 'ORDER_NOT_READY',
-        error: 'This order is not ready for collection yet.',
-        currentStatus: order.status,
-      });
+    let studentRollNumber = order.studentRollNumber || '';
+    if (!studentRollNumber && order.studentId) {
+      const studentUser = await User.findOne({
+        $or: [
+          { uid: order.studentId },
+          { registrationNumber: order.studentId },
+          { email: order.studentId.toLowerCase() },
+        ],
+      }).select('registrationNumber').lean();
+      if (studentUser && studentUser.registrationNumber) {
+        studentRollNumber = studentUser.registrationNumber;
+      }
     }
 
-    // All conditions verified successfully! Return Green Success structured payload
+    const category = getOrderStatusCategory(order.status, order.barcodeStatus);
+    const statusMessage = STATUS_MESSAGES[category] || STATUS_MESSAGES.PREPARING;
+    const eligibleForPickup = (category === 'READY');
+
     const orderDate = order.orderDate || formatIstDate(order.orderPlacedAt || order.createdAt);
     const orderTime = order.orderTime || formatIstTime(order.orderPlacedAt || order.createdAt);
 
     return res.status(200).json({
       success: true,
-      code: 'VERIFIED_SUCCESS',
-      message: 'ORDER VERIFIED SUCCESSFULLY',
+      code: category,
+      message: statusMessage,
+      statusMessage: statusMessage,
+      eligibleForPickup: eligibleForPickup,
+      currentStatus: order.status,
+      collectedAt: order.collectedAt || order.pickedUpAt || null,
+      collectedAtLocal: order.pickedUpAtLocal || order.completedAtLocal || '',
+      collectedBy: order.collectedBy || order.verifiedByOwnerId || null,
       order: {
         orderId: order.orderId,
         tokenNumber: order.tokenNumber,
         studentName: order.studentName || 'Student',
+        studentRollNumber: studentRollNumber,
         studentPhone: order.studentPhone || '',
+        studentCourse: order.studentCourse || '',
         items: (order.items || []).map(it => ({
           itemId: it.itemId,
           name: it.name,
           quantity: it.quantity,
           price: it.price,
+          subtotal: it.subtotal || (it.price * it.quantity),
+          prepMinutes: it.prepMinutes || 7,
           selectedOption: it.selectedOption || null,
         })),
         totalAmount: order.totalAmount,
@@ -1380,6 +1279,7 @@ router.post('/orders/verify-barcode', requireOwnerAuth, async (req, res) => {
         canteenId: order.canteenId,
         pickupCounter: order.pickupCounter || 'Counter 1',
         verificationToken: order.verificationToken || cleanToken,
+        statusHistory: order.statusHistory || [],
       },
     });
   } catch (err) {
@@ -1387,12 +1287,12 @@ router.post('/orders/verify-barcode', requireOwnerAuth, async (req, res) => {
     return res.status(500).json({
       success: false,
       code: 'SERVER_ERROR',
-      error: 'Unable to verify the order. Please check your internet connection and try again.',
+      error: 'Unable to verify order due to a server error. Please try again.',
     });
   }
 });
 
-// ── POST /api/owner/orders/confirm-pickup - Step 2: Atomic Pickup Confirmation ──────────────
+// Atomic Pickup Confirmation: Atomically transitions order to PICKED_UP status and broadcasts WebSocket update
 router.post('/orders/confirm-pickup', requireOwnerAuth, async (req, res) => {
   try {
     const { token, orderId } = req.body || {};
@@ -1406,7 +1306,6 @@ router.post('/orders/confirm-pickup', requireOwnerAuth, async (req, res) => {
       });
     }
 
-    // 1. Initial lookup to verify ownership & existing state
     const existingOrder = await findOrderByTokenOrId(lookupKey);
     if (!existingOrder) {
       return res.status(404).json({
@@ -1416,7 +1315,7 @@ router.post('/orders/confirm-pickup', requireOwnerAuth, async (req, res) => {
       });
     }
 
-    if (existingOrder.canteenId !== req.owner.canteenId) {
+    if (req.owner.role !== 'admin' && existingOrder.canteenId !== req.owner.canteenId) {
       return res.status(403).json({
         success: false,
         code: 'WRONG_OWNER',
@@ -1424,27 +1323,35 @@ router.post('/orders/confirm-pickup', requireOwnerAuth, async (req, res) => {
       });
     }
 
-    if (existingOrder.status === 'PICKED_UP' || existingOrder.status === 'COMPLETED' || existingOrder.barcodeStatus === 'USED') {
+    if (existingOrder.status === 'CANCELLED' || existingOrder.barcodeStatus === 'CANCELLED') {
+      return res.status(400).json({
+        success: false,
+        code: 'ORDER_CANCELLED',
+        error: STATUS_MESSAGES.CANCELLED,
+      });
+    }
+
+    if (existingOrder.status === 'PICKED_UP' || existingOrder.status === 'COMPLETED' || existingOrder.status === 'COLLECTED' || existingOrder.barcodeStatus === 'USED') {
       return res.status(400).json({
         success: false,
         code: 'ALREADY_COLLECTED',
-        error: 'This order has already been collected.',
+        error: STATUS_MESSAGES.COLLECTED,
       });
     }
 
     if (existingOrder.status !== 'READY') {
+      const cat = getOrderStatusCategory(existingOrder.status, existingOrder.barcodeStatus);
       return res.status(400).json({
         success: false,
-        code: 'ORDER_NOT_READY',
-        error: 'This order is not ready for collection yet.',
+        code: cat,
+        error: STATUS_MESSAGES[cat] || 'Order is not ready for pickup.',
         currentStatus: existingOrder.status,
       });
     }
 
-    // 2. Atomic MongoDB update (strict condition: status MUST be READY, barcodeStatus != USED)
-    // Prevents two simultaneous scans from confirming the same order (race condition safeguard)
     const now = new Date();
     const nowLocal = formatIstDateTime(now);
+    const prevStatus = existingOrder.status;
 
     const updatedOrder = await Order.findOneAndUpdate(
       {
@@ -1455,7 +1362,7 @@ router.post('/orders/confirm-pickup', requireOwnerAuth, async (req, res) => {
       },
       {
         $set: {
-          status: 'PICKED_UP',
+          status: 'COMPLETED',
           barcodeStatus: 'USED',
           usedAt: now,
           collectedAt: now,
@@ -1468,9 +1375,12 @@ router.post('/orders/confirm-pickup', requireOwnerAuth, async (req, res) => {
         },
         $push: {
           statusHistory: {
-            status: 'PICKED_UP',
+            status: 'COLLECTED',
+            previousStatus: prevStatus,
             timestamp: now,
             timestampLocal: nowLocal,
+            changedBy: req.owner.uid,
+            changedByRole: 'OWNER',
           },
         },
       },
@@ -1478,15 +1388,13 @@ router.post('/orders/confirm-pickup', requireOwnerAuth, async (req, res) => {
     );
 
     if (!updatedOrder) {
-      // If atomic update matched 0 documents, it was just confirmed by another concurrent request
       return res.status(409).json({
         success: false,
         code: 'ALREADY_COLLECTED',
-        error: 'This order has already been collected.',
+        error: STATUS_MESSAGES.COLLECTED,
       });
     }
 
-    // Mark OrderVerification as REDEEMED if exists
     try {
       await OrderVerification.updateMany(
         { orderId: updatedOrder.orderId, status: 'ACTIVE' },
@@ -1502,7 +1410,6 @@ router.post('/orders/confirm-pickup', requireOwnerAuth, async (req, res) => {
       console.warn('[ConfirmPickup] OrderVerification sync warning:', vErr.message);
     }
 
-    // 3. Real-time WebSocket Broadcast & Push Notification
     try {
       broadcastOrderStatus(updatedOrder);
       broadcastQueueUpdate(updatedOrder.canteenId);
@@ -1510,7 +1417,7 @@ router.post('/orders/confirm-pickup', requireOwnerAuth, async (req, res) => {
         sendPushToUser(updatedOrder.studentId, {
           title: `Order #${updatedOrder.tokenNumber || updatedOrder.orderId} Collected!`,
           body: 'Your order has been verified and successfully collected. Enjoy your meal!',
-          data: { orderId: updatedOrder.orderId, type: 'ORDER_COLLECTED', status: 'PICKED_UP' },
+          data: { orderId: updatedOrder.orderId, type: 'ORDER_COLLECTED', status: 'COMPLETED' },
         }).catch(() => {});
       }
     } catch (rtErr) {

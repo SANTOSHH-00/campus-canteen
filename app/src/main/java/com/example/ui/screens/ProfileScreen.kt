@@ -1,3 +1,4 @@
+// ProfileScreen: Jetpack Compose screen for Profile user interface
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
@@ -54,16 +55,21 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.components.ModernLogoutDialog
 import com.example.ui.state.CanteenAppState
 import com.example.ui.theme.BlackPrimary
 import com.example.ui.theme.BorderGray
 import com.example.ui.theme.CardSurface
 import com.example.ui.theme.DeliveryOrange
 import com.example.ui.theme.DeliveryOrangeLight
+import com.example.ui.theme.DrawerAmber
+import com.example.ui.theme.DrawerAmberDark
+import com.example.ui.theme.DrawerAmberLight
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.SoftGray
 import com.example.ui.theme.TextDark
 import com.example.ui.theme.TextMuted
+import com.example.ui.theme.TextSecondary
 import com.example.ui.theme.WarmCream
 import kotlinx.coroutines.launch
 
@@ -97,6 +103,7 @@ fun ProfileScreen(
   var showNotificationsDialog by remember { mutableStateOf(false) }
   var showHelpSupportDialog by remember { mutableStateOf(false) }
   var showBreakClockDialog by remember { mutableStateOf(false) }
+  var showLogoutConfirmDialog by remember { mutableStateOf(false) }
 
   val isGuest = appState.isGuest
   val currentUser = appState.currentUser
@@ -131,12 +138,12 @@ fun ProfileScreen(
             modifier = Modifier
               .size(38.dp)
               .clip(CircleShape)
-              .background(Color(0xFFEDE3D0)),
+              .background(DrawerAmberLight),
           ) {
             Icon(
               imageVector = Icons.AutoMirrored.Filled.ArrowBack,
               contentDescription = "Back",
-              tint = BlackPrimary,
+              tint = DrawerAmber,
               modifier = Modifier.size(20.dp),
             )
           }
@@ -144,18 +151,18 @@ fun ProfileScreen(
           Text(
             text = "My Profile",
             fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = BlackPrimary,
+            fontWeight = FontWeight.ExtraBold,
+            color = TextDark,
           )
         }
       }
 
-      // ── 1. Top Student Profile Card (Matching Image 1 Exactly) ─────────────────
       Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEEFE3)), // Soft peach cream
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        colors = CardDefaults.cardColors(containerColor = PureWhite),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderGray.copy(alpha = 0.7f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
       ) {
         Column(
           modifier = Modifier
@@ -172,20 +179,20 @@ fun ProfileScreen(
               verticalAlignment = Alignment.CenterVertically,
               modifier = Modifier.weight(1f)
             ) {
-              // Black and White Monochrome Profile Icon
+              // Theme-matched Profile Icon
               Box(
                 modifier = Modifier
                   .size(72.dp)
                   .shadow(4.dp, CircleShape)
                   .clip(CircleShape)
-                  .background(Color(0xFF18181B))
-                  .border(2.5.dp, Color(0xFFE4E4E7), CircleShape),
+                  .background(DrawerAmberLight)
+                  .border(2.5.dp, DrawerAmber, CircleShape),
                 contentAlignment = Alignment.Center,
               ) {
                 Icon(
                   imageVector = Icons.Default.Person,
                   contentDescription = "Profile",
-                  tint = PureWhite,
+                  tint = DrawerAmber,
                   modifier = Modifier.size(42.dp),
                 )
               }
@@ -197,14 +204,14 @@ fun ProfileScreen(
                   text = "Hello,",
                   fontSize = 12.5.sp,
                   fontWeight = FontWeight.Medium,
-                  color = Color(0xFF6B7280),
+                  color = DrawerAmberDark,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Text(
                     text = displayName,
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF1F2937),
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Black,
+                    color = TextDark,
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                   )
@@ -222,7 +229,7 @@ fun ProfileScreen(
                     text = displayCourse,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF4B5563),
+                    color = TextDark.copy(alpha = 0.8f),
                   )
                 }
 
@@ -236,7 +243,7 @@ fun ProfileScreen(
                     text = displayCollege,
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF6B7280),
+                    color = TextMuted,
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                   )
@@ -252,7 +259,7 @@ fun ProfileScreen(
                     text = "Roll No: $displayRollNo",
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF4B5563),
+                    color = TextDark.copy(alpha = 0.8f),
                   )
                 }
 
@@ -263,15 +270,15 @@ fun ProfileScreen(
                   verticalAlignment = Alignment.CenterVertically,
                   modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFFEF3C7))
-                    .border(1.dp, Color(0xFFFDE68A), RoundedCornerShape(12.dp))
+                    .background(DrawerAmberLight)
+                    .border(1.dp, DrawerAmber.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
                     .clickable { showBreakClockDialog = true }
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 ) {
                   Icon(
                     imageVector = Icons.Default.AccessTime,
                     contentDescription = "Break Time",
-                    tint = Color(0xFFB45309),
+                    tint = DrawerAmber,
                     modifier = Modifier.size(13.dp),
                   )
                   Spacer(modifier = Modifier.width(4.dp))
@@ -279,7 +286,7 @@ fun ProfileScreen(
                     text = "${appState.breakStartTime} – ${appState.breakEndTime}",
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF92400E),
+                    color = DrawerAmberDark,
                   )
                 }
               }
@@ -289,8 +296,8 @@ fun ProfileScreen(
             Box(
               modifier = Modifier
                 .clip(RoundedCornerShape(16.dp))
-                .background(PureWhite.copy(alpha = 0.85f))
-                .border(1.dp, Color(0xFFF3D5C0), RoundedCornerShape(16.dp))
+                .background(DrawerAmberLight)
+                .border(1.dp, DrawerAmber.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
                 .clickable { showEditProfileDialog = true }
                 .padding(horizontal = 10.dp, vertical = 6.dp),
               contentAlignment = Alignment.Center,
@@ -302,13 +309,13 @@ fun ProfileScreen(
                   text = "Edit Profile",
                   fontSize = 11.5.sp,
                   fontWeight = FontWeight.Bold,
-                  color = Color(0xFF374151),
+                  color = DrawerAmberDark,
                 )
               }
             }
           }
 
-          // Bottom Slogan matching image: "Good food fuels your dreams! 💫"
+          // Bottom Slogan: "Good food fuels your dreams! 💫"
           Row(
             modifier = Modifier
               .fillMaxWidth()
@@ -320,7 +327,7 @@ fun ProfileScreen(
               text = "Good food fuels your dreams! 💫",
               fontSize = 11.5.sp,
               fontWeight = FontWeight.SemiBold,
-              color = Color(0xFF9A3412),
+              color = DrawerAmberDark,
               fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
             )
           }
@@ -329,7 +336,6 @@ fun ProfileScreen(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // ── 3. Profile Options List (Matching Image 2 Exactly) ─────────────────────
       Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
@@ -337,10 +343,9 @@ fun ProfileScreen(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
       ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
-          // Row 1: Favorites
           ProfileFeatureRow(
-            iconBg = Color(0xFFF3F4F6),
-            iconTint = BlackPrimary,
+            iconBg = DrawerAmberLight,
+            iconTint = DrawerAmber,
             iconEmoji = "♡",
             title = "Favorites",
             subtitle = if (appState.favoriteItemIds.isNotEmpty()) "${appState.favoriteItemIds.size} saved dishes" else "Your saved favorite dishes",
@@ -349,12 +354,11 @@ fun ProfileScreen(
             },
           )
 
-          HorizontalDivider(color = Color(0xFFF3F4F6), modifier = Modifier.padding(horizontal = 4.dp))
+          HorizontalDivider(color = BorderGray.copy(alpha = 0.45f), modifier = Modifier.padding(horizontal = 4.dp))
 
-          // Row 2: Order History (Orange Document Icon)
           ProfileFeatureRow(
-            iconBg = Color(0xFFFFF1EB),
-            iconTint = Color(0xFFEA580C),
+            iconBg = DrawerAmberLight,
+            iconTint = DrawerAmber,
             iconEmoji = "📄",
             title = "Order History",
             subtitle = "View your past orders and re-order",
@@ -363,60 +367,55 @@ fun ProfileScreen(
             },
           )
 
-          HorizontalDivider(color = Color(0xFFF3F4F6), modifier = Modifier.padding(horizontal = 4.dp))
+          HorizontalDivider(color = BorderGray.copy(alpha = 0.45f), modifier = Modifier.padding(horizontal = 4.dp))
 
-          // Row 2: Saved Addresses (Blue Pin Icon)
           ProfileFeatureRow(
-            iconBg = Color(0xFFEFF6FF),
-            iconTint = Color(0xFF2563EB),
+            iconBg = DrawerAmberLight,
+            iconTint = DrawerAmber,
             iconEmoji = "📍",
             title = "Saved Addresses",
             subtitle = "Manage your delivery & pickup locations",
             onClick = { showAddressesDialog = true },
           )
 
-          HorizontalDivider(color = Color(0xFFF3F4F6), modifier = Modifier.padding(horizontal = 4.dp))
+          HorizontalDivider(color = BorderGray.copy(alpha = 0.45f), modifier = Modifier.padding(horizontal = 4.dp))
 
-          // Row 3: Payment Methods (Green Card Icon)
           ProfileFeatureRow(
-            iconBg = Color(0xFFF0FDF4),
-            iconTint = Color(0xFF16A34A),
+            iconBg = DrawerAmberLight,
+            iconTint = DrawerAmber,
             iconEmoji = "💳",
             title = "Payment Methods",
             subtitle = "UPI, Cards and more",
             onClick = { showPaymentMethodsDialog = true },
           )
 
-          HorizontalDivider(color = Color(0xFFF3F4F6), modifier = Modifier.padding(horizontal = 4.dp))
+          HorizontalDivider(color = BorderGray.copy(alpha = 0.45f), modifier = Modifier.padding(horizontal = 4.dp))
 
-          // Row 4: Notifications (Purple Bell Icon)
           ProfileFeatureRow(
-            iconBg = Color(0xFFFAF5FF),
-            iconTint = Color(0xFF9333EA),
+            iconBg = DrawerAmberLight,
+            iconTint = DrawerAmber,
             iconEmoji = "🔔",
             title = "Notifications",
             subtitle = "Order updates, offers and alerts",
             onClick = { showNotificationsDialog = true },
           )
 
-          HorizontalDivider(color = Color(0xFFF3F4F6), modifier = Modifier.padding(horizontal = 4.dp))
+          HorizontalDivider(color = BorderGray.copy(alpha = 0.45f), modifier = Modifier.padding(horizontal = 4.dp))
 
-          // Row 5: Help & Support (Teal Headset Icon)
           ProfileFeatureRow(
-            iconBg = Color(0xFFF0FDFA),
-            iconTint = Color(0xFF0D9488),
+            iconBg = DrawerAmberLight,
+            iconTint = DrawerAmber,
             iconEmoji = "🎧",
             title = "Help & Support",
             subtitle = "FAQs, contact us",
             onClick = { showHelpSupportDialog = true },
           )
 
-          HorizontalDivider(color = Color(0xFFF3F4F6), modifier = Modifier.padding(horizontal = 4.dp))
+          HorizontalDivider(color = BorderGray.copy(alpha = 0.45f), modifier = Modifier.padding(horizontal = 4.dp))
 
-          // Row 6: About QuickBite (Gray Info Icon)
           ProfileFeatureRow(
-            iconBg = Color(0xFFF3F4F6),
-            iconTint = Color(0xFF4B5563),
+            iconBg = DrawerAmberLight,
+            iconTint = DrawerAmber,
             iconEmoji = "ℹ️",
             title = "About QuickBite",
             subtitle = "App version, terms & privacy",
@@ -427,7 +426,6 @@ fun ProfileScreen(
 
       Spacer(modifier = Modifier.height(20.dp))
 
-      // ── 4. Log In / Log Out Button ─────────────────────────────────────────
       if (isGuest) {
         Box(
           modifier = Modifier
@@ -461,7 +459,7 @@ fun ProfileScreen(
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0xFFFEF2F2))
             .border(1.dp, Color(0xFFFEE2E2), RoundedCornerShape(16.dp))
-            .clickable { onLogout() }
+            .clickable { showLogoutConfirmDialog = true }
             .padding(vertical = 14.dp),
           contentAlignment = Alignment.Center,
         ) {
@@ -486,6 +484,18 @@ fun ProfileScreen(
       Spacer(modifier = Modifier.height(16.dp))
     }
 
+    // Modern Logout Confirmation Dialog
+    if (showLogoutConfirmDialog) {
+      ModernLogoutDialog(
+        userName = displayName,
+        onConfirm = {
+          showLogoutConfirmDialog = false
+          onLogout()
+        },
+        onDismiss = { showLogoutConfirmDialog = false },
+      )
+    }
+
     SnackbarHost(
       hostState = snackbarHostState,
       modifier = Modifier
@@ -493,7 +503,6 @@ fun ProfileScreen(
         .padding(bottom = 12.dp),
     )
 
-    // ── Dialogs ─────────────────────────────────────────────────────────────
 
     // Break Clock Dialog
     if (showBreakClockDialog) {
@@ -511,7 +520,6 @@ fun ProfileScreen(
       )
     }
 
-    // 2. Edit Profile Dialog
     if (showEditProfileDialog) {
       EditProfileModal(
         initialName = displayName,
@@ -530,7 +538,6 @@ fun ProfileScreen(
       )
     }
 
-    // 3. About QuickBite Dialog
     if (showAboutDialog) {
       AlertDialog(
         onDismissRequest = { showAboutDialog = false },
@@ -580,7 +587,6 @@ fun ProfileScreen(
       )
     }
 
-    // 4. Saved Addresses Dialog
     if (showAddressesDialog) {
       SimpleFeatureDialog(
         title = "Saved Locations",
@@ -590,7 +596,6 @@ fun ProfileScreen(
       )
     }
 
-    // 5. Payment Methods Dialog
     if (showPaymentMethodsDialog) {
       SimpleFeatureDialog(
         title = "Payment Methods",
@@ -600,15 +605,17 @@ fun ProfileScreen(
       )
     }
 
-    // 6. Notifications Sheet
     if (showNotificationsDialog) {
       com.example.ui.components.ModernNotificationsSheet(
         appState = appState,
-        onDismiss = { showNotificationsDialog = false }
+        onDismiss = { showNotificationsDialog = false },
+        onLoginClick = {
+          showNotificationsDialog = false
+          showLoginSheet = true
+        },
       )
     }
 
-    // 7. Help & Support Dialog
     if (showHelpSupportDialog) {
       SimpleFeatureDialog(
         title = "Help & Support",
@@ -618,7 +625,6 @@ fun ProfileScreen(
       )
     }
 
-    // 8. In-Screen Modal Login Sheet for Guest User
     if (showLoginSheet) {
       Box(
         modifier = Modifier
